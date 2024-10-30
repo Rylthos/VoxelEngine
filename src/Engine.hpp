@@ -8,19 +8,12 @@
 #include <vector>
 
 #include "Buffer.hpp"
+#include "Image.hpp"
 #include "Window.hpp"
 
 struct Queue {
     VkQueue queue;
     uint32_t queueFamily;
-};
-
-struct Image {
-    VkImage image;
-    VkImageView imageView;
-    VmaAllocation allocation;
-    VkExtent3D extent;
-    VkFormat format;
 };
 
 struct FrameData {
