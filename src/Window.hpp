@@ -20,6 +20,7 @@ class Window
     void create(const char* title, int winX, int winY);
 
     GLFWwindow* get() { return m_Window; }
+    glm::uvec2 getSize() { return m_WindowSize; }
 
     void pollInput();
     void swapBuffes();

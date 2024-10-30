@@ -28,6 +28,7 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
   add_compile_definitions(DEBUG)
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
   message("Release Build")
+
   set(outputDirectory "${outputDirectory}/release")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 endif()
@@ -53,11 +54,14 @@ target_include_directories(
 target_link_libraries(
   ${PROJECT_NAME}
   PRIVATE ${linker}
-  PUBLIC glfw Vulkan::Vulkan glm::glm vk-bootstrap::vk-bootstrap
+  PUBLIC glfw
+         Vulkan::Vulkan
+         glm::glm
+         vk-bootstrap::vk-bootstrap
          # STB
-         GPUOpen::VulkanMemoryAllocator spdlog
-         Imgui
-)
+         GPUOpen::VulkanMemoryAllocator
+         spdlog
+         Imgui)
 
 set(InputRes "${PROJECT_SOURCE_DIR}/res")
 set(OutputRes "${outputDirectory}/res")
@@ -86,12 +90,6 @@ foreach(file ${RESOURCES_VERTEX})
             ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")
 endforeach()
-
-# file(GLOB RESOURCES_GEOMETRY ${InputRes}/shaders/*.geo.glsl) foreach(file
-# ${RESOURCES_GEOMETRY}) get_filename_component(name ${file} NAME_WLE)
-# add_custom_command( TARGET Resources POST_BUILD COMMAND glslc
-# -fshader-stage=geom -o ${InputRes}/shaders/${name}.spv
-# ${InputRes}/shaders/${name}.glsl COMMENT "Compiled ${name}") endforeach()
 
 file(GLOB RESOURCES_FRAGMENT ${InputRes}/shaders/*.frag.glsl)
 foreach(file ${RESOURCES_FRAGMENT})
@@ -122,9 +120,4 @@ add_custom_command(
   POST_BUILD
   COMMAND cmake -E copy ${RESOURCES_COMPILED_SHADERS} "${OutputRes}/shaders"
   COMMENT "Copied Shaders
-from ${InputRes}/shaders/ To ${OutputRes}/shaders/")
-
-# add_custom_command( TARGET Resources POST_BUILD COMMAND cmake -E
-# copy_directory_if_different "${InputRes}/textures" "${OutputRes}/textures"
-# COMMENT "Copied Textures from ${InputRes}/textures/ To ${OutputRes}/textures/"
-# )
+  from ${InputRes}/shaders/ To ${OutputRes}/shaders/")

@@ -16,5 +16,5 @@ void main()
 {
     vec4 v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
 
-    gl_Position = v
+    gl_Position = v;
 }
