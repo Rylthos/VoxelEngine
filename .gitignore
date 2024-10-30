@@ -1,0 +1,8 @@
+.cache/*
+.direnv/*
+bin/*
+build/*
+.envrc
+*.sh
+res/shaders/*.spv
+imgui.ini
