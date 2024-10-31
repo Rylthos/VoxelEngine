@@ -24,6 +24,7 @@ layout (buffer_reference, std430) readonly buffer VoxelBuffer
 
 layout (push_constant) uniform constants
 {
+    mat4 viewMatrix;
     uvec3 dimensions;
     float size;
     VoxelBuffer voxels;
@@ -73,7 +74,7 @@ void main()
 
     vec2 uv = vec2(texelCoord) / vec2(size - 1);
 
-    const vec3 cameraOrigin = vec3(8.0, 8.0, -10.);
+    const vec3 cameraOrigin = vec3(PushConstants.viewMatrix * vec4(0., 0., 0., 1.));
     const float viewportWidth = 2.0;
     const float viewportHeight = 2.0;
     const float viewportDepth = 1.0;
@@ -84,14 +85,11 @@ void main()
 
     vec3 origin = cameraOrigin;
     vec3 target = topLeft + uv.x * deltaRight + uv.y * deltaDown;
-    // vec3 direction = vec3(0., 0., 1.0);
-    vec3 direction = target - origin;
+    vec3 direction = normalize(target - origin);
 
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
-
-    // imageStore(o_Image, texelCoord, vec4(target, 0.));
 
     float minHit = 10000.;
     Voxel minHitVoxel;

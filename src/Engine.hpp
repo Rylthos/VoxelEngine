@@ -30,6 +30,7 @@ struct Voxel {
 };
 
 struct VoxelPushConstants {
+    glm::mat4 viewMatrix;
     glm::uvec3 dimensions;
     float size;
     VkDeviceAddress voxelAddress;

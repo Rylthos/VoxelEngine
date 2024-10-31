@@ -10,6 +10,9 @@
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
 
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+
 void Engine::init()
 {
     m_Window.create("Voxel Engine", 500, 500);
@@ -577,7 +580,11 @@ void Engine::render(float frameDelta)
                             1, &m_VoxelDescriptorSet, 0, nullptr);
 
     VoxelPushConstants pushConstants;
+    pushConstants.viewMatrix = glm::inverse(glm::lookAt(
+        glm::vec3(8.f, 8.f, -10.f), glm::vec3(8.f, 8.f, 0.f), glm::vec3(0.f, -1.f, 0.f)));
+
     pushConstants.size = 1.0f;
+
     pushConstants.dimensions = { VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE };
     pushConstants.voxelAddress = m_VoxelBuffer.getDeviceAddress(m_Device);
 
