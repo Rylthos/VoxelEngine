@@ -76,7 +76,7 @@ add_custom_target(Resources ALL COMMENT "Copying Resources")
 
 add_custom_command(
   TARGET Resources
-  PRE_LINK
+  PRE_BUILD
   COMMAND cmake -E make_directory "${OutputRes}/shaders/"
   COMMENT "Create resource folder at ${OutputRes}")
 
@@ -85,7 +85,7 @@ foreach(file ${RESOURCES_VERTEX})
   get_filename_component(name ${file} NAME_WLE)
   add_custom_command(
     TARGET Resources
-    PRE_LINK
+    PRE_BUILD
     COMMAND glslc -fshader-stage=vert -o ${InputRes}/shaders/${name}.spv
             ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")
@@ -96,7 +96,7 @@ foreach(file ${RESOURCES_FRAGMENT})
   get_filename_component(name ${file} NAME_WLE)
   add_custom_command(
     TARGET Resources
-    PRE_LINK
+    PRE_BUILD
     COMMAND glslc -fshader-stage=frag -o ${InputRes}/shaders/${name}.spv
             ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")
@@ -107,7 +107,7 @@ foreach(file ${RESOURCES_COMPUTE})
   get_filename_component(name ${file} NAME_WLE)
   add_custom_command(
     TARGET Resources
-    PRE_LINK
+    PRE_BUILD
     COMMAND glslc -fshader-stage=comp -o ${InputRes}/shaders/${name}.spv
             ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")

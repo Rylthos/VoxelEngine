@@ -32,6 +32,8 @@ class Buffer
     VmaAllocation getAllocation() const { return m_Allocation; }
     VmaAllocationInfo getAllocationInfo() const { return m_AllocationInfo; }
 
+    VkDeviceAddress getDeviceAddress(VkDevice device) const;
+
     void copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset = 0,
                         size_t dstOffset = 0);
 

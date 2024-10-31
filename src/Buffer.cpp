@@ -44,6 +44,18 @@ void Buffer::free()
     m_AllocationInfo = {};
 }
 
+VkDeviceAddress Buffer::getDeviceAddress(VkDevice device) const
+{
+    VkBufferDeviceAddressInfo deviceAI{};
+    deviceAI.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    deviceAI.pNext = nullptr;
+    deviceAI.buffer = m_Buffer;
+
+    VkDeviceAddress address = vkGetBufferDeviceAddress(device, &deviceAI);
+
+    return address;
+}
+
 void Buffer::copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
 {
     ImmediateSubmit::submit([&](VkCommandBuffer cmd) {

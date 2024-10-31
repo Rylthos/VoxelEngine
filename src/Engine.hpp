@@ -25,6 +25,16 @@ struct FrameData {
     VkFence renderFence;
 };
 
+struct Voxel {
+    glm::vec4 colour;
+};
+
+struct VoxelPushConstants {
+    glm::uvec3 dimensions;
+    float size;
+    VkDeviceAddress voxelAddress;
+};
+
 struct Stats {
     float frameDelta;
 };
@@ -60,25 +70,21 @@ class Engine
 
     Image m_DrawImage;
 
+    VkDescriptorSet m_VoxelDescriptorSet;
+    VkDescriptorSetLayout m_VoxelDescriptorSetLayout;
+
+    VkPipeline m_VoxelPipeline;
+    VkPipelineLayout m_VoxelPipelineLayout;
+
     std::vector<FrameData> m_Frames;
 
     VkDescriptorPool m_DescriptorPool;
 
-    VkDescriptorSetLayout m_BackgroundDescriptorLayout;
-    VkDescriptorSet m_BackgroundDescriptorSet;
-
-    VkDescriptorSetLayout m_MeshDescriptorLayout;
-    std::vector<VkDescriptorSet> m_MeshDescriptorSet;
-
     VkDescriptorPool m_ImguiPool;
 
-    VkPipeline m_BackgroundPipeline;
-    VkPipelineLayout m_BackgroundPipelineLayout;
-
-    VkPipeline m_MeshPipeline;
-    VkPipelineLayout m_MeshPipelineLayout;
-
-    Buffer m_Vertices;
+    const uint32_t VOXEL_SIZE = 16;
+    size_t m_TotalVoxels;
+    Buffer m_VoxelBuffer;
 
     Stats m_Stats;
 
@@ -94,7 +100,7 @@ class Engine
 
     void initImGui();
 
-    void initBuffers();
+    void initVoxelBuffer();
 
     void initDescriptorPool();
     void initDescriptorLayouts();

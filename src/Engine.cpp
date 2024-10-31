@@ -20,7 +20,7 @@ void Engine::init()
     ImmediateSubmit::init(m_Device, m_GraphicsQueue.queue, m_GraphicsQueue.queueFamily);
     initSyncStructures();
     initImGui();
-    initBuffers();
+    initVoxelBuffer();
     initDescriptorPool();
     initDescriptorLayouts();
     initPipelines();
@@ -31,6 +31,7 @@ void Engine::start()
 {
     float currentTime;
     float previousTime = glfwGetTime();
+    // return;
     while (!m_Window.shouldClose())
     {
         currentTime = glfwGetTime();
@@ -55,15 +56,11 @@ void Engine::cleanup()
 
     ImmediateSubmit::free();
 
-    m_Vertices.free();
-    vkDestroyPipeline(m_Device, m_MeshPipeline, nullptr);
-    vkDestroyPipelineLayout(m_Device, m_MeshPipelineLayout, nullptr);
+    m_VoxelBuffer.free();
+    vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
+    vkDestroyPipelineLayout(m_Device, m_VoxelPipelineLayout, nullptr);
 
-    vkDestroyPipelineLayout(m_Device, m_BackgroundPipelineLayout, nullptr);
-    vkDestroyPipeline(m_Device, m_BackgroundPipeline, nullptr);
-
-    vkDestroyDescriptorSetLayout(m_Device, m_BackgroundDescriptorLayout, nullptr);
-    vkDestroyDescriptorSetLayout(m_Device, m_MeshDescriptorLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_Device, m_VoxelDescriptorSetLayout, nullptr);
 
     vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
 
@@ -320,27 +317,64 @@ void Engine::initImGui()
     spdlog::info("Initializsed ImGui");
 }
 
-void Engine::initBuffers()
+void Engine::initVoxelBuffer()
 {
-    const size_t size = sizeof(glm::vec4) * 3;
+    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
+    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
+    {
+        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
+        {
+            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
+            {
+
+                uint32_t layerSum = x + z;
+                uint32_t sum = x + y + z;
+                uint32_t layerIndex = z * VOXEL_SIZE + x;
+                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                glm::vec4 colour = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+
+                if (layerSum % 2 == 0)
+                {
+                    if (sum % 2 == 0)
+                    {
+                        colour = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+                    }
+                    else
+                    {
+                        colour = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+                    }
+                }
+                else
+                {
+                    if (sum % 2 == 0)
+                    {
+                        colour = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+                    }
+                    else
+                    {
+                        colour = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+                    }
+                }
+
+                voxels.at(index) = { .colour = colour };
+            }
+        }
+    }
     Buffer staging;
-    staging.create(m_Allocator, size,
+    staging.create(m_Allocator, voxels.size() * sizeof(Voxel),
                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                   VMA_MEMORY_USAGE_CPU_ONLY);
-    std::vector<glm::vec4> vertexData = {
-        { 0.0f,  -0.5f, 0.0f, 1.0f },
-        { -0.5f, 0.5f,  0.0f, 1.0f },
-        { 0.5f,  0.5f,  0.0f, 1.0f }
-    };
+                   VMA_MEMORY_USAGE_CPU_COPY);
 
-    staging.copyFromData<glm::vec4>(vertexData);
+    staging.copyFromData<Voxel>(voxels);
 
-    m_Vertices.create(m_Allocator, size,
-                      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                      VMA_MEMORY_USAGE_GPU_ONLY);
+    m_VoxelBuffer.create(m_Allocator, voxels.size() * sizeof(Voxel),
+                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    m_Vertices.copyFromBuffer(staging, size);
+    m_VoxelBuffer.copyFromBuffer(staging, voxels.size() * sizeof(Voxel));
+    m_TotalVoxels = voxels.size();
     spdlog::info("Created Vertex Buffer");
 }
 
@@ -363,109 +397,57 @@ void Engine::initDescriptorPool()
 }
 void Engine::initDescriptorLayouts()
 {
-    m_BackgroundDescriptorLayout = DescriptorLayoutBuilder::start(m_Device)
-                                       .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
-                                       .build();
-
-    m_MeshDescriptorLayout = DescriptorLayoutBuilder::start(m_Device)
-                                 .addStorageBuffer(0, VK_SHADER_STAGE_VERTEX_BIT)
-                                 .build();
+    m_VoxelDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
+                                     .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
+                                     .build();
     spdlog::info("Created descriptor layouts");
 }
 
 void Engine::initPipelines()
 {
     {
-
         VkPushConstantRange pushConstant{};
         pushConstant.offset = 0;
-        pushConstant.size = sizeof(glm::vec4) * 2;
+        pushConstant.size = sizeof(VoxelPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
         VkPipelineLayoutCreateInfo computeLayoutCI{};
         computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         computeLayoutCI.pNext = nullptr;
-        computeLayoutCI.pSetLayouts = &m_BackgroundDescriptorLayout;
         computeLayoutCI.setLayoutCount = 1;
+        computeLayoutCI.pSetLayouts = &m_VoxelDescriptorSetLayout;
         computeLayoutCI.pushConstantRangeCount = 1;
         computeLayoutCI.pPushConstantRanges = &pushConstant;
 
-        VK_CHECK(vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr,
-                                        &m_BackgroundPipelineLayout));
+        VK_CHECK(
+            vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_VoxelPipelineLayout));
 
-        ShaderModule gradientShader;
-        gradientShader.create("res/shaders/gradient_color.comp.spv", m_Device);
+        ShaderModule voxelShader;
+        voxelShader.create("res/shaders/basic_voxel_raytracer.comp.spv", m_Device);
 
         VkPipelineShaderStageCreateInfo shaderStageCI{};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStageCI.pNext = nullptr;
         shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        shaderStageCI.module = gradientShader.getShaderModule();
+        shaderStageCI.module = voxelShader.getShaderModule();
         shaderStageCI.pName = "main";
 
         VkComputePipelineCreateInfo computePipelineCI{};
         computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         computePipelineCI.pNext = nullptr;
-        computePipelineCI.layout = m_BackgroundPipelineLayout;
+        computePipelineCI.layout = m_VoxelPipelineLayout;
         computePipelineCI.stage = shaderStageCI;
 
         VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
-                                          &m_BackgroundPipeline));
-
+                                          &m_VoxelPipeline));
         spdlog::info("Created Background Pipeline and Pipeline Layout");
-    }
-
-    {
-        VkPushConstantRange pushConstant{};
-        pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        pushConstant.offset = 0;
-        pushConstant.size = sizeof(VkDeviceAddress);
-
-        VkPipelineLayoutCreateInfo meshLayoutCI{};
-        meshLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        meshLayoutCI.pNext = nullptr;
-        meshLayoutCI.setLayoutCount = 1;
-        meshLayoutCI.pSetLayouts = &m_MeshDescriptorLayout;
-        meshLayoutCI.pushConstantRangeCount = 1;
-        meshLayoutCI.pPushConstantRanges = &pushConstant;
-
-        VK_CHECK(vkCreatePipelineLayout(m_Device, &meshLayoutCI, nullptr, &m_MeshPipelineLayout));
-
-        ShaderModule vertShader;
-        ShaderModule fragShader;
-
-        vertShader.create("res/shaders/Triangle.vert.spv", m_Device);
-        fragShader.create("res/shaders/Triangle.frag.spv", m_Device);
-
-        m_MeshPipeline =
-            PipelineBuilder::start()
-                .setPipelineLayout(m_MeshPipelineLayout)
-                .setShaders({
-                    { VK_SHADER_STAGE_VERTEX_BIT,   vertShader.getShaderModule() },
-                    { VK_SHADER_STAGE_FRAGMENT_BIT, fragShader.getShaderModule() }
-        })
-                .inputAssembly(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST)
-                .rasterizer(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE)
-                .setMultisampleNone()
-                .disableBlending()
-                .disableDepthTest()
-                .setColourAttachmentFormat(m_DrawImage.getFormat())
-                .buildPipeline(m_Device);
-
-        spdlog::info("Created Mesh Pipeline and pipeline layout");
     }
 }
 
 void Engine::initDescriptorSets()
 {
-
-    m_MeshDescriptorSet = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, FRAMES_IN_FLIGHT,
-                                                      m_MeshDescriptorLayout)
-                              .addStorageBuffer(0, m_Vertices.getBuffer(), 0, sizeof(glm::vec3) * 3)
-                              .build();
-
-    m_BackgroundDescriptorSet =
-        DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_BackgroundDescriptorLayout)
+    m_VoxelDescriptorSet =
+        DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
             .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
             .build()
             .at(0);
@@ -589,93 +571,29 @@ void Engine::render(float frameDelta)
     Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_BackgroundPipeline);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
 
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                            m_BackgroundPipelineLayout, 0, 1, &m_BackgroundDescriptorSet, 0,
-                            nullptr);
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipelineLayout, 0,
+                            1, &m_VoxelDescriptorSet, 0, nullptr);
 
-    static float total = 0.0f;
-    total += frameDelta;
-    glm::vec4 top = { fabs(cos(total)), fabs(sin(total)), 0.0f, 1.0f };
-    glm::vec4 bottom = { 0.0f, fabs(cos(-total * 0.5)), fabs(sin(-total * 0.5)), 1.0f };
+    VoxelPushConstants pushConstants;
+    pushConstants.size = 1.0f;
+    pushConstants.dimensions = { VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE };
+    pushConstants.voxelAddress = m_VoxelBuffer.getDeviceAddress(m_Device);
 
-    glm::vec4 data[2] = { top, bottom };
-    vkCmdPushConstants(commandBuffer, m_BackgroundPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(data), data);
+    vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                       sizeof(pushConstants), &pushConstants);
 
     vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
                   std::ceil(drawExtent.height / 16.0), 1);
 
     m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
-                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-    {
-        VkRenderingAttachmentInfo colourAI{};
-        colourAI.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-        colourAI.pNext = nullptr;
-        colourAI.imageView = m_DrawImage.getImageView();
-        colourAI.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        colourAI.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        colourAI.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colourAI.clearValue.color = {
-            { 0.2f, 0.2f, 0.2f, 1.0f }
-        };
-
-        VkRenderingInfo renderInfo{};
-        renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-        renderInfo.pNext = nullptr;
-        renderInfo.flags = 0;
-        renderInfo.renderArea = VkRect2D({ 0, 0 }, { drawExtent.width, drawExtent.height });
-        renderInfo.layerCount = 1;
-        renderInfo.colorAttachmentCount = 1;
-        renderInfo.pColorAttachments = &colourAI;
-        renderInfo.pDepthAttachment = nullptr;
-        renderInfo.pStencilAttachment = nullptr;
-
-        vkCmdBeginRendering(commandBuffer, &renderInfo);
-
-        VkViewport viewport{};
-        viewport.x = 0;
-        viewport.y = 0;
-        viewport.width = drawExtent.width;
-        viewport.height = drawExtent.height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-
-        VkRect2D scissor{};
-        scissor.offset.x = 0.0f;
-        scissor.offset.y = 0.0f;
-        scissor.extent.width = drawExtent.width;
-        scissor.extent.height = drawExtent.height;
-
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_MeshPipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                m_MeshPipelineLayout, 0, 1, &(m_MeshDescriptorSet.at(frameIndex)),
-                                0, nullptr);
-
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-        VkBufferDeviceAddressInfo deviceAI{};
-        deviceAI.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        deviceAI.pNext = nullptr;
-        deviceAI.buffer = m_Vertices.getBuffer();
-        VkDeviceAddress address = vkGetBufferDeviceAddress(m_Device, &deviceAI);
-        vkCmdPushConstants(commandBuffer, m_MeshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0,
-                           sizeof(VkDeviceAddress), &address);
-
-        vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-
-        vkCmdEndRendering(commandBuffer);
-    }
-
-    m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     VkExtent3D target = { .width = m_SwapchainImageExtent.width,
                           .height = m_SwapchainImageExtent.height,
                           .depth = 1 };
+
     Image::copyFromTo(commandBuffer, m_DrawImage.getImage(), m_SwapchainImages[swapchainImageIndex],
                       m_DrawImage.getExtent(), target);
 
