@@ -24,7 +24,8 @@ class Camera : public EventReceiver
     glm::vec3 m_Position;
     float m_Yaw;
     float m_Pitch;
-    float m_MovementSpeed = 1.0f;
+    float m_MovementSpeed = 2.0f;
+    float m_Speedup = 2.0f;
 
     glm::vec3 m_Forward;
     glm::vec3 m_Right;

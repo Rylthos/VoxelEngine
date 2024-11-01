@@ -77,9 +77,9 @@ void main()
 
     vec2 uv = vec2(texelCoord) / vec2(size - 1);
 
-    float viewportWidth = 2.0;
-    float viewportHeight = 2.0;
-    float viewportDepth = 1.0;
+    const float viewportWidth = 2.0;
+    const float viewportHeight = 2.0;
+    const float viewportDepth = 1.0;
 
     vec3 viewportTopLeft = vec3(p_CameraPosition + viewportDepth * p_CameraForward - (p_CameraRight * viewportWidth / 2.) + (p_CameraUp * viewportHeight / 2.));
     vec3 deltaRight = vec3(p_CameraRight * viewportWidth);

@@ -93,7 +93,7 @@ class Engine
 
     VkDescriptorPool m_ImguiPool;
 
-    const uint32_t VOXEL_SIZE = 16;
+    const uint32_t VOXEL_SIZE = 8;
     size_t m_TotalVoxels;
     Buffer m_VoxelBuffer;
 

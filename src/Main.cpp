@@ -10,6 +10,7 @@
 int main()
 {
     std::unique_ptr<Engine> engine = std::make_unique<Engine>();
+
     engine->init();
     engine->start();
     engine->cleanup();

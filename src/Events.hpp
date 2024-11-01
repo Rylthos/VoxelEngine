@@ -1,11 +1,12 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <cstdint>
-#include <memory>
 
 #include "EventHandler.hpp"
 
-enum class EventType { UNDEFINED, KEYBOARD, MOUSE };
+enum class EventType { UNDEFINED, KeyboardInput, MouseMove, GameUpdate, GameRender };
 
 struct Event {
     virtual ~Event() = default;
@@ -18,11 +19,27 @@ struct KeyboardInput : public Event {
     int32_t action;
     int32_t mods;
 
-    EventType getType() const override { return EventType::KEYBOARD; }
+    EventType getType() const override { return EventType::KeyboardInput; }
 };
 
-struct MouseInput : public Event {
-    EventType getType() const override { return EventType::MOUSE; }
+struct MouseMove : public Event {
+    EventType getType() const override { return EventType::MouseMove; }
+
+    glm::vec2 position;
+    glm::vec2 delta;
+    bool captured;
+};
+
+struct GameUpdate : public Event {
+    EventType getType() const override { return EventType::GameUpdate; }
+
+    float frameDelta;
+};
+
+struct GameRender : public Event {
+    EventType getType() const override { return EventType::GameRender; }
+
+    float frameDelta;
 };
 
 class EventReceiver

@@ -33,7 +33,8 @@ void Engine::init()
 
     m_Camera = Camera(glm::vec3(8.0f, 8.0f, -10.0f));
 
-    EventHandler::subscribe(EventType::KEYBOARD, &m_Camera);
+    EventHandler::subscribe(
+        { EventType::KeyboardInput, EventType::MouseMove, EventType::GameUpdate }, &m_Camera);
 }
 
 void Engine::start()
@@ -466,6 +467,10 @@ void Engine::initDescriptorSets()
 
 void Engine::update(float frameDelta)
 {
+    GameUpdate update;
+    update.frameDelta = frameDelta;
+    EventHandler::dispatchEvent(&update);
+
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
 
