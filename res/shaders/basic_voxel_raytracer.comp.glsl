@@ -24,19 +24,22 @@ layout (buffer_reference, std430) readonly buffer VoxelBuffer
 
 layout (push_constant) uniform constants
 {
-    mat4 viewMatrix;
-    uvec3 dimensions;
-    float size;
-    VoxelBuffer voxels;
-} PushConstants;
+    vec4 p_CameraPosition;
+    vec4 p_CameraForward;
+    vec4 p_CameraRight;
+    vec4 p_CameraUp;
+    uvec3 p_Dimensions;
+    float p_Size;
+    VoxelBuffer p_Voxels;
+};
 
 const vec3 voxelOrigin = vec3(0., 0., 0.);
 
 float hit(Ray ray, Voxel voxel, ivec3 position)
 {
-    vec3 center = voxelOrigin + vec3(position) * PushConstants.size;
+    vec3 center = voxelOrigin + vec3(position) * p_Size;
     vec3 minBound = center;
-    vec3 maxBound = center + vec3(PushConstants.size);
+    vec3 maxBound = center + vec3(p_Size);
 
     vec3 invDir = 1. / ray.direction;
 
@@ -74,17 +77,16 @@ void main()
 
     vec2 uv = vec2(texelCoord) / vec2(size - 1);
 
-    const vec3 cameraOrigin = vec3(PushConstants.viewMatrix * vec4(0., 0., 0., 1.));
-    const float viewportWidth = 2.0;
-    const float viewportHeight = 2.0;
-    const float viewportDepth = 1.0;
+    float viewportWidth = 2.0;
+    float viewportHeight = 2.0;
+    float viewportDepth = 1.0;
 
-    vec3 topLeft = vec3(cameraOrigin.x - viewportWidth / 2.0, cameraOrigin.y - viewportHeight / 2.0, cameraOrigin.z + viewportDepth);
-    vec3 deltaRight = vec3(viewportWidth, 0.0, 0.0);
-    vec3 deltaDown = vec3(0.0, viewportHeight, 0.0);
+    vec3 viewportTopLeft = vec3(p_CameraPosition + viewportDepth * p_CameraForward - (p_CameraRight * viewportWidth / 2.) + (p_CameraUp * viewportHeight / 2.));
+    vec3 deltaRight = vec3(p_CameraRight * viewportWidth);
+    vec3 deltaDown = vec3(-p_CameraUp * viewportHeight);
 
-    vec3 origin = cameraOrigin;
-    vec3 target = topLeft + uv.x * deltaRight + uv.y * deltaDown;
+    vec3 origin = vec3(p_CameraPosition);
+    vec3 target = viewportTopLeft + uv.x * deltaRight + uv.y * deltaDown;
     vec3 direction = normalize(target - origin);
 
     Ray ray;
@@ -95,14 +97,14 @@ void main()
     Voxel minHitVoxel;
     bool hasHit = false;
 
-    for (int y = 0; y < PushConstants.dimensions.y; y++)
+    for (int y = 0; y < p_Dimensions.y; y++)
     {
-        for (int z = 0; z < PushConstants.dimensions.z; z++)
+        for (int z = 0; z < p_Dimensions.z; z++)
         {
-            for (int x = 0; x < PushConstants.dimensions.x; x++)
+            for (int x = 0; x < p_Dimensions.x; x++)
             {
-                uint index = x + z * PushConstants.dimensions.x + y * PushConstants.dimensions.x * PushConstants.dimensions.z;
-                Voxel voxel = PushConstants.voxels.voxels[index];
+                uint index = x + z * p_Dimensions.x + y * p_Dimensions.x * p_Dimensions.z;
+                Voxel voxel = p_Voxels.voxels[index];
 
                 float hitPos = hit(ray, voxel, ivec3(x, y, z));
 

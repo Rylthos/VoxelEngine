@@ -1,5 +1,4 @@
 #define VMA_IMPLEMENTATION
-#define GLM_ENABLE_EXPERIMENTAL
 
 #include "Engine.hpp"
 

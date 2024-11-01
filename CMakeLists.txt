@@ -34,7 +34,8 @@ elseif(CMAKE_BUILD_TYPE MATCHES Release)
 endif()
 
 add_compile_definitions(GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE
-                        GLFW_INCLUDE_VULKAN)
+                        GLFW_INCLUDE_VULKAN GLM_ENABLE_EXPERIMENTAL)
+
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${outputDirectory})
 

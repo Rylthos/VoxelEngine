@@ -31,7 +31,9 @@ void Engine::init()
     initPipelines();
     initDescriptorSets();
 
-    EventHandler::subscribe(EventType::KEYBOARD, this);
+    m_Camera = Camera(glm::vec3(8.0f, 8.0f, -10.0f));
+
+    EventHandler::subscribe(EventType::KEYBOARD, &m_Camera);
 }
 
 void Engine::start()
@@ -98,22 +100,6 @@ void Engine::cleanup()
     vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
     vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
     vkDestroyInstance(m_Instance, nullptr);
-}
-
-void Engine::receive(const Event* event)
-{
-    switch (event->getType())
-    {
-    case EventType::KEYBOARD:
-        {
-            const KeyboardInput* keyboardInput = reinterpret_cast<const KeyboardInput*>(event);
-
-            spdlog::info("{}", keyboardInput->key);
-            break;
-        }
-    default:
-        break;
-    }
 }
 
 void Engine::initVulkan()
@@ -600,8 +586,10 @@ void Engine::render(float frameDelta)
                             1, &m_VoxelDescriptorSet, 0, nullptr);
 
     VoxelPushConstants pushConstants;
-    pushConstants.viewMatrix = glm::inverse(glm::lookAt(
-        glm::vec3(8.f, 8.f, -10.f), glm::vec3(8.f, 8.f, 0.f), glm::vec3(0.f, -1.f, 0.f)));
+    pushConstants.cameraPosition = m_Camera.getPosition();
+    pushConstants.cameraForward = m_Camera.getForward();
+    pushConstants.cameraRight = m_Camera.getRight();
+    pushConstants.cameraUp = m_Camera.getUp();
 
     pushConstants.size = 1.0f;
 

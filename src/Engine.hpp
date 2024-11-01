@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Buffer.hpp"
+#include "Camera.hpp"
 #include "EventHandler.hpp"
 #include "Events.hpp"
 #include "Image.hpp"
@@ -32,7 +33,10 @@ struct Voxel {
 };
 
 struct VoxelPushConstants {
-    glm::mat4 viewMatrix;
+    glm::vec4 cameraPosition;
+    glm::vec4 cameraForward;
+    glm::vec4 cameraRight;
+    glm::vec4 cameraUp;
     glm::uvec3 dimensions;
     float size;
     VkDeviceAddress voxelAddress;
@@ -42,21 +46,20 @@ struct Stats {
     float frameDelta;
 };
 
-class Engine : public EventReceiver
+class Engine
 {
   public:
   public:
     Engine() {}
-    virtual ~Engine() {}
 
     void init();
     void start();
     void cleanup();
 
-    void receive(const Event* event) override;
-
   private:
     const uint32_t FRAMES_IN_FLIGHT = 2;
+
+    Camera m_Camera;
 
     Window m_Window;
 
