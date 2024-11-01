@@ -5,6 +5,8 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
+#include "EventHandler.hpp"
+
 class Window
 {
   private:

@@ -8,6 +8,8 @@
 #include <vector>
 
 #include "Buffer.hpp"
+#include "EventHandler.hpp"
+#include "Events.hpp"
 #include "Image.hpp"
 #include "Window.hpp"
 
@@ -40,13 +42,18 @@ struct Stats {
     float frameDelta;
 };
 
-class Engine
+class Engine : public EventReceiver
 {
   public:
   public:
+    Engine() {}
+    virtual ~Engine() {}
+
     void init();
     void start();
     void cleanup();
+
+    void receive(const Event* event) override;
 
   private:
     const uint32_t FRAMES_IN_FLIGHT = 2;

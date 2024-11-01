@@ -4,6 +4,9 @@
 
 #include "VkCheck.hpp"
 
+#include "EventHandler.hpp"
+#include "Events.hpp"
+
 Window::Window() {}
 Window::~Window()
 {
@@ -65,4 +68,12 @@ void Window::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
     {
         glfwSetWindowShouldClose(window, true);
     }
+
+    KeyboardInput input;
+    input.key = key;
+    input.scancode = scancode;
+    input.action = action;
+    input.mods = mods;
+
+    EventHandler::dispatchEvent(&input);
 }

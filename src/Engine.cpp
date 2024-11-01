@@ -10,6 +10,8 @@
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
 
+#include "Events.hpp"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
@@ -28,6 +30,8 @@ void Engine::init()
     initDescriptorLayouts();
     initPipelines();
     initDescriptorSets();
+
+    EventHandler::subscribe(EventType::KEYBOARD, this);
 }
 
 void Engine::start()
@@ -94,6 +98,22 @@ void Engine::cleanup()
     vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
     vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
     vkDestroyInstance(m_Instance, nullptr);
+}
+
+void Engine::receive(const Event* event)
+{
+    switch (event->getType())
+    {
+    case EventType::KEYBOARD:
+        {
+            const KeyboardInput* keyboardInput = reinterpret_cast<const KeyboardInput*>(event);
+
+            spdlog::info("{}", keyboardInput->key);
+            break;
+        }
+    default:
+        break;
+    }
 }
 
 void Engine::initVulkan()
