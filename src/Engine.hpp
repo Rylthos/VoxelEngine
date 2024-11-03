@@ -46,7 +46,7 @@ struct Stats {
     float frameDelta;
 };
 
-class Engine
+class Engine : EventReceiver
 {
   public:
   public:
@@ -55,6 +55,8 @@ class Engine
     void init();
     void start();
     void cleanup();
+
+    void receive(const Event* event) override;
 
   private:
     const uint32_t FRAMES_IN_FLIGHT = 2;
@@ -80,6 +82,9 @@ class Engine
     std::vector<VkImageView> m_SwapchainImageViews;
 
     Image m_DrawImage;
+    Image m_RayImage;
+
+    bool m_RenderRay = false;
 
     VkDescriptorSet m_VoxelDescriptorSet;
     VkDescriptorSetLayout m_VoxelDescriptorSetLayout;
@@ -93,7 +98,7 @@ class Engine
 
     VkDescriptorPool m_ImguiPool;
 
-    const uint32_t VOXEL_SIZE = 8;
+    const uint32_t VOXEL_SIZE = 128;
     size_t m_TotalVoxels;
     Buffer m_VoxelBuffer;
 

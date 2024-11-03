@@ -17,7 +17,7 @@
 
 void Engine::init()
 {
-    m_Window.create("Voxel Engine", 500, 500);
+    m_Window.create("Voxel Engine", 1000, 1000);
 
     initVulkan();
     initSwapchain();
@@ -31,7 +31,9 @@ void Engine::init()
     initPipelines();
     initDescriptorSets();
 
-    m_Camera = Camera(glm::vec3(8.0f, 8.0f, -10.0f));
+    m_Camera = Camera(glm::vec3(64.0f, 64.0f, -0.5f));
+
+    EventHandler::subscribe(EventType::KeyboardInput, this);
 
     EventHandler::subscribe(
         { EventType::KeyboardInput, EventType::MouseMove, EventType::GameUpdate }, &m_Camera);
@@ -93,6 +95,7 @@ void Engine::cleanup()
     }
 
     m_DrawImage.free();
+    m_RayImage.free();
 
     destroySwapchain();
 
@@ -101,6 +104,24 @@ void Engine::cleanup()
     vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
     vkb::destroy_debug_utils_messenger(m_Instance, m_DebugMessenger, nullptr);
     vkDestroyInstance(m_Instance, nullptr);
+}
+
+void Engine::receive(const Event* event)
+{
+    switch (event->getType())
+    {
+    case EventType::KeyboardInput:
+        {
+            const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
+
+            if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
+                m_RenderRay = !m_RenderRay;
+
+            break;
+        }
+    default:
+        break;
+    }
 }
 
 void Engine::initVulkan()
@@ -207,6 +228,13 @@ void Engine::initSwapchain()
                        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+
+    m_RayImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, VK_IMAGE_TYPE_2D,
+                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                      VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
     spdlog::info("Createed Swapchain ImageView");
 }
@@ -409,6 +437,7 @@ void Engine::initDescriptorLayouts()
 {
     m_VoxelDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
                                      .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
+                                     .addStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT)
                                      .build();
     spdlog::info("Created descriptor layouts");
 }
@@ -459,6 +488,7 @@ void Engine::initDescriptorSets()
     m_VoxelDescriptorSet =
         DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
             .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
+            .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_RayImage.getImageView())
             .build()
             .at(0);
 
@@ -579,9 +609,13 @@ void Engine::render(float frameDelta)
     commandBufferBI.pInheritanceInfo = nullptr;
     commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
+    Image& renderImage = m_RenderRay ? m_RayImage : m_DrawImage;
+
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
 
     m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    m_RayImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
     Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -607,15 +641,15 @@ void Engine::render(float frameDelta)
     vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
                   std::ceil(drawExtent.height / 16.0), 1);
 
-    m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
+    renderImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
     VkExtent3D target = { .width = m_SwapchainImageExtent.width,
                           .height = m_SwapchainImageExtent.height,
                           .depth = 1 };
 
-    Image::copyFromTo(commandBuffer, m_DrawImage.getImage(), m_SwapchainImages[swapchainImageIndex],
-                      m_DrawImage.getExtent(), target);
+    Image::copyFromTo(commandBuffer, renderImage.getImage(), m_SwapchainImages[swapchainImageIndex],
+                      renderImage.getExtent(), target);
 
     Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
