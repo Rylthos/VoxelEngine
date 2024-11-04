@@ -43,6 +43,8 @@ void Window::initGLFW()
     }
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, GLFW_FALSE);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
     glfwWindowHintString(GLFW_X11_CLASS_NAME, "GLFW");
     glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "GLFW");
@@ -60,6 +62,8 @@ void Window::initWindow(const char* title)
     glfwSwapInterval(0);
 
     glfwSetWindowUserPointer(m_Window, this);
+
+    glfwSetInputMode(m_Window, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
 
     glfwSetKeyCallback(m_Window, Window::keyCallback);
     glfwSetCursorEnterCallback(m_Window, Window::mouseEnterCallback);

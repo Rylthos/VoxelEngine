@@ -5,9 +5,7 @@ project(VoxelEngine)
 
 find_package(Vulkan REQUIRED)
 
-if(UNIX)
-  find_package(glfw3 REQUIRED)
-endif()
+find_package(glfw3 REQUIRED)
 
 # Set C++ Standard
 set(CMAKE_CXX_STANDARD 20)

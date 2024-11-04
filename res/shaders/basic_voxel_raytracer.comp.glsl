@@ -9,6 +9,8 @@ layout (rgba16f, set = 0, binding = 1) uniform image2D o_RayImage;
 
 #define MAX_COMPARISONS 128
 
+ivec2 texelCoord;
+
 struct Voxel
 {
     vec4 colour;
@@ -120,7 +122,7 @@ Ray generateRay()
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
-    ray.invDir = 1. / ray.direction;
+    ray.invDir =1. / ray.direction;
 
     return ray;
 }
@@ -138,13 +140,13 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
     comparisons = 1;
 
     tMin = max(tMin, t0);
-    tMax = max(tMax, t1);
+    tMax = min(tMax, t1);
 
     vec3 rayStart = ray.origin + ray.direction * tMin;
     vec3 rayEnd = ray.origin + ray.direction * tMax;
 
-    int currentXIndex = int(max(0, floor(rayStart.x - minBound.x / p_Size)));
-    int endXIndex = int(max(0, floor(rayStart.x - minBound.x / p_Size)));
+    int currentXIndex = int(max(1, ceil(rayStart.x - minBound.x / p_Size)));
+    int endXIndex = int(max(1, ceil(rayEnd.x - minBound.x / p_Size)));
     int stepX;
     float tDeltaX;
     float tMaxX;
@@ -168,8 +170,8 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
         tMaxX = tMax;
     }
 
-    int currentYIndex = int(max(0, floor(rayStart.y - minBound.y / p_Size)));
-    int endYIndex = int(max(0, floor(rayStart.y - minBound.y / p_Size)));
+    int currentYIndex = int(max(1, ceil(rayStart.y - minBound.y / p_Size)));
+    int endYIndex = int(max(1, ceil(rayEnd.y - minBound.y / p_Size)));
     int stepY;
     float tDeltaY;
     float tMaxY;
@@ -193,8 +195,8 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
         tMaxY = tMax;
     }
 
-    int currentZIndex = int(max(0, floor(rayStart.z - minBound.z / p_Size)));
-    int endZIndex = int(max(0, floor(rayStart.z - minBound.z / p_Size)));
+    int currentZIndex = int(max(1, ceil(rayStart.z - minBound.z / p_Size)));
+    int endZIndex = int(max(1, ceil(rayEnd.z - minBound.z / p_Size)));
     int stepZ;
     float tDeltaZ;
     float tMaxZ;
@@ -202,7 +204,7 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
     {
         stepZ = 1;
         tDeltaZ = p_Size * ray.invDir.z;
-        tMaxZ = tMin + (minBound.z + currentYIndex * p_Size - rayStart.z) * ray.invDir.z;
+        tMaxZ = tMin + (minBound.z + currentZIndex * p_Size - rayStart.z) * ray.invDir.z;
     }
     else if (ray.direction.z < 0.)
     {
@@ -218,9 +220,23 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
         tMaxZ = tMax;
     }
 
+    int maxIndex = int(p_Dimensions.x * p_Dimensions.y * p_Dimensions.z);
+    bool valid = false;
     while (currentXIndex != endXIndex || currentYIndex != endYIndex || currentZIndex != endZIndex)
     {
         comparisons += 1;
+        int index = indexFromPosition(ivec3(currentXIndex - 1, currentYIndex - 1, currentZIndex - 1));
+        if (index >= maxIndex)
+            return false;
+
+        voxel = p_Voxels.voxels[index];
+        if (voxel.colour.a > 0.)
+        {
+            valid = true;
+            break;
+        }
+
+
         if (tMaxX < tMaxY && tMaxX < tMaxZ)
         {
             currentXIndex += stepX;
@@ -238,19 +254,23 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
         }
     }
 
-    int index = indexFromPosition(ivec3(currentXIndex, currentYIndex, currentZIndex));
+    int index = indexFromPosition(ivec3(currentXIndex - 1, currentYIndex - 1, currentZIndex - 1));
+
+    imageStore(o_RayImage, texelCoord, vec4(currentXIndex, currentYIndex, currentZIndex, index));
 
     voxel = p_Voxels.voxels[index];
-    return true;
+    return valid;
 }
 
 void main()
 {
-    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    // ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    texelCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(o_Image);
 
     Ray ray = generateRay();
 
+    imageStore(o_RayImage, texelCoord, vec4(0.));
 
     Voxel hitVoxel;
     int comparisons;
@@ -260,15 +280,14 @@ void main()
     const vec4 maxComp = vec4(1., 1., 0., 1.);
     vec4 colour = mix(noComp, maxComp, float(comparisons) / MAX_COMPARISONS);
 
-
     if (hasHit)
     {
-        imageStore(o_RayImage, texelCoord, colour);
-        imageStore(o_Image, texelCoord, hitVoxel.colour);
+        // imageStore(o_RayImage, texelCoord, colour);
+        imageStore(o_Image, texelCoord, vec4(hitVoxel.colour.xyz, 1.));
     }
     else
     {
-        imageStore(o_RayImage, texelCoord, vec4(0.));
+        // imageStore(o_RayImage, texelCoord, vec4(0.));
         imageStore(o_Image, texelCoord, vec4(0.));
     }
 }

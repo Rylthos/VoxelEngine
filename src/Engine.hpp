@@ -98,7 +98,7 @@ class Engine : EventReceiver
 
     VkDescriptorPool m_ImguiPool;
 
-    const uint32_t VOXEL_SIZE = 128;
+    const uint32_t VOXEL_SIZE = 2;
     size_t m_TotalVoxels;
     Buffer m_VoxelBuffer;
 

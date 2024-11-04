@@ -17,7 +17,7 @@
 
 void Engine::init()
 {
-    m_Window.create("Voxel Engine", 1000, 1000);
+    m_Window.create("Voxel Engine", 960, 960);
 
     initVulkan();
     initSwapchain();
@@ -31,7 +31,7 @@ void Engine::init()
     initPipelines();
     initDescriptorSets();
 
-    m_Camera = Camera(glm::vec3(64.0f, 64.0f, -0.5f));
+    m_Camera = Camera(glm::vec3(1.0f, 1.0f, -0.5f));
 
     EventHandler::subscribe(EventType::KeyboardInput, this);
 
@@ -364,38 +364,40 @@ void Engine::initVoxelBuffer()
         {
             for (uint32_t x = 0; x < VOXEL_SIZE; x++)
             {
-
                 uint32_t layerSum = x + z;
                 uint32_t sum = x + y + z;
                 uint32_t layerIndex = z * VOXEL_SIZE + x;
                 uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
 
-                glm::vec4 colour = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                glm::vec3 colour = glm::vec3(0.0f, 0.0f, 0.0f);
+                int32_t visible = 1;
 
                 if (layerSum % 2 == 0)
                 {
                     if (sum % 2 == 0)
                     {
-                        colour = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+                        colour = glm::vec3(1.0f, 0.0f, 0.0f);
+                        visible = -1;
                     }
                     else
                     {
-                        colour = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+                        colour = glm::vec3(0.0f, 1.0f, 0.0f);
                     }
                 }
                 else
                 {
                     if (sum % 2 == 0)
                     {
-                        colour = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+                        colour = glm::vec3(0.0f, 0.0f, 1.0f);
+                        visible = -1;
                     }
                     else
                     {
-                        colour = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+                        colour = glm::vec3(1.0f, 1.0f, 0.0f);
                     }
                 }
 
-                voxels.at(index) = { .colour = colour };
+                voxels.at(index) = { .colour = glm::vec4(colour, visible) };
             }
         }
     }
