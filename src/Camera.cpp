@@ -51,7 +51,7 @@ void Camera::receive(const Event* event)
             const float mouseSensitivity = 0.5;
             m_Yaw -= mi->delta.x * mouseSensitivity;
             m_Pitch += mi->delta.y * mouseSensitivity;
-            m_Pitch = std::clamp(m_Pitch, -90.0f, 90.0f);
+            m_Pitch = std::clamp(m_Pitch, -89.9f, 89.9f);
 
             updateAxis();
 

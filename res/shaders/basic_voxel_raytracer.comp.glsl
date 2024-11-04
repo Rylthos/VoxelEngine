@@ -92,10 +92,10 @@ bool hitBox(Ray ray, vec3 minBound, vec3 maxBound, float t0, float t1, out float
     if (tZMin > tMin) tMin = tZMin;
     if (tZMax < tMax) tMax = tZMax;
 
-    return (tMin < t1 && tMax > t0);
+    return ((tMin < t1) && (tMax > t0));
 }
 
-int indexFromPosition(ivec3 pos)
+int indexFromPosition(uvec3 pos)
 {
     return int(pos.x + pos.z * p_Dimensions.x + pos.y * p_Dimensions.x * p_Dimensions.z);
 }
@@ -111,7 +111,7 @@ Ray generateRay()
     const float viewportHeight = 2.0;
     const float viewportDepth = 1.0;
 
-    vec3 viewportTopLeft = vec3(p_CameraPosition + viewportDepth * p_CameraForward - (p_CameraRight * viewportWidth / 2.) + (p_CameraUp * viewportHeight / 2.));
+    vec3 viewportTopLeft = vec3(p_CameraPosition + p_CameraForward * viewportDepth - (p_CameraRight * viewportWidth / 2.) + (p_CameraUp * viewportHeight / 2.));
     vec3 deltaRight = vec3(p_CameraRight * viewportWidth);
     vec3 deltaDown = vec3(-p_CameraUp * viewportHeight);
 
@@ -122,9 +122,16 @@ Ray generateRay()
     Ray ray;
     ray.origin = origin;
     ray.direction = direction;
-    ray.invDir =1. / ray.direction;
+    ray.invDir = 1. / ray.direction;
 
     return ray;
+}
+
+bool withinBounds(uvec3 index)
+{
+    bvec3 less = lessThanEqual(index, p_Dimensions - 1);
+    bvec3 greater = greaterThanEqual(index, uvec3(0));
+    return less.x && less.y && less.z && greater.x && greater.y && greater.z;
 }
 
 bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
@@ -145,121 +152,44 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
     vec3 rayStart = ray.origin + ray.direction * tMin;
     vec3 rayEnd = ray.origin + ray.direction * tMax;
 
-    int currentXIndex = int(max(1, ceil(rayStart.x - minBound.x / p_Size)));
-    int endXIndex = int(max(1, ceil(rayEnd.x - minBound.x / p_Size)));
-    int stepX;
-    float tDeltaX;
-    float tMaxX;
-    if (ray.direction.x > 0.)
-    {
-        stepX = 1;
-        tDeltaX = p_Size * ray.invDir.x;
-        tMaxX = tMin + (minBound.x + currentXIndex * p_Size - rayStart.x) * ray.invDir.x;
-    }
-    else if (ray.direction.x < 0.)
-    {
-        stepX = -1;
-        tDeltaX = -p_Size * ray.invDir.x;
-        int previousXIndex = currentXIndex - 1;
-        tMaxX = tMin + (minBound.x + previousXIndex * p_Size - rayStart.x) * ray.invDir.x;
-    }
-    else
-    {
-        stepX = 0;
-        tDeltaX = tMax;
-        tMaxX = tMax;
-    }
+    ivec3 currentIndex = ivec3(max(vec3(0.), floor(rayStart - minBound / p_Size)));
+    ivec3 endIndex = ivec3(max(vec3(0.), floor(rayEnd - minBound / p_Size)));
 
-    int currentYIndex = int(max(1, ceil(rayStart.y - minBound.y / p_Size)));
-    int endYIndex = int(max(1, ceil(rayEnd.y - minBound.y / p_Size)));
-    int stepY;
-    float tDeltaY;
-    float tMaxY;
-    if (ray.direction.y > 0.)
-    {
-        stepY = 1;
-        tDeltaY = p_Size * ray.invDir.y;
-        tMaxY = tMin + (minBound.y + currentYIndex * p_Size - rayStart.y) * ray.invDir.y;
-    }
-    else if (ray.direction.y < 0.)
-    {
-        stepY = -1;
-        tDeltaY = -p_Size * ray.invDir.y;
-        int previousYIndex = currentYIndex - 1;
-        tMaxY = tMin + (minBound.y + previousYIndex * p_Size - rayStart.y) * ray.invDir.y;
-    }
-    else
-    {
-        stepY = 0;
-        tDeltaY = tMax;
-        tMaxY = tMax;
-    }
+    currentIndex = clamp(currentIndex, ivec3(0), ivec3(p_Dimensions - 1));
+    endIndex = clamp(endIndex, ivec3(0), ivec3(p_Dimensions - 1));
 
-    int currentZIndex = int(max(1, ceil(rayStart.z - minBound.z / p_Size)));
-    int endZIndex = int(max(1, ceil(rayEnd.z - minBound.z / p_Size)));
-    int stepZ;
-    float tDeltaZ;
-    float tMaxZ;
-    if (ray.direction.z > 0.)
-    {
-        stepZ = 1;
-        tDeltaZ = p_Size * ray.invDir.z;
-        tMaxZ = tMin + (minBound.z + currentZIndex * p_Size - rayStart.z) * ray.invDir.z;
-    }
-    else if (ray.direction.z < 0.)
-    {
-        stepZ = -1;
-        tDeltaZ = -p_Size * ray.invDir.z;
-        int previousZIndex = currentZIndex - 1;
-        tMaxZ = tMin + (minBound.z + previousZIndex * p_Size - rayStart.z) * ray.invDir.z;
-    }
-    else
-    {
-        stepZ = 0;
-        tDeltaZ = tMax;
-        tMaxZ = tMax;
-    }
+    ivec3 stepDirection = clamp(ivec3(sign(ray.direction)), ivec3(-1), ivec3(1));
+    vec3 stepSize = vec3(p_Size * ray.invDir * stepDirection);
+    // vec3 nextDist = (vec3(stepDirection) * 0.5 + 0.5 - fract(rayStart)) * ray.invDir;
+    vec3 nextDist = abs((currentIndex + max(stepDirection, 0) - ray.origin) * ray.invDir);
 
-    int maxIndex = int(p_Dimensions.x * p_Dimensions.y * p_Dimensions.z);
-    bool valid = false;
-    while (currentXIndex != endXIndex || currentYIndex != endYIndex || currentZIndex != endZIndex)
+    endIndex += stepDirection;
+
+    while (currentIndex.x != endIndex.x && currentIndex.y != endIndex.y && currentIndex.z != endIndex.z)
     {
-        comparisons += 1;
-        int index = indexFromPosition(ivec3(currentXIndex - 1, currentYIndex - 1, currentZIndex - 1));
-        if (index >= maxIndex)
-            return false;
+        if (!withinBounds(currentIndex)) return false;
+        int index = indexFromPosition(currentIndex);
 
         voxel = p_Voxels.voxels[index];
-        if (voxel.colour.a > 0.)
-        {
-            valid = true;
-            break;
-        }
+        if (voxel.colour.w > 0) return true;
 
-
-        if (tMaxX < tMaxY && tMaxX < tMaxZ)
-        {
-            currentXIndex += stepX;
-            tMaxX += tDeltaX;
-        }
-        else if (tMaxY < tMaxZ)
-        {
-            currentYIndex += stepY;
-            tMaxY += tDeltaY;
-        }
-        else
-        {
-            currentZIndex += stepZ;
-            tMaxZ += tDeltaZ;
-        }
+        float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
+        ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
+        currentIndex += stepDirection * stepAxis;
+        nextDist += stepSize * stepAxis;
+        imageStore(o_RayImage, texelCoord, vec4(currentIndex, withinBounds(currentIndex)));
     }
 
-    int index = indexFromPosition(ivec3(currentXIndex - 1, currentYIndex - 1, currentZIndex - 1));
 
-    imageStore(o_RayImage, texelCoord, vec4(currentXIndex, currentYIndex, currentZIndex, index));
+
+    if (!withinBounds(currentIndex)) return false;
+
+    int index = indexFromPosition(currentIndex);
 
     voxel = p_Voxels.voxels[index];
-    return valid;
+    if (voxel.colour.w > 0) return true;
+
+    return false;
 }
 
 void main()
@@ -270,11 +200,13 @@ void main()
 
     Ray ray = generateRay();
 
-    imageStore(o_RayImage, texelCoord, vec4(0.));
+    imageStore(o_RayImage, texelCoord, vec4(0.2));
 
     Voxel hitVoxel;
     int comparisons;
     bool hasHit = traverse(ray, 0., 1000., hitVoxel, comparisons);
+
+    imageStore(o_Image, texelCoord, vec4(0.2));
 
     const vec4 noComp = vec4(1., 0., 1., 1.);
     const vec4 maxComp = vec4(1., 1., 0., 1.);
@@ -282,12 +214,6 @@ void main()
 
     if (hasHit)
     {
-        // imageStore(o_RayImage, texelCoord, colour);
         imageStore(o_Image, texelCoord, vec4(hitVoxel.colour.xyz, 1.));
-    }
-    else
-    {
-        // imageStore(o_RayImage, texelCoord, vec4(0.));
-        imageStore(o_Image, texelCoord, vec4(0.));
     }
 }
