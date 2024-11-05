@@ -357,6 +357,11 @@ void Engine::initImGui()
 
 void Engine::initVoxelBuffer()
 {
+    const float R = 16.0f;
+    const float r = 10.0f;
+
+    glm::vec3 center = glm::vec3(VOXEL_SIZE / 2.f);
+
     std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
     for (uint32_t y = 0; y < VOXEL_SIZE; y++)
     {
@@ -369,52 +374,28 @@ void Engine::initVoxelBuffer()
                 uint32_t layerIndex = z * VOXEL_SIZE + x;
                 uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
 
-                glm::vec3 colour = glm::vec3(0.0f, 0.0f, 0.0f);
-                int32_t visible = 1;
+                glm::vec3 position = glm::vec3(x, y, z) - center;
+                glm::vec3 squared = position * position;
 
-                if (layerSum % 2 == 0)
+                if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
                 {
-                    if (sum % 2 == 0)
-                    {
-                        colour = glm::vec3(1.0f, 0.0f, 0.0f);
-                        visible = -1;
-                    }
-                    else
-                    {
-                        colour = glm::vec3(0.0f, 1.0f, 0.0f);
-                    }
+                    voxels.at(index) = { .colour = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) };
                 }
                 else
                 {
-                    if (sum % 2 == 0)
-                    {
-                        colour = glm::vec3(0.0f, 0.0f, 1.0f);
-                        visible = -1;
-                    }
-                    else
-                    {
-                        colour = glm::vec3(1.0f, 1.0f, 0.0f);
-                    }
+                    voxels.at(index) = { .colour = glm::vec4(0.f) };
                 }
-
-                voxels.at(index) = { .colour = glm::vec4(colour, visible) };
             }
         }
     }
-    Buffer staging;
-    staging.create(m_Allocator, voxels.size() * sizeof(Voxel),
-                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                   VMA_MEMORY_USAGE_CPU_COPY);
-
-    staging.copyFromData<Voxel>(voxels);
 
     m_VoxelBuffer.create(m_Allocator, voxels.size() * sizeof(Voxel),
                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                              VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                          VMA_MEMORY_USAGE_GPU_ONLY);
 
-    m_VoxelBuffer.copyFromBuffer(staging, voxels.size() * sizeof(Voxel));
-    m_TotalVoxels = voxels.size();
+    m_VoxelBuffer.copyFromData<Voxel>(voxels);
+
     spdlog::info("Created Vertex Buffer");
 }
 
@@ -547,6 +528,26 @@ void Engine::update(float frameDelta)
         ImGui::Text("AVG: %1.3f : %.2f", avgTime, 1.0f / avgTime);
         ImGui::Text("MIN: %1.3f : %.2f", minTime, 1.0f / minTime);
         ImGui::Text("FPS: %1.3f", 1.0f / m_Stats.frameDelta);
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Camera"))
+    {
+        glm::vec3 camPos = m_Camera.getPosition();
+        ImGui::Text("Camera Position");
+        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camPos.x, camPos.y, camPos.z);
+
+        glm::vec3 camForward = m_Camera.getForward();
+        ImGui::Text("Camera Forward");
+        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camForward.x, camForward.y, camForward.z);
+
+        glm::vec3 camRight = m_Camera.getRight();
+        ImGui::Text("Camera Right");
+        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camRight.x, camRight.y, camRight.z);
+
+        glm::vec3 camUp = m_Camera.getUp();
+        ImGui::Text("Camera Up");
+        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
     }
     ImGui::End();
 

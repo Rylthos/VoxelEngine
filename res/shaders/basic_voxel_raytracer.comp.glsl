@@ -136,7 +136,7 @@ bool withinBounds(uvec3 index)
 
 bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
 {
-    comparisons = 0;
+    comparisons = -1;
 
     vec3 minBound, maxBound;
     getVoxelBounds(minBound, maxBound);
@@ -167,6 +167,8 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
 
     while (currentIndex.x != endIndex.x && currentIndex.y != endIndex.y && currentIndex.z != endIndex.z)
     {
+        comparisons += 1;
+
         if (!withinBounds(currentIndex)) return false;
         int index = indexFromPosition(currentIndex);
 
@@ -177,10 +179,9 @@ bool traverse(Ray ray, float t0, float t1, out Voxel voxel, out int comparisons)
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
         currentIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
-        imageStore(o_RayImage, texelCoord, vec4(currentIndex, withinBounds(currentIndex)));
     }
 
-
+    comparisons += 1;
 
     if (!withinBounds(currentIndex)) return false;
 
@@ -208,9 +209,14 @@ void main()
 
     imageStore(o_Image, texelCoord, vec4(0.2));
 
-    const vec4 noComp = vec4(1., 0., 1., 1.);
-    const vec4 maxComp = vec4(1., 1., 0., 1.);
-    vec4 colour = mix(noComp, maxComp, float(comparisons) / MAX_COMPARISONS);
+    const vec4 noComp = vec4(1., 0., 1., 0.2);
+    const vec4 maxComp = vec4(1., 1., 0., 0.2);
+
+    if (comparisons >= 0)
+    {
+        vec4 colour = mix(noComp, maxComp, float(comparisons) / MAX_COMPARISONS);
+        imageStore(o_RayImage, texelCoord, colour);
+    }
 
     if (hasHit)
     {
