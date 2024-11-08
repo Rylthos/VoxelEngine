@@ -445,7 +445,7 @@ void Engine::initPipelines()
             vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_VoxelPipelineLayout));
 
         ShaderModule voxelShader;
-        voxelShader.create("res/shaders/basic_voxel_raytracer.comp.spv", m_Device);
+        voxelShader.create("res/shaders/FastVoxelTraversal.comp.spv", m_Device);
 
         VkPipelineShaderStageCreateInfo shaderStageCI{};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
