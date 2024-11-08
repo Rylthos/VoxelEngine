@@ -47,8 +47,9 @@ void main()
     Voxel hitVoxel;
     vec3 normal;
     int comparisons;
+    float t;
     bool didHit = traverse(ray, grid, 0., 1000.,
-            hitIndex, hitVoxel, normal, comparisons);
+            hitIndex, hitVoxel, normal, comparisons, t);
 
     if (comparisons >= 0)
     {
@@ -61,6 +62,20 @@ void main()
 
     if (didHit)
     {
-        imageStore(o_Image, texelCoord, vec4(abs(normal), 1.0));
+        const vec3 lightPosition = vec3(0., -5, 0.);
+        const vec3 lightColour = vec3(1.);
+
+        const vec3 hitPosition = ray.direction * t;
+        const vec3 lightDir = normalize(lightPosition - hitPosition);
+        float diff = max(dot(normal, lightDir), 0.);
+
+        const float ambientStrength = 1.0;
+        vec3 ambient = lightColour * ambientStrength;
+        vec3 diffuse = lightColour * diff;
+
+        vec3 colour = (ambient + diffuse) * hitVoxel.colour.xyz;
+
+        imageStore(o_Image, texelCoord, vec4(colour, 1.0));
+        // imageStore(o_Image, texelCoord, vec4(lightDir, 1.0));
     }
 }

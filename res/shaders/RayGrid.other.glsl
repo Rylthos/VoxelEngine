@@ -117,7 +117,8 @@ bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float t0, float t1,
 }
 
 bool traverse(Ray ray, Grid grid, float t0, float t1,
-            out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons)
+            out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons,
+            out float t)
 {
     comparisons = -1;
 
@@ -131,6 +132,8 @@ bool traverse(Ray ray, Grid grid, float t0, float t1,
 
     tMin = max(tMin, t0);
     tMax = min(tMax, t1);
+
+    t = tMin;
 
     vec3 rayStart = ray.origin + ray.direction * tMin;
     vec3 rayEnd = ray.origin + ray.direction * tMax;
@@ -161,9 +164,11 @@ bool traverse(Ray ray, Grid grid, float t0, float t1,
 
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
+
+        t += dot(stepSize, stepAxis);
         gridIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
-        normal = stepDirection * stepAxis;
+        normal = normalize(stepDirection * stepAxis);
     }
 
     comparisons += 1;
