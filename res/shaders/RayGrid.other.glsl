@@ -1,3 +1,5 @@
+#define MAX_ITERATIONS 128
+
 struct Ray
 {
     vec3 origin;
@@ -32,7 +34,7 @@ int indexFromGridPosition(Grid grid, uvec3 position)
                + position.y * grid.dimensions.x * grid.dimensions.z);
 }
 
-bool indexWithinBounds(Grid grid, uvec3 position)
+bool indexWithinBounds(Grid grid, ivec3 position)
 {
     bvec3 less = lessThanEqual(position, grid.dimensions - 1);
     bvec3 greater = greaterThanEqual(position, uvec3(0));
@@ -62,61 +64,31 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
     Ray ray;
     ray.origin = position;
     ray.direction = direction;
+
     ray.invDir = 1. / direction;
 
     return ray;
 }
 
-bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float t0, float t1,
+bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float maxT,
                      out float tMin, out float tMax)
 {
-    if (ray.invDir.x >= 0.)
-    {
-        tMin = (minBound.x - ray.origin.x) * ray.invDir.x;
-        tMax = (maxBound.x - ray.origin.x) * ray.invDir.x;
-    }
-    else
-    {
-        tMax = (minBound.x - ray.origin.x) * ray.invDir.x;
-        tMin = (maxBound.x - ray.origin.x) * ray.invDir.x;
-    }
+    vec3 tbot = ray.invDir * (minBound - ray.origin);
+    vec3 ttop = ray.invDir * (maxBound - ray.origin);
 
-    float tYMin, tYMax;
-    if (ray.invDir.y >= 0.)
-    {
-        tYMin = (minBound.y - ray.origin.y) * ray.invDir.y;
-        tYMax = (maxBound.y - ray.origin.y) * ray.invDir.y;
-    }
-    else
-    {
-        tYMax = (minBound.y - ray.origin.y) * ray.invDir.y;
-        tYMin = (maxBound.y - ray.origin.y) * ray.invDir.y;
-    }
+    vec3 tmin = min(ttop, tbot);
+    vec3 tmax = max(ttop, tbot);
 
-    if (tMin > tYMax || tYMin > tMax) return false;
-    if (tYMin > tMin) tMin = tYMin;
-    if (tYMax < tMax) tMax = tYMax;
-
-    float tZMin, tZMax;
-    if (ray.invDir.z >= 0.)
-    {
-        tZMin = (minBound.z - ray.origin.z) * ray.invDir.z;
-        tZMax = (maxBound.z - ray.origin.z) * ray.invDir.z;
-    }
-    else
-    {
-        tZMax = (minBound.z - ray.origin.z) * ray.invDir.z;
-        tZMin = (maxBound.z - ray.origin.z) * ray.invDir.z;
-    }
-
-    if (tMin > tZMax || tZMin > tMax) return false;
-    if (tZMin > tMin) tMin = tZMin;
-    if (tZMax < tMax) tMax = tZMax;
-
-    return ((tMin < t1) && (tMax > t0));
+    vec2 t = max(tmin.xx, tmin.yz);
+    float t0 = max(t.x, t.y);
+    t = min(tmax.xx, tmax.yz);
+    float t1 = min(t.x, t.y);
+    tMin = t0;
+    tMax = t1;
+    return t1 > max(t0, 0.0) && tMax > minT && tMin < maxT;
 }
 
-bool traverse(Ray ray, Grid grid, float t0, float t1,
+bool traverse(Ray ray, Grid grid,
             out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons,
             out float t)
 {
@@ -125,38 +97,36 @@ bool traverse(Ray ray, Grid grid, float t0, float t1,
     float tMin, tMax;
     const vec3 minBound = grid.minBound;
     const vec3 maxBound = grid.maxBound;
-    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, t0, t1, tMin, tMax);
+    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000.0, tMin, tMax);
+
     if (!intersectGrid) return false;
 
-    comparisons = 1;
+    comparisons = 0;
 
-    tMin = max(tMin, t0);
-    tMax = min(tMax, t1);
+    vec3 invDir = ray.invDir;
+    if (isinf(invDir.x)) invDir.x = 0.;
+    if (isinf(invDir.y)) invDir.y = 0.;
+    if (isinf(invDir.z)) invDir.z = 0.;
 
-    t = tMin;
-
-    vec3 rayStart = ray.origin + ray.direction * tMin;
+    vec3 rayStart = ray.origin + ray.direction * max(tMin, 0);
     vec3 rayEnd = ray.origin + ray.direction * tMax;
 
     gridIndex = ivec3(max(vec3(0.), floor(rayStart - minBound / grid.voxelSize)));
-    ivec3 endIndex = ivec3(max(vec3(0.), floor(rayEnd - minBound / grid.voxelSize)));
-
     gridIndex = clamp(gridIndex, ivec3(0), ivec3(grid.dimensions - 1));
-    endIndex = clamp(endIndex, ivec3(0), ivec3(grid.dimensions - 1));
 
     ivec3 stepDirection = clamp(ivec3(sign(ray.direction)), ivec3(-1), ivec3(1));
-    vec3 stepSize = vec3(grid.voxelSize * ray.invDir * stepDirection);
+    vec3 stepSize = vec3(grid.voxelSize * invDir * stepDirection);
     vec3 nextDist = abs((gridIndex + max(stepDirection, 0) - ray.origin) * ray.invDir);
 
+    ivec3 endIndex = ivec3(max(vec3(0.), floor(rayEnd - minBound / grid.voxelSize)));
+    endIndex = clamp(endIndex, ivec3(0), ivec3(grid.dimensions - 1));
     endIndex += stepDirection;
 
-    normal = vec3(0.);
-
-    while (gridIndex.x != endIndex.x && gridIndex.y != endIndex.y && gridIndex.z != endIndex.z)
+    for (int i = 0; i < MAX_ITERATIONS; i++)
     {
-        comparisons += 1;
-
+        comparisons++;
         if (!indexWithinBounds(grid, gridIndex)) return false;
+
         int index = indexFromGridPosition(grid, gridIndex);
 
         voxel = grid.voxels.voxels[index];
@@ -168,16 +138,8 @@ bool traverse(Ray ray, Grid grid, float t0, float t1,
         t += dot(stepSize, stepAxis);
         gridIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
-        normal = normalize(stepDirection * stepAxis);
+        normal = -stepDirection * stepAxis;
     }
 
-    comparisons += 1;
-
-    if (!indexWithinBounds(grid, gridIndex)) return false;
-
-    int index = indexFromGridPosition(grid, gridIndex);
-
-    voxel = grid.voxels.voxels[index];
-
-    return (voxel.colour.w > 0) ? true : false;
+    return false;
 }

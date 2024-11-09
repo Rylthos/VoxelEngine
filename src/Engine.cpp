@@ -31,7 +31,7 @@ void Engine::init()
     initPipelines();
     initDescriptorSets();
 
-    m_Camera = Camera(glm::vec3(1.0f, 1.0f, -0.5f));
+    m_Camera = Camera(glm::vec3(32.0f, 32.0f, -0.5f));
 
     EventHandler::subscribe(EventType::KeyboardInput, this);
 

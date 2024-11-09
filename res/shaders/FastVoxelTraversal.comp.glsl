@@ -30,14 +30,12 @@ void main()
     ivec2 size = imageSize(o_Image);
     vec2 uv = vec2(texelCoord) / vec2(size);
 
-
-    const vec3 clearColour = vec3(0.2);
-    imageStore(o_ComparisonImage, texelCoord, vec4(clearColour, 1.0));
+    const vec3 clearColour = vec3(0.1);
+    imageStore(o_ComparisonImage, texelCoord, vec4(clearColour, 0.0));
     imageStore(o_Image, texelCoord, vec4(clearColour, 1.0));
 
     Ray ray = generateRay(uv,
-                        vec3(p_CameraPosition),
-                        vec3(p_CameraFront),
+                        vec3(p_CameraPosition), vec3(p_CameraFront),
                         vec3(p_CameraRight),
                         vec3(p_CameraUp));
 
@@ -48,7 +46,7 @@ void main()
     vec3 normal;
     int comparisons;
     float t;
-    bool didHit = traverse(ray, grid, 0., 1000.,
+    bool didHit = traverse(ray, grid,
             hitIndex, hitVoxel, normal, comparisons, t);
 
     if (comparisons >= 0)
@@ -57,7 +55,8 @@ void main()
         const vec4 maxComparisons = vec4(1., 1., 0., 0.2);
         vec4 comparisonColour = mix(noComparisons, maxComparisons,
                 float(comparisons) / MAX_COMPARISONS);
-        imageStore(o_ComparisonImage, texelCoord, comparisonColour);
+        imageStore(o_ComparisonImage, texelCoord, vec4(normal, comparisons));
+        // imageStore(o_ComparisonImage, texelCoord, vec4(normal, comparisons)); }
     }
 
     if (didHit)
@@ -69,13 +68,12 @@ void main()
         const vec3 lightDir = normalize(lightPosition - hitPosition);
         float diff = max(dot(normal, lightDir), 0.);
 
-        const float ambientStrength = 1.0;
+        const float ambientStrength = 0.1;
         vec3 ambient = lightColour * ambientStrength;
         vec3 diffuse = lightColour * diff;
 
         vec3 colour = (ambient + diffuse) * hitVoxel.colour.xyz;
 
         imageStore(o_Image, texelCoord, vec4(colour, 1.0));
-        // imageStore(o_Image, texelCoord, vec4(lightDir, 1.0));
     }
 }
