@@ -108,6 +108,8 @@ bool traverse(Ray ray, Grid grid,
     if (isinf(invDir.y)) invDir.y = 0.;
     if (isinf(invDir.z)) invDir.z = 0.;
 
+    t = max(tMin, 0.);
+
     vec3 rayStart = ray.origin + ray.direction * max(tMin, 0);
     vec3 rayEnd = ray.origin + ray.direction * tMax;
 
@@ -135,7 +137,7 @@ bool traverse(Ray ray, Grid grid,
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
-        t += dot(stepSize, stepAxis);
+        t += dot(stepAxis, vec3(closestDist));
         gridIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
         normal = -stepDirection * stepAxis;

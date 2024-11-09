@@ -55,8 +55,8 @@ void main()
         const vec4 maxComparisons = vec4(1., 1., 0., 0.2);
         vec4 comparisonColour = mix(noComparisons, maxComparisons,
                 float(comparisons) / MAX_COMPARISONS);
-        imageStore(o_ComparisonImage, texelCoord, vec4(normal, comparisons));
-        // imageStore(o_ComparisonImage, texelCoord, vec4(normal, comparisons)); }
+
+        imageStore(o_ComparisonImage, texelCoord, comparisonColour);
     }
 
     if (didHit)
