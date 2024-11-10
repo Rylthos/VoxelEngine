@@ -33,6 +33,7 @@ void Engine::init()
     initDescriptorLayouts();
     initPipelines();
     initDescriptorSets();
+    initQueryPool();
 
     m_Camera = Camera(glm::vec3(32.0f, 32.0f, -0.5f));
 
@@ -70,6 +71,8 @@ void Engine::cleanup()
     vkDeviceWaitIdle(m_Device);
 
     ImmediateSubmit::free();
+
+    vkDestroyQueryPool(m_Device, m_QueryPool, nullptr);
 
     m_VoxelBuffer.free();
     vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
@@ -150,6 +153,7 @@ void Engine::initVulkan()
     VkPhysicalDeviceVulkan12Features features12{};
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
+    features12.hostQueryReset = true;
 
     VkPhysicalDeviceVulkan11Features features11{};
     features11.shaderDrawParameters = true;
@@ -404,8 +408,8 @@ void Engine::initVoxelBuffer()
                  voxels.size());
 
     { // Top Left Front
-        const float R = 16.0f;
-        const float r = 10.0f;
+        const float R = HALF_VOXEL_SIZE / 4.f;
+        const float r = HALF_VOXEL_SIZE / 6.f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
 
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
@@ -439,7 +443,7 @@ void Engine::initVoxelBuffer()
     }
 
     { // Top Right Front
-        const float R = 24.0f;
+        const float R = HALF_VOXEL_SIZE / 3.f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.x += HALF_VOXEL_SIZE;
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
@@ -472,7 +476,7 @@ void Engine::initVoxelBuffer()
     }
 
     { // Top Left Back
-        const float R = 24.0f;
+        const float R = HALF_VOXEL_SIZE / 2.f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.z += HALF_VOXEL_SIZE;
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
@@ -506,7 +510,7 @@ void Engine::initVoxelBuffer()
     }
 
     { // Top Right Back
-        const float R = 32.0f;
+        const float R = HALF_VOXEL_SIZE / 2.0f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.x += HALF_VOXEL_SIZE;
         center.z += HALF_VOXEL_SIZE;
@@ -542,7 +546,7 @@ void Engine::initVoxelBuffer()
     }
 
     { // Bottom Left Front
-        const float R = 16.0f;
+        const float R = HALF_VOXEL_SIZE / 3.0f;
 
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.y += HALF_VOXEL_SIZE;
@@ -581,7 +585,7 @@ void Engine::initVoxelBuffer()
     }
 
     { // Bottom Right Front
-        const float R = 24.0f;
+        const float R = HALF_VOXEL_SIZE / 2.0f;
 
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.x += HALF_VOXEL_SIZE;
@@ -799,6 +803,25 @@ void Engine::initDescriptorSets()
     spdlog::info("Created descriptors");
 }
 
+void Engine::initQueryPool()
+{
+    VkQueryPoolCreateInfo queryPoolCI{};
+    queryPoolCI.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+    queryPoolCI.pNext = nullptr;
+    queryPoolCI.flags = 0;
+    queryPoolCI.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryPoolCI.queryCount = m_Frames.size() * 2;
+    VK_CHECK(vkCreateQueryPool(m_Device, &queryPoolCI, nullptr, &m_QueryPool));
+
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(m_PhysicalDevice, &deviceProperties);
+    m_QueryTimestampInterval = deviceProperties.limits.timestampPeriod;
+
+    spdlog::info("Created Query Pool");
+
+    vkResetQueryPool(m_Device, m_QueryPool, 0, m_Frames.size() * 2);
+}
+
 void Engine::update(float frameDelta)
 {
     GameUpdate update;
@@ -849,6 +872,9 @@ void Engine::update(float frameDelta)
         ImGui::Text("AVG: %1.3f : %.2f", avgTime, 1.0f / avgTime);
         ImGui::Text("MIN: %1.3f : %.2f", minTime, 1.0f / minTime);
         ImGui::Text("FPS: %1.3f", 1.0f / m_Stats.frameDelta);
+
+        ImGui::Text("Dispatch Time: %.1f ms",
+                    m_PreviousFrameTime * m_QueryTimestampInterval / 1000000);
     }
     ImGui::End();
 
@@ -937,12 +963,17 @@ void Engine::render(float frameDelta)
 
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
 
+    vkCmdResetQueryPool(commandBuffer, m_QueryPool, frameIndex * 2, 2);
+
     m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     m_RayImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     m_LookupTexture.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
     Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool,
+                        frameIndex * 2);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
 
@@ -965,6 +996,9 @@ void Engine::render(float frameDelta)
 
     vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
                   std::ceil(drawExtent.height / 16.0), 1);
+
+    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool,
+                        frameIndex * 2 + 1);
 
     renderImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -1033,6 +1067,19 @@ void Engine::render(float frameDelta)
     {
         vkQueuePresentKHR(m_GraphicsQueue.queue, &presentInfo);
     }
+
+    static uint64_t timeQueryBuffer[2];
+    VkResult result =
+        vkGetQueryPoolResults(m_Device, m_QueryPool, frameIndex * 2, 2, sizeof(uint64_t) * 2,
+                              timeQueryBuffer, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+    if (result == VK_NOT_READY)
+    {
+    }
+    else if (result == VK_SUCCESS)
+    {
+        m_PreviousFrameTime = timeQueryBuffer[1] - timeQueryBuffer[0];
+    }
+    vkResetQueryPool(m_Device, m_QueryPool, frameIndex * 2, 2);
 
     currentFrameIndex++;
 }

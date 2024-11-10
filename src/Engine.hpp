@@ -99,7 +99,11 @@ class Engine : EventReceiver
 
     VkDescriptorPool m_ImguiPool;
 
-    const uint32_t VOXEL_SIZE = 128;
+    float m_QueryTimestampInterval;
+    VkQueryPool m_QueryPool;
+    uint64_t m_PreviousFrameTime;
+
+    const uint32_t VOXEL_SIZE = 512;
     size_t m_TotalVoxels;
     Buffer m_VoxelBuffer;
 
@@ -126,6 +130,8 @@ class Engine : EventReceiver
     void initPipelines();
 
     void initDescriptorSets();
+
+    void initQueryPool();
 
     void update(float frameDelta);
     void renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView, VkExtent2D extent);

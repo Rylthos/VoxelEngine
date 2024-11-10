@@ -58,15 +58,14 @@ void main()
         vec4 comparisonColour = mix(noComparisons, maxComparisons,
                 float(comparisons) / MAX_COMPARISONS);
 
-        // imageStore(o_ComparisonImage, texelCoord, comparisonColour);
-        imageStore(o_ComparisonImage, texelCoord, vec4(normal, 1.));
+        imageStore(o_ComparisonImage, texelCoord, comparisonColour);
     }
 
     if (didHit)
     {
         vec4 lookupColour = imageLoad(i_Lookup, hitVoxel.lookupIndex);
 
-        const vec3 lightPosition = vec3(0., -5, 0.);
+        const vec3 lightPosition = vec3(128., 128, 128.);
         const vec4 lightColour = vec4(1.);
 
         const vec3 hitPosition = ray.direction * t;
