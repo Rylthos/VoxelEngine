@@ -88,6 +88,22 @@ bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float ma
     return t1 > max(t0, 0.0) && tMax > minT && tMin < maxT;
 }
 
+vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
+{
+    bvec3 minBoundHit = lessThanEqual(position - minBound, vec3(0.0001));
+    bvec3 maxBoundHit = greaterThanEqual(position - maxBound, vec3(0.0001));
+
+    if (minBoundHit.x) return vec3(-1, 0, 0);
+    if (minBoundHit.y) return vec3(0, -1, 0);
+    if (minBoundHit.z) return vec3(0, 0, -1);
+
+    if (maxBoundHit.x) return vec3(1, 0, 0);
+    if (maxBoundHit.y) return vec3(0, 1, 0);
+    if (maxBoundHit.z) return vec3(0, 0, 1);
+
+    return vec3(0.);
+}
+
 bool traverse(Ray ray, Grid grid,
             out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons,
             out float t)
@@ -123,6 +139,8 @@ bool traverse(Ray ray, Grid grid,
     ivec3 endIndex = ivec3(max(vec3(0.), floor(rayEnd - minBound / grid.voxelSize)));
     endIndex = clamp(endIndex, ivec3(0), ivec3(grid.dimensions - 1));
     endIndex += stepDirection;
+
+    normal = normalFromBounds(rayStart, minBound, maxBound);
 
     for (int i = 0; i < MAX_ITERATIONS; i++)
     {

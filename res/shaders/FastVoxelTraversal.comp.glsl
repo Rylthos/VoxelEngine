@@ -58,7 +58,8 @@ void main()
         vec4 comparisonColour = mix(noComparisons, maxComparisons,
                 float(comparisons) / MAX_COMPARISONS);
 
-        imageStore(o_ComparisonImage, texelCoord, comparisonColour);
+        // imageStore(o_ComparisonImage, texelCoord, comparisonColour);
+        imageStore(o_ComparisonImage, texelCoord, vec4(normal, 1.));
     }
 
     if (didHit)
