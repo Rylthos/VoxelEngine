@@ -1,4 +1,4 @@
-#define MAX_ITERATIONS 128
+#define MAX_ITERATIONS 256
 
 struct Ray
 {

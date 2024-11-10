@@ -318,7 +318,8 @@ void Engine::initImGui()
     VK_CHECK(vkCreateDescriptorPool(m_Device, &poolCI, nullptr, &m_ImguiPool));
 
     ImGui::CreateContext();
-    ImGuiIO io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
+    (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     ImGui::StyleColorsDark();
@@ -393,6 +394,8 @@ void Engine::initVoxelBuffer()
     glm::vec3 center = glm::vec3(VOXEL_SIZE / 2.f);
 
     std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
+    spdlog::info("Voxel grid of {}x{}x{} TOTAL: {}", VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE,
+                 voxels.size());
     for (uint32_t y = 0; y < VOXEL_SIZE; y++)
     {
         for (uint32_t z = 0; z < VOXEL_SIZE; z++)
@@ -588,7 +591,7 @@ void Engine::update(float frameDelta)
     }
     ImGui::End();
 
-    ImGui::ShowDemoWindow();
+    // ImGui::ShowDemoWindow();
     ImGui::Render();
 }
 
