@@ -12,6 +12,8 @@
 
 #include "Events.hpp"
 
+#include <cmath>
+
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
@@ -361,17 +363,23 @@ void Engine::initImages()
 
     m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
-    VkExtent3D lookupExtent = { 2, 1, 1 };
+    VkExtent3D lookupExtent = { 8, 1, 1 };
     m_LookupTexture.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, lookupExtent,
-                           VK_IMAGE_TYPE_2D,
+                           VK_IMAGE_TYPE_1D,
                            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
                            VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    m_LookupTexture.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_LookupTexture.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_1D);
 
     std::vector<glm::vec4> colours = {
+        { 0., 0., 0., 1. },
+        { 1., 0., 0., 1. },
+        { 0., 1., 0., 1. },
+        { 0., 0., 1., 1. },
+        { 1., 1., 0., 1. },
+        { 1., 0., 1., 1. },
         { 0., 1., 1., 1. },
-        { 1., 0., 0., 1. }
+        { 1., 1., 1., 1. },
     };
 
     Buffer uploadBuffer;
@@ -388,40 +396,313 @@ void Engine::initImages()
 
 void Engine::initVoxelBuffer()
 {
-    const float R = 16.0f;
-    const float r = 10.0f;
-
-    glm::vec3 center = glm::vec3(VOXEL_SIZE / 2.f);
+    const uint32_t HALF_VOXEL_SIZE = VOXEL_SIZE / 2;
 
     std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
+
     spdlog::info("Voxel grid of {}x{}x{} TOTAL: {}", VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE,
                  voxels.size());
-    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
-    {
-        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
+
+    { // Top Left Front
+        const float R = 16.0f;
+        const float r = 10.0f;
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+
+        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
         {
-            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
+            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
             {
-                uint32_t layerSum = x + z;
-                uint32_t sum = x + y + z;
-                uint32_t layerIndex = z * VOXEL_SIZE + x;
-                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                glm::vec3 position = glm::vec3(x, y, z) - center;
-                glm::vec3 squared = position * position;
-
-                if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
+                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
                 {
-                    if (sum % 2 == 0)
-                        voxels.at(index) = { .colourIndex = 1 };
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+                    glm::vec3 squared = position * position;
+
+                    if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 0 };
+                        else
+                            voxels.at(index) = { .colourIndex = 1 };
+                    }
                     else
-                        voxels.at(index) = { .colourIndex = 0 };
-                    // voxels.at(index) = { .colour = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) };
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
                 }
-                else
+            }
+        }
+    }
+
+    { // Top Right Front
+        const float R = 24.0f;
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.x += HALF_VOXEL_SIZE;
+        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
                 {
-                    voxels.at(index) = { .colourIndex = -1 };
-                    // voxels.at(index) = { .colour = glm::vec4(0.f) };
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+
+                    if (dot(position, position) < R * R)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 2 };
+                        else
+                            voxels.at(index) = { .colourIndex = 3 };
+                    }
+                    else
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                }
+            }
+        }
+    }
+
+    { // Top Left Back
+        const float R = 24.0f;
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.z += HALF_VOXEL_SIZE;
+        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+                    position.y = 0;
+
+                    if (dot(position, position) < R * R)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 4 };
+                        else
+                            voxels.at(index) = { .colourIndex = 5 };
+                    }
+                    else
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                }
+            }
+        }
+    }
+
+    { // Top Right Back
+        const float R = 32.0f;
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.x += HALF_VOXEL_SIZE;
+        center.z += HALF_VOXEL_SIZE;
+        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+                    position.y *= 1.8;
+                    position.z *= 1.2;
+
+                    if (dot(position, position) < R * R)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 6 };
+                        else
+                            voxels.at(index) = { .colourIndex = 7 };
+                    }
+                    else
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                }
+            }
+        }
+    }
+
+    { // Bottom Left Front
+        const float R = 16.0f;
+
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.y += HALF_VOXEL_SIZE;
+
+        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+
+                    float yz = fabs(position.y + position.z);
+                    float zx = fabs(position.z + position.x);
+                    float xy = fabs(position.x + position.y);
+
+                    if (fmax(yz - 1, fmax(zx - 1, xy - 1)) < R)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 4 };
+                        else
+                            voxels.at(index) = { .colourIndex = 0 };
+                    }
+                    else
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                }
+            }
+        }
+    }
+
+    { // Bottom Right Front
+        const float R = 24.0f;
+
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.x += HALF_VOXEL_SIZE;
+        center.y += HALF_VOXEL_SIZE;
+
+        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = 1.f * (glm::vec3(x, y, z) - center);
+                    float fx = position.x;
+                    float fy = position.y;
+                    float fz = position.z;
+                    float implicit =
+                        (2 * fz * (fz * fz - 3 * fx * fx) * (1 - fy * fy) +
+                         pow(fx * fx + fz * fz, 2) - (9 * fy * fy - 1) * (1 - fy * fy)) -
+                        5.f;
+
+                    if (implicit <= 0)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 5 };
+                        else
+                            voxels.at(index) = { .colourIndex = 2 };
+                    }
+                    else
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                }
+            }
+        }
+    }
+
+    { // Bottom Left Back
+        const float c = 1.0;
+        const float y0 = 2.0;
+
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.z += HALF_VOXEL_SIZE;
+        center.y += HALF_VOXEL_SIZE;
+
+        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+                    float fx = position.x;
+                    float fy = position.y;
+                    float fz = position.z;
+
+                    float implicit = (fx * fx + fz * fz) / (c * c) - pow(fy - y0, 2);
+
+                    if (implicit <= 0)
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 2 };
+                        else
+                            voxels.at(index) = { .colourIndex = 7 };
+                    }
+                    else
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                }
+            }
+        }
+    }
+
+    { // Bottom Right Back
+        const float c = 1.0;
+        const float y0 = 2.0;
+
+        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+        center.x += HALF_VOXEL_SIZE;
+        center.z += HALF_VOXEL_SIZE;
+        center.y += HALF_VOXEL_SIZE;
+
+        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
+        {
+            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
+            {
+                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * VOXEL_SIZE + x;
+                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+                    float fx = position.x;
+                    float fy = position.y;
+                    float fz = position.z;
+
+                    float implicit = (fx * fx + fz * fz) / (c * c) - pow(fy - y0, 2);
+
+                    if (implicit <= 0)
+                    {
+                        voxels.at(index) = { .colourIndex = -1 };
+                    }
+                    else
+                    {
+                        if (sum % 2 == 0)
+                            voxels.at(index) = { .colourIndex = 1 };
+                        else
+                            voxels.at(index) = { .colourIndex = 4 };
+                    }
                 }
             }
         }

@@ -127,6 +127,7 @@ bool traverse(Ray ray, Grid grid,
     for (int i = 0; i < MAX_ITERATIONS; i++)
     {
         comparisons++;
+
         if (!indexWithinBounds(grid, gridIndex)) return false;
 
         int index = indexFromGridPosition(grid, gridIndex);

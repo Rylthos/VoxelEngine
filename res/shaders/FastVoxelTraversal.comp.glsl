@@ -12,7 +12,7 @@ layout (local_size_x = 16, local_size_y = 16) in;
 
 layout (rgba16f, set = 0, binding = 0) uniform image2D o_Image;
 layout (rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
-layout (rgba16f, set = 0, binding = 2) readonly uniform image2D i_Lookup;
+layout (rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 
 layout (push_constant) uniform constants
 {
@@ -63,11 +63,7 @@ void main()
 
     if (didHit)
     {
-        ivec2 lookupSize = imageSize(i_Lookup);
-        ivec2 lookupIndex = ivec2(hitVoxel.lookupIndex % lookupSize.x,
-                hitVoxel.lookupIndex / lookupSize.x);
-
-        vec4 lookupColour = imageLoad(i_Lookup, lookupIndex);
+        vec4 lookupColour = imageLoad(i_Lookup, hitVoxel.lookupIndex);
 
         const vec3 lightPosition = vec3(0., -5, 0.);
         const vec4 lightColour = vec4(1.);
