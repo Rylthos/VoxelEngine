@@ -3,7 +3,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
-#include "ImmediateSubmit.hpp"
+#include "Buffer.hpp"
 
 class Image
 {
@@ -40,6 +40,8 @@ class Image
     void transition(VkCommandBuffer commandBuffer, VkImageLayout current, VkImageLayout target);
     static void transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current,
                            VkImageLayout target);
+
+    void copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer);
 
     void copyToImage(VkCommandBuffer commandBuffer, const Image& image);
     void copyFromImage(VkCommandBuffer commandBuffer, const Image& image);

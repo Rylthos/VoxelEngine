@@ -14,11 +14,12 @@ void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlag
     assert(m_Buffer == 0 && "Buffer already initialized");
 
     m_Allocator = allocator;
+    m_Size = size;
 
     VkBufferCreateInfo bufferCI{};
     bufferCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferCI.pNext = nullptr;
-    bufferCI.size = size;
+    bufferCI.size = m_Size;
     bufferCI.usage = usage;
 
     VmaAllocationCreateInfo vmaACI{};
@@ -28,7 +29,7 @@ void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlag
     // VK_CHECK(vkCreateBuffer(m_Device, &bufferCI, nullptr, &m_Buffer));
     VK_CHECK(vmaCreateBuffer(m_Allocator, &bufferCI, &vmaACI, &m_Buffer, &m_Allocation,
                              &m_AllocationInfo));
-    spdlog::info("Created buffer with size: {}", size);
+    spdlog::info("Created buffer with size: {}", m_Size);
 }
 
 void Buffer::free()

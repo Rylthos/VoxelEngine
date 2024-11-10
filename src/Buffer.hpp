@@ -17,6 +17,8 @@ class Buffer
 
     VmaAllocator m_Allocator;
 
+    size_t m_Size = 0;
+
   public:
     Buffer();
     Buffer(Buffer&) = delete;
@@ -31,6 +33,7 @@ class Buffer
     VkBuffer getBuffer() const { return m_Buffer; }
     VmaAllocation getAllocation() const { return m_Allocation; }
     VmaAllocationInfo getAllocationInfo() const { return m_AllocationInfo; }
+    size_t getSize() { return m_Size; }
 
     VkDeviceAddress getDeviceAddress(VkDevice device) const;
 

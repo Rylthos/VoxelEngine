@@ -25,6 +25,7 @@ void Engine::init()
     ImmediateSubmit::init(m_Device, m_GraphicsQueue.queue, m_GraphicsQueue.queueFamily);
     initSyncStructures();
     initImGui();
+    initImages();
     initVoxelBuffer();
     initDescriptorPool();
     initDescriptorLayouts();
@@ -96,6 +97,7 @@ void Engine::cleanup()
 
     m_DrawImage.free();
     m_RayImage.free();
+    m_LookupTexture.free();
 
     destroySwapchain();
 
@@ -229,13 +231,6 @@ void Engine::initSwapchain()
 
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
-    m_RayImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, VK_IMAGE_TYPE_2D,
-                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                      VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
-
     spdlog::info("Createed Swapchain ImageView");
 }
 
@@ -355,6 +350,41 @@ void Engine::initImGui()
     spdlog::info("Initializsed ImGui");
 }
 
+void Engine::initImages()
+{
+    m_RayImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, m_DrawImage.getExtent(),
+                      VK_IMAGE_TYPE_2D,
+                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                      VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+
+    VkExtent3D lookupExtent = { 2, 1, 1 };
+    m_LookupTexture.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, lookupExtent,
+                           VK_IMAGE_TYPE_2D,
+                           VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                           VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    m_LookupTexture.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+
+    std::vector<glm::vec4> colours = {
+        { 0., 1., 1., 1. },
+        { 1., 0., 0., 1. }
+    };
+
+    Buffer uploadBuffer;
+    uploadBuffer.create(m_Allocator, colours.size() * sizeof(glm::vec4),
+                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                        VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    uploadBuffer.copyFromData<glm::vec4>(colours);
+    ImmediateSubmit::submit(
+        [&](VkCommandBuffer cmd) { m_LookupTexture.copyFromBuffer(cmd, uploadBuffer); });
+
+    uploadBuffer.free();
+}
+
 void Engine::initVoxelBuffer()
 {
     const float R = 16.0f;
@@ -379,11 +409,16 @@ void Engine::initVoxelBuffer()
 
                 if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
                 {
-                    voxels.at(index) = { .colour = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) };
+                    if (sum % 2 == 0)
+                        voxels.at(index) = { .colourIndex = 1 };
+                    else
+                        voxels.at(index) = { .colourIndex = 0 };
+                    // voxels.at(index) = { .colour = glm::vec4(0.0f, 1.0f, 1.0f, 1.0f) };
                 }
                 else
                 {
-                    voxels.at(index) = { .colour = glm::vec4(0.f) };
+                    voxels.at(index) = { .colourIndex = -1 };
+                    // voxels.at(index) = { .colour = glm::vec4(0.f) };
                 }
             }
         }
@@ -421,6 +456,7 @@ void Engine::initDescriptorLayouts()
     m_VoxelDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
                                      .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
                                      .addStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT)
+                                     .addStorageImage(2, VK_SHADER_STAGE_COMPUTE_BIT)
                                      .build();
     spdlog::info("Created descriptor layouts");
 }
@@ -472,6 +508,7 @@ void Engine::initDescriptorSets()
         DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
             .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
             .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_RayImage.getImageView())
+            .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_LookupTexture.getImageView())
             .build()
             .at(0);
 
@@ -618,6 +655,7 @@ void Engine::render(float frameDelta)
 
     m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     m_RayImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    m_LookupTexture.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
     Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);

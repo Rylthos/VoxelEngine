@@ -103,6 +103,28 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayo
     vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 }
 
+void Image::copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer)
+{
+    transition(commandBuffer, m_Image, VK_IMAGE_LAYOUT_UNDEFINED,
+               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    VkBufferImageCopy copyRegion{};
+    copyRegion.bufferOffset = 0;
+    copyRegion.bufferRowLength = 0;
+    copyRegion.bufferImageHeight = 0;
+    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copyRegion.imageSubresource.mipLevel = 0;
+    copyRegion.imageSubresource.baseArrayLayer = 0;
+    copyRegion.imageSubresource.layerCount = 1;
+    copyRegion.imageExtent = m_Extent;
+
+    vkCmdCopyBufferToImage(commandBuffer, buffer.getBuffer(), m_Image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+
+    transition(commandBuffer, m_Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+               VK_IMAGE_LAYOUT_GENERAL);
+}
+
 void Image::copyToImage(VkCommandBuffer commandBuffer, const Image& image)
 {
     Image::copyFromTo(commandBuffer, m_Image, image.m_Image, m_Extent, image.m_Extent);
@@ -115,7 +137,6 @@ void Image::copyFromImage(VkCommandBuffer commandBuffer, const Image& image)
 void Image::copyFromTo(VkCommandBuffer commandBuffer, VkImage src, VkImage dst, VkExtent3D srcSize,
                        VkExtent3D dstSize)
 {
-
     VkImageBlit2 blitRegion{};
     blitRegion.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
     blitRegion.pNext = nullptr;

@@ -29,7 +29,7 @@ struct FrameData {
 };
 
 struct Voxel {
-    glm::vec4 colour;
+    int colourIndex;
 };
 
 struct VoxelPushConstants {
@@ -83,6 +83,7 @@ class Engine : EventReceiver
 
     Image m_DrawImage;
     Image m_RayImage;
+    Image m_LookupTexture;
 
     bool m_RenderRay = false;
 
@@ -116,6 +117,7 @@ class Engine : EventReceiver
 
     void initImGui();
 
+    void initImages();
     void initVoxelBuffer();
 
     void initDescriptorPool();

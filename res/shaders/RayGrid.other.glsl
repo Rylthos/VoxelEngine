@@ -132,7 +132,7 @@ bool traverse(Ray ray, Grid grid,
         int index = indexFromGridPosition(grid, gridIndex);
 
         voxel = grid.voxels.voxels[index];
-        if (voxel.colour.w > 0) return true;
+        if (voxel.lookupIndex >= 0) return true;
 
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
