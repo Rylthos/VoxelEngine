@@ -46,8 +46,7 @@ void Window::initGLFW()
     glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
 
-    glfwWindowHintString(GLFW_X11_CLASS_NAME, "GLFW");
-    glfwWindowHintString(GLFW_X11_INSTANCE_NAME, "GLFW");
+    glfwWindowHint(GLFW_WAYLAND_APP_ID, 0xFF);
 }
 
 void Window::initWindow(const char* title)

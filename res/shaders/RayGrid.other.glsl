@@ -34,6 +34,11 @@ int indexFromGridPosition(Grid grid, uvec3 position)
                + position.y * grid.dimensions.x * grid.dimensions.z);
 }
 
+vec3 worldPositionFromIndex(Grid grid, uvec3 position)
+{
+    return grid.minBound + position * grid.voxelSize;
+}
+
 bool indexWithinBounds(Grid grid, ivec3 position)
 {
     bvec3 less = lessThanEqual(position, grid.dimensions - 1);
@@ -105,8 +110,7 @@ vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
 }
 
 bool traverse(Ray ray, Grid grid,
-            out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons,
-            out float t)
+            out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons)
 {
     comparisons = -1;
 
@@ -123,8 +127,6 @@ bool traverse(Ray ray, Grid grid,
     if (isinf(invDir.x)) invDir.x = 0.;
     if (isinf(invDir.y)) invDir.y = 0.;
     if (isinf(invDir.z)) invDir.z = 0.;
-
-    t = max(tMin, 0.);
 
     vec3 rayStart = ray.origin + ray.direction * max(tMin, 0);
     vec3 rayEnd = ray.origin + ray.direction * tMax;
@@ -156,7 +158,6 @@ bool traverse(Ray ray, Grid grid,
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
-        t += dot(stepAxis, vec3(closestDist));
         gridIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
         normal = -stepDirection * stepAxis;
