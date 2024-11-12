@@ -2,6 +2,7 @@
 
 #extension GL_EXT_buffer_reference : enable
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_debug_printf : enable
 
 #include "Voxel.other.glsl"
 #include "RayGrid.other.glsl"
@@ -59,7 +60,7 @@ void main()
         vec4 comparisonColour = mix(noComparisons, maxComparisons,
                 float(comparisons) / MAX_COMPARISONS);
 
-        imageStore(o_ComparisonImage, texelCoord, vec4(abs(normal), 1.));
+        imageStore(o_ComparisonImage, texelCoord, vec4(abs(normal), comparisons));
     }
 
     if (didHit)

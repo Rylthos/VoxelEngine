@@ -34,7 +34,6 @@ endif()
 add_compile_definitions(GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE
                         GLFW_INCLUDE_VULKAN GLM_ENABLE_EXPERIMENTAL)
 
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${outputDirectory})
 
 # Setup build flags
@@ -108,8 +107,10 @@ foreach(file ${RESOURCES_COMPUTE})
   add_custom_command(
     TARGET Resources
     PRE_BUILD
-    COMMAND glslc -fshader-stage=comp -o ${InputRes}/shaders/${name}.spv
+    COMMAND glslangValidator -e main --target-env vulkan1.3 -V -o ${InputRes}/shaders/${name}.spv
             ${InputRes}/shaders/${name}.glsl
+    # COMMAND glslc -fshader-stage=comp -o ${InputRes}/shaders/${name}.spv
+    # ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")
 endforeach()
 

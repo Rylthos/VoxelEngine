@@ -29,7 +29,7 @@ struct FrameData {
 };
 
 struct Voxel {
-    int colourIndex;
+    uint8_t colourIndex;
 };
 
 struct VoxelPushConstants {

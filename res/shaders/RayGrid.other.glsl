@@ -152,8 +152,10 @@ bool traverse(Ray ray, Grid grid,
 
         int index = indexFromGridPosition(grid, gridIndex);
 
-        voxel = grid.voxels.voxels[index];
-        if (voxel.lookupIndex >= 0) return true;
+        comparisons = int(getGroupedIndex(grid.dimensions, gridIndex));
+
+        voxel = getVoxelFromGrid(grid.voxels, grid.dimensions, gridIndex);
+        if (voxel.lookupIndex > 0) return true;
 
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));

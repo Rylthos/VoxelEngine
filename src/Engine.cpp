@@ -35,7 +35,7 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_Camera = Camera(glm::vec3(32.0f, 32.0f, -0.5f));
+    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f, VOXEL_SIZE / 2.f, -1.f));
 
     EventHandler::subscribe(EventType::KeyboardInput, this);
 
@@ -134,11 +134,19 @@ void Engine::receive(const Event* event)
 void Engine::initVulkan()
 {
     vkb::InstanceBuilder builder;
+    auto system_info = vkb::SystemInfo::get_system_info().value();
+
     auto instRet = builder.set_app_name("VoxelEngine")
                        .request_validation_layers(true)
                        .use_default_debug_messenger()
                        .require_api_version(1, 3, 0)
                        .build();
+
+    if (!instRet)
+    {
+        spdlog::error("Failed to create Instance: {}", instRet.error().message());
+        exit(-1);
+    }
 
     vkb::Instance vkbInst = instRet.value();
     m_Instance = vkbInst.instance;
@@ -165,13 +173,15 @@ void Engine::initVulkan()
     features.geometryShader = true;
 
     vkb::PhysicalDeviceSelector selector{ vkbInst };
-    auto vkbMaybeDevice = selector.set_minimum_version(1, 3)
-                              .set_required_features_13(features13)
-                              .set_required_features_12(features12)
-                              .set_required_features_11(features11)
-                              .set_required_features(features)
-                              .set_surface(m_Surface)
-                              .select();
+    auto vkbMaybeDevice =
+        selector.set_minimum_version(1, 3)
+            .set_required_features_13(features13)
+            .set_required_features_12(features12)
+            .set_required_features_11(features11)
+            .set_required_features(features)
+            .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
+            .set_surface(m_Surface)
+            .select();
 
     if (!vkbMaybeDevice.has_value())
     {
@@ -182,6 +192,7 @@ void Engine::initVulkan()
     vkb::PhysicalDevice vkbPhysicalDevice = vkbMaybeDevice.value();
 
     vkb::DeviceBuilder deviceBuilder{ vkbPhysicalDevice };
+
     vkb::Device vkbDevice = deviceBuilder.build().value();
 
     m_PhysicalDevice = vkbPhysicalDevice.physical_device;
@@ -359,7 +370,7 @@ void Engine::initImGui()
 
 void Engine::initImages()
 {
-    m_RayImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, m_DrawImage.getExtent(),
+    m_RayImage.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, m_DrawImage.getExtent(),
                       VK_IMAGE_TYPE_2D,
                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                           VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -376,6 +387,7 @@ void Engine::initImages()
     m_LookupTexture.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_1D);
 
     std::vector<glm::vec4> colours = {
+        { 0., 0., 0., 0. },
         { 0., 0., 0., 1. },
         { 1., 0., 0., 1. },
         { 0., 1., 0., 1. },
@@ -429,13 +441,13 @@ void Engine::initVoxelBuffer()
                     if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 0 };
-                        else
                             voxels.at(index) = { .colourIndex = 1 };
+                        else
+                            voxels.at(index) = { .colourIndex = 2 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -462,13 +474,13 @@ void Engine::initVoxelBuffer()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 2 };
-                        else
                             voxels.at(index) = { .colourIndex = 3 };
+                        else
+                            voxels.at(index) = { .colourIndex = 4 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -496,13 +508,13 @@ void Engine::initVoxelBuffer()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 4 };
-                        else
                             voxels.at(index) = { .colourIndex = 5 };
+                        else
+                            voxels.at(index) = { .colourIndex = 6 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -532,13 +544,13 @@ void Engine::initVoxelBuffer()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 6 };
-                        else
                             voxels.at(index) = { .colourIndex = 7 };
+                        else
+                            voxels.at(index) = { .colourIndex = 8 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -571,13 +583,13 @@ void Engine::initVoxelBuffer()
                     if (fmax(yz - 1, fmax(zx - 1, xy - 1)) < R)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 4 };
+                            voxels.at(index) = { .colourIndex = 5 };
                         else
-                            voxels.at(index) = { .colourIndex = 0 };
+                            voxels.at(index) = { .colourIndex = 1 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -614,13 +626,13 @@ void Engine::initVoxelBuffer()
                     if (implicit <= 0)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 5 };
+                            voxels.at(index) = { .colourIndex = 6 };
                         else
-                            voxels.at(index) = { .colourIndex = 2 };
+                            voxels.at(index) = { .colourIndex = 3 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -656,13 +668,13 @@ void Engine::initVoxelBuffer()
                     if (implicit <= 0)
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 2 };
+                            voxels.at(index) = { .colourIndex = 3 };
                         else
-                            voxels.at(index) = { .colourIndex = 7 };
+                            voxels.at(index) = { .colourIndex = 8 };
                     }
                     else
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                 }
             }
@@ -698,14 +710,14 @@ void Engine::initVoxelBuffer()
 
                     if (implicit <= 0)
                     {
-                        voxels.at(index) = { .colourIndex = -1 };
+                        voxels.at(index) = { .colourIndex = 0 };
                     }
                     else
                     {
                         if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 1 };
+                            voxels.at(index) = { .colourIndex = 2 };
                         else
-                            voxels.at(index) = { .colourIndex = 4 };
+                            voxels.at(index) = { .colourIndex = 5 };
                     }
                 }
             }
