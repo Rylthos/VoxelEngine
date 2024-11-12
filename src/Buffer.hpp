@@ -50,13 +50,14 @@ class Buffer
 
         memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
 
-        ImmediateSubmit::submit([&](VkCommandBuffer cmd) {
-            VkBufferCopy copy{};
-            copy.srcOffset = 0;
-            copy.dstOffset = 0;
-            copy.size = size;
+        copyFromBuffer(stagingBuffer, size);
+    }
 
-            vkCmdCopyBuffer(cmd, stagingBuffer.getBuffer(), getBuffer(), 1, &copy);
-        });
+    template<typename T>
+    void copyFromData_CPUOnly(const std::span<T>& data)
+    {
+        size_t size = data.size() * sizeof(T);
+
+        memcpy(getAllocationInfo().pMappedData, data.data(), size);
     }
 };

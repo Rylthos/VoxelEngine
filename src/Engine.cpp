@@ -21,6 +21,8 @@ void Engine::init()
 {
     m_Window.create("Voxel Engine", 960, 960);
 
+    m_SceneManager = SceneManager({ VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE });
+
     initVulkan();
     initSwapchain();
     initCommandPool();
@@ -29,7 +31,7 @@ void Engine::init()
     initImGui();
     initImages();
     initVoxelBuffer();
-    loadScene();
+    updateScene();
     initDescriptorPool();
     initDescriptorLayouts();
     initPipelines();
@@ -75,6 +77,7 @@ void Engine::cleanup()
 
     vkDestroyQueryPool(m_Device, m_QueryPool, nullptr);
 
+    m_VoxelStagingBuffer.free();
     m_VoxelBuffer.free();
     vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_VoxelPipelineLayout, nullptr);
@@ -417,6 +420,9 @@ void Engine::initVoxelBuffer()
 {
     size_t totalSize = VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE;
 
+    m_VoxelStagingBuffer.create(m_Allocator, totalSize * sizeof(Voxel),
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
     m_VoxelBuffer.create(m_Allocator, totalSize * sizeof(Voxel),
                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                              VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -425,481 +431,12 @@ void Engine::initVoxelBuffer()
     spdlog::info("Created Vertex Buffer");
 }
 
-void Engine::squareScene()
+void Engine::updateScene()
 {
-    spdlog::info("Loaded Scene: SQUARE");
+    m_SceneManager.copyDataToBuffer(m_VoxelStagingBuffer);
 
-    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
-
-    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
-    {
-        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
-        {
-            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
-            {
-                uint32_t layerSum = x + z;
-                uint32_t sum = x + y + z;
-                uint32_t layerIndex = z * VOXEL_SIZE + x;
-                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                glm::vec3 position = glm::vec3(x, y, z);
-                glm::vec3 squared = position * position;
-
-                if (layerIndex % 2 == 0)
-                {
-                    if (sum % 2 == 0)
-                        voxels.at(index) = { .colourIndex = 2 };
-                    else
-                        voxels.at(index) = { .colourIndex = 3 };
-                }
-                else
-                {
-                    if (sum % 2 == 0)
-                        voxels.at(index) = { .colourIndex = 4 };
-                    else
-                        voxels.at(index) = { .colourIndex = 5 };
-                }
-            }
-        }
-    }
-
-    m_VoxelBuffer.copyFromData<Voxel>(voxels);
-}
-
-void Engine::holedSquareScene()
-{
-    spdlog::info("Loaded Scene: HOLED_SQUARE");
-    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
-
-    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
-    {
-        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
-        {
-            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
-            {
-                uint32_t layerSum = x + z;
-                uint32_t sum = x + y + z;
-                uint32_t layerIndex = z * VOXEL_SIZE + x;
-                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                glm::vec3 position = glm::vec3(x, y, z);
-                glm::vec3 squared = position * position;
-
-                if (layerIndex % 2 == 0)
-                {
-                    if (sum % 2 == 0)
-                        voxels.at(index) = { .colourIndex = 2 };
-                    else
-                        voxels.at(index) = { .colourIndex = 0 };
-                }
-                else
-                {
-                    if (sum % 2 == 0)
-                        voxels.at(index) = { .colourIndex = 3 };
-                    else
-                        voxels.at(index) = { .colourIndex = 0 };
-                }
-            }
-        }
-    }
-
-    m_VoxelBuffer.copyFromData<Voxel>(voxels);
-}
-
-void Engine::randomObjectsScene()
-{
-    const uint32_t HALF_VOXEL_SIZE = VOXEL_SIZE / 2;
-
-    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
-
-    spdlog::info("Loaded Scene: RANDOM_OBJECTS");
-
-    { // Top Left Front
-        const float R = HALF_VOXEL_SIZE / 4.f;
-        const float r = HALF_VOXEL_SIZE / 6.f;
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-
-        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-                    glm::vec3 squared = position * position;
-
-                    if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 1 };
-                        else
-                            voxels.at(index) = { .colourIndex = 2 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Top Right Front
-        const float R = HALF_VOXEL_SIZE / 3.f;
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.x += HALF_VOXEL_SIZE;
-        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-
-                    if (dot(position, position) < R * R)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 3 };
-                        else
-                            voxels.at(index) = { .colourIndex = 4 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Top Left Back
-        const float R = HALF_VOXEL_SIZE / 2.f;
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.z += HALF_VOXEL_SIZE;
-        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-                    position.y = 0;
-
-                    if (dot(position, position) < R * R)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 5 };
-                        else
-                            voxels.at(index) = { .colourIndex = 6 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Top Right Back
-        const float R = HALF_VOXEL_SIZE / 2.0f;
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.x += HALF_VOXEL_SIZE;
-        center.z += HALF_VOXEL_SIZE;
-        for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-                    position.y *= 1.8;
-                    position.z *= 1.2;
-
-                    if (dot(position, position) < R * R)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 7 };
-                        else
-                            voxels.at(index) = { .colourIndex = 8 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Bottom Left Front
-        const float R = HALF_VOXEL_SIZE / 3.0f;
-
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.y += HALF_VOXEL_SIZE;
-
-        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-
-                    float yz = fabs(position.y + position.z);
-                    float zx = fabs(position.z + position.x);
-                    float xy = fabs(position.x + position.y);
-
-                    if (fmax(yz - 1, fmax(zx - 1, xy - 1)) < R)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 5 };
-                        else
-                            voxels.at(index) = { .colourIndex = 1 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Bottom Right Front
-        const float R = HALF_VOXEL_SIZE / 2.0f;
-
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.x += HALF_VOXEL_SIZE;
-        center.y += HALF_VOXEL_SIZE;
-
-        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = 1.f * (glm::vec3(x, y, z) - center);
-                    float fx = position.x;
-                    float fy = position.y;
-                    float fz = position.z;
-                    float implicit =
-                        (2 * fz * (fz * fz - 3 * fx * fx) * (1 - fy * fy) +
-                         pow(fx * fx + fz * fz, 2) - (9 * fy * fy - 1) * (1 - fy * fy)) -
-                        5.f;
-
-                    if (implicit <= 0)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 6 };
-                        else
-                            voxels.at(index) = { .colourIndex = 3 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Bottom Left Back
-        const float c = 1.0;
-        const float y0 = 2.0;
-
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.z += HALF_VOXEL_SIZE;
-        center.y += HALF_VOXEL_SIZE;
-
-        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = 0; x < HALF_VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-                    float fx = position.x;
-                    float fy = position.y;
-                    float fz = position.z;
-
-                    float implicit = (fx * fx + fz * fz) / (c * c) - pow(fy - y0, 2);
-
-                    if (implicit <= 0)
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 3 };
-                        else
-                            voxels.at(index) = { .colourIndex = 8 };
-                    }
-                    else
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                }
-            }
-        }
-    }
-
-    { // Bottom Right Back
-        const float c = 1.0;
-        const float y0 = 2.0;
-
-        glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
-        center.x += HALF_VOXEL_SIZE;
-        center.z += HALF_VOXEL_SIZE;
-        center.y += HALF_VOXEL_SIZE;
-
-        for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
-        {
-            for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
-            {
-                for (uint32_t x = HALF_VOXEL_SIZE; x < VOXEL_SIZE; x++)
-                {
-                    uint32_t layerSum = x + z;
-                    uint32_t sum = x + y + z;
-                    uint32_t layerIndex = z * VOXEL_SIZE + x;
-                    uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                    glm::vec3 position = glm::vec3(x, y, z) - center;
-                    float fx = position.x;
-                    float fy = position.y;
-                    float fz = position.z;
-
-                    float implicit = (fx * fx + fz * fz) / (c * c) - pow(fy - y0, 2);
-
-                    if (implicit <= 0)
-                    {
-                        voxels.at(index) = { .colourIndex = 0 };
-                    }
-                    else
-                    {
-                        if (sum % 2 == 0)
-                            voxels.at(index) = { .colourIndex = 2 };
-                        else
-                            voxels.at(index) = { .colourIndex = 5 };
-                    }
-                }
-            }
-        }
-    }
-
-    m_VoxelBuffer.copyFromData<Voxel>(voxels);
-}
-
-void Engine::sphereScene()
-{
-    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
-    const float R = VOXEL_SIZE / 2.0f;
-    glm::vec3 center(VOXEL_SIZE / 2.f);
-
-    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
-    {
-        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
-        {
-            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
-            {
-                uint32_t layerSum = x + z;
-                uint32_t sum = x + y + z;
-                uint32_t layerIndex = z * VOXEL_SIZE + x;
-                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
-
-                glm::vec3 position = glm::vec3(x, y, z) - center;
-
-                if (dot(position, position) < R * R)
-                {
-                    if (sum % 2 == 0)
-                        voxels.at(index) = { .colourIndex = 3 };
-                    else
-                        voxels.at(index) = { .colourIndex = 4 };
-                }
-                else
-                {
-                    voxels.at(index) = { .colourIndex = 0 };
-                }
-            }
-        }
-    }
-
-    m_VoxelBuffer.copyFromData<Voxel>(voxels);
-}
-
-std::string Engine::sceneToString(VoxelScene scene)
-{
-    switch (scene)
-    {
-    case VoxelScene::SQUARE:
-        return "Square";
-    case VoxelScene::HOLED_SQUARE:
-        return "Holed Square";
-    case VoxelScene::RANDOM_OBJECTS:
-        return "Random Objects";
-    case VoxelScene::SPHERE:
-        return "SPHERE";
-    default:
-        return "ERROR";
-    }
-}
-
-void Engine::loadScene()
-{
     vkDeviceWaitIdle(m_Device);
-
-    switch (m_CurrentScene)
-    {
-    case VoxelScene::SQUARE:
-        squareScene();
-        break;
-    case VoxelScene::HOLED_SQUARE:
-        holedSquareScene();
-        break;
-
-    case VoxelScene::RANDOM_OBJECTS:
-        randomObjectsScene();
-        break;
-
-    case VoxelScene::SPHERE:
-        sphereScene();
-        break;
-
-    default:
-        throw std::runtime_error("Unexepected Scene");
-    }
+    m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
 }
 
 void Engine::initDescriptorPool()
@@ -1080,28 +617,31 @@ void Engine::update(float frameDelta)
 
     if (ImGui::Begin("Scene"))
     {
-        static size_t selectedIndex = static_cast<size_t>(m_CurrentScene);
-        size_t startIndex = static_cast<size_t>(VoxelScene::START) + 1;
-        size_t endIndex = static_cast<size_t>(VoxelScene::END);
-        std::string preview = sceneToString(m_CurrentScene);
+        static size_t selectedIndex = static_cast<size_t>(m_SceneManager.currentScene());
+        size_t startIndex = static_cast<size_t>(Scene::START) + 1;
+        size_t endIndex = static_cast<size_t>(Scene::END);
+        std::string preview = stringOfScene(m_SceneManager.currentScene());
 
         ImGui::Text("Current Scene");
 
         if (ImGui::BeginCombo("##Scene", preview.c_str(), 0))
         {
+            bool hasChanged = false;
             for (size_t i = startIndex; i < endIndex; i++)
             {
-                VoxelScene scene = static_cast<VoxelScene>(i);
+                Scene scene = static_cast<Scene>(i);
                 const bool isSelected = (selectedIndex == i);
-                if (ImGui::Selectable(sceneToString(scene).c_str(), isSelected))
+                if (ImGui::Selectable(stringOfScene(scene).c_str(), isSelected))
                 {
                     selectedIndex = i;
-                    m_CurrentScene = static_cast<VoxelScene>(i);
-                    loadScene();
+                    m_SceneManager.loadScene(static_cast<Scene>(i));
+                    hasChanged = true;
                 }
 
                 if (isSelected) ImGui::SetItemDefaultFocus();
             }
+            if (hasChanged) updateScene();
+
             ImGui::EndCombo();
         }
     }

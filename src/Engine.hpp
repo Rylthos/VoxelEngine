@@ -12,6 +12,8 @@
 #include "EventHandler.hpp"
 #include "Events.hpp"
 #include "Image.hpp"
+#include "SceneManager.hpp"
+#include "Voxel.hpp"
 #include "Window.hpp"
 
 struct Queue {
@@ -28,10 +30,6 @@ struct FrameData {
     VkFence renderFence;
 };
 
-struct Voxel {
-    uint8_t colourIndex;
-};
-
 struct VoxelPushConstants {
     glm::vec4 cameraPosition;
     glm::vec4 cameraForward;
@@ -41,8 +39,6 @@ struct VoxelPushConstants {
     float size;
     VkDeviceAddress voxelAddress;
 };
-
-enum class VoxelScene { START = 0, SQUARE, HOLED_SQUARE, RANDOM_OBJECTS, SPHERE, END };
 
 struct Stats {
     float frameDelta;
@@ -102,17 +98,18 @@ class Engine : EventReceiver
     bool m_RenderImGui = true;
     VkDescriptorPool m_ImguiPool;
 
-    VoxelScene m_CurrentScene = VoxelScene::SPHERE;
-
     float m_QueryTimestampInterval;
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
     const uint32_t VOXEL_SIZE = 1024;
     size_t m_TotalVoxels;
+    Buffer m_VoxelStagingBuffer;
     Buffer m_VoxelBuffer;
 
     Stats m_Stats;
+
+    SceneManager m_SceneManager;
 
   private:
     void initVulkan();
@@ -129,12 +126,7 @@ class Engine : EventReceiver
     void initImages();
     void initVoxelBuffer();
 
-    void squareScene();
-    void holedSquareScene();
-    void randomObjectsScene();
-    void sphereScene();
-    std::string sceneToString(VoxelScene scene);
-    void loadScene();
+    void updateScene();
 
     void initDescriptorPool();
     void initDescriptorLayouts();
