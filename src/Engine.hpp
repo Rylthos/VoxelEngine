@@ -42,6 +42,8 @@ struct VoxelPushConstants {
     VkDeviceAddress voxelAddress;
 };
 
+enum class VoxelScene { START = 0, SQUARE, HOLED_SQUARE, RANDOM_OBJECTS, SPHERE, END };
+
 struct Stats {
     float frameDelta;
 };
@@ -97,13 +99,16 @@ class Engine : EventReceiver
 
     VkDescriptorPool m_DescriptorPool;
 
+    bool m_RenderImGui = true;
     VkDescriptorPool m_ImguiPool;
+
+    VoxelScene m_CurrentScene = VoxelScene::SPHERE;
 
     float m_QueryTimestampInterval;
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 512;
+    const uint32_t VOXEL_SIZE = 1024;
     size_t m_TotalVoxels;
     Buffer m_VoxelBuffer;
 
@@ -123,6 +128,13 @@ class Engine : EventReceiver
 
     void initImages();
     void initVoxelBuffer();
+
+    void squareScene();
+    void holedSquareScene();
+    void randomObjectsScene();
+    void sphereScene();
+    std::string sceneToString(VoxelScene scene);
+    void loadScene();
 
     void initDescriptorPool();
     void initDescriptorLayouts();

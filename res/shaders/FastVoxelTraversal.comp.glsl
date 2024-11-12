@@ -7,7 +7,7 @@
 #include "Voxel.other.glsl"
 #include "RayGrid.other.glsl"
 
-#define MAX_COMPARISONS 256
+#define MAX_COMPARISONS 1024
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
@@ -60,7 +60,8 @@ void main()
         vec4 comparisonColour = mix(noComparisons, maxComparisons,
                 float(comparisons) / MAX_COMPARISONS);
 
-        imageStore(o_ComparisonImage, texelCoord, vec4(abs(normal), comparisons));
+        imageStore(o_ComparisonImage, texelCoord, comparisonColour);
+        // imageStore(o_ComparisonImage, texelCoord, vec4(abs(normal), comparisons));
     }
 
     if (didHit)

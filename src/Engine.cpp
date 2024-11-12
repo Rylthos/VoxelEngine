@@ -29,6 +29,7 @@ void Engine::init()
     initImGui();
     initImages();
     initVoxelBuffer();
+    loadScene();
     initDescriptorPool();
     initDescriptorLayouts();
     initPipelines();
@@ -120,6 +121,8 @@ void Engine::receive(const Event* event)
     case EventType::KeyboardInput:
         {
             const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
+
+            if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS) m_RenderImGui = !m_RenderImGui;
 
             if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
                 m_RenderRay = !m_RenderRay;
@@ -412,12 +415,104 @@ void Engine::initImages()
 
 void Engine::initVoxelBuffer()
 {
+    size_t totalSize = VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE;
+
+    m_VoxelBuffer.create(m_Allocator, totalSize * sizeof(Voxel),
+                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                         VMA_MEMORY_USAGE_GPU_ONLY);
+
+    spdlog::info("Created Vertex Buffer");
+}
+
+void Engine::squareScene()
+{
+    spdlog::info("Loaded Scene: SQUARE");
+
+    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
+
+    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
+    {
+        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
+        {
+            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
+            {
+                uint32_t layerSum = x + z;
+                uint32_t sum = x + y + z;
+                uint32_t layerIndex = z * VOXEL_SIZE + x;
+                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                glm::vec3 position = glm::vec3(x, y, z);
+                glm::vec3 squared = position * position;
+
+                if (layerIndex % 2 == 0)
+                {
+                    if (sum % 2 == 0)
+                        voxels.at(index) = { .colourIndex = 2 };
+                    else
+                        voxels.at(index) = { .colourIndex = 3 };
+                }
+                else
+                {
+                    if (sum % 2 == 0)
+                        voxels.at(index) = { .colourIndex = 4 };
+                    else
+                        voxels.at(index) = { .colourIndex = 5 };
+                }
+            }
+        }
+    }
+
+    m_VoxelBuffer.copyFromData<Voxel>(voxels);
+}
+
+void Engine::holedSquareScene()
+{
+    spdlog::info("Loaded Scene: HOLED_SQUARE");
+    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
+
+    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
+    {
+        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
+        {
+            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
+            {
+                uint32_t layerSum = x + z;
+                uint32_t sum = x + y + z;
+                uint32_t layerIndex = z * VOXEL_SIZE + x;
+                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                glm::vec3 position = glm::vec3(x, y, z);
+                glm::vec3 squared = position * position;
+
+                if (layerIndex % 2 == 0)
+                {
+                    if (sum % 2 == 0)
+                        voxels.at(index) = { .colourIndex = 2 };
+                    else
+                        voxels.at(index) = { .colourIndex = 0 };
+                }
+                else
+                {
+                    if (sum % 2 == 0)
+                        voxels.at(index) = { .colourIndex = 3 };
+                    else
+                        voxels.at(index) = { .colourIndex = 0 };
+                }
+            }
+        }
+    }
+
+    m_VoxelBuffer.copyFromData<Voxel>(voxels);
+}
+
+void Engine::randomObjectsScene()
+{
     const uint32_t HALF_VOXEL_SIZE = VOXEL_SIZE / 2;
 
     std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
 
-    spdlog::info("Voxel grid of {}x{}x{} TOTAL: {}", VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE,
-                 voxels.size());
+    spdlog::info("Loaded Scene: RANDOM_OBJECTS");
 
     { // Top Left Front
         const float R = HALF_VOXEL_SIZE / 4.f;
@@ -724,14 +819,87 @@ void Engine::initVoxelBuffer()
         }
     }
 
-    m_VoxelBuffer.create(m_Allocator, voxels.size() * sizeof(Voxel),
-                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                         VMA_MEMORY_USAGE_GPU_ONLY);
+    m_VoxelBuffer.copyFromData<Voxel>(voxels);
+}
+
+void Engine::sphereScene()
+{
+    std::vector<Voxel> voxels(VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE);
+    const float R = VOXEL_SIZE / 2.0f;
+    glm::vec3 center(VOXEL_SIZE / 2.f);
+
+    for (uint32_t y = 0; y < VOXEL_SIZE; y++)
+    {
+        for (uint32_t z = 0; z < VOXEL_SIZE; z++)
+        {
+            for (uint32_t x = 0; x < VOXEL_SIZE; x++)
+            {
+                uint32_t layerSum = x + z;
+                uint32_t sum = x + y + z;
+                uint32_t layerIndex = z * VOXEL_SIZE + x;
+                uint32_t index = layerIndex + y * VOXEL_SIZE * VOXEL_SIZE;
+
+                glm::vec3 position = glm::vec3(x, y, z) - center;
+
+                if (dot(position, position) < R * R)
+                {
+                    if (sum % 2 == 0)
+                        voxels.at(index) = { .colourIndex = 3 };
+                    else
+                        voxels.at(index) = { .colourIndex = 4 };
+                }
+                else
+                {
+                    voxels.at(index) = { .colourIndex = 0 };
+                }
+            }
+        }
+    }
 
     m_VoxelBuffer.copyFromData<Voxel>(voxels);
+}
 
-    spdlog::info("Created Vertex Buffer");
+std::string Engine::sceneToString(VoxelScene scene)
+{
+    switch (scene)
+    {
+    case VoxelScene::SQUARE:
+        return "Square";
+    case VoxelScene::HOLED_SQUARE:
+        return "Holed Square";
+    case VoxelScene::RANDOM_OBJECTS:
+        return "Random Objects";
+    case VoxelScene::SPHERE:
+        return "SPHERE";
+    default:
+        return "ERROR";
+    }
+}
+
+void Engine::loadScene()
+{
+    vkDeviceWaitIdle(m_Device);
+
+    switch (m_CurrentScene)
+    {
+    case VoxelScene::SQUARE:
+        squareScene();
+        break;
+    case VoxelScene::HOLED_SQUARE:
+        holedSquareScene();
+        break;
+
+    case VoxelScene::RANDOM_OBJECTS:
+        randomObjectsScene();
+        break;
+
+    case VoxelScene::SPHERE:
+        sphereScene();
+        break;
+
+    default:
+        throw std::runtime_error("Unexepected Scene");
+    }
 }
 
 void Engine::initDescriptorPool()
@@ -910,6 +1078,35 @@ void Engine::update(float frameDelta)
     }
     ImGui::End();
 
+    if (ImGui::Begin("Scene"))
+    {
+        static size_t selectedIndex = static_cast<size_t>(m_CurrentScene);
+        size_t startIndex = static_cast<size_t>(VoxelScene::START) + 1;
+        size_t endIndex = static_cast<size_t>(VoxelScene::END);
+        std::string preview = sceneToString(m_CurrentScene);
+
+        ImGui::Text("Current Scene");
+
+        if (ImGui::BeginCombo("##Scene", preview.c_str(), 0))
+        {
+            for (size_t i = startIndex; i < endIndex; i++)
+            {
+                VoxelScene scene = static_cast<VoxelScene>(i);
+                const bool isSelected = (selectedIndex == i);
+                if (ImGui::Selectable(sceneToString(scene).c_str(), isSelected))
+                {
+                    selectedIndex = i;
+                    m_CurrentScene = static_cast<VoxelScene>(i);
+                    loadScene();
+                }
+
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+    }
+    ImGui::End();
+
     // ImGui::ShowDemoWindow();
     ImGui::Render();
 }
@@ -935,11 +1132,14 @@ void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView,
     renderInfo.pDepthAttachment = nullptr;
     renderInfo.pStencilAttachment = nullptr;
 
-    vkCmdBeginRendering(commandBuffer, &renderInfo);
+    if (m_RenderImGui)
+    {
+        vkCmdBeginRendering(commandBuffer, &renderInfo);
 
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 
-    vkCmdEndRendering(commandBuffer);
+        vkCmdEndRendering(commandBuffer);
+    }
 }
 
 void Engine::render(float frameDelta)

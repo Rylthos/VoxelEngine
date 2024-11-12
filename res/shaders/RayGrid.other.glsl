@@ -1,4 +1,4 @@
-#define MAX_ITERATIONS 1024
+#define MAX_ITERATIONS 2048
 
 struct Ray
 {
@@ -117,7 +117,7 @@ bool traverse(Ray ray, Grid grid,
     float tMin, tMax;
     const vec3 minBound = grid.minBound;
     const vec3 maxBound = grid.maxBound;
-    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000.0, tMin, tMax);
+    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
     if (!intersectGrid) return false;
 
@@ -151,8 +151,6 @@ bool traverse(Ray ray, Grid grid,
         if (!indexWithinBounds(grid, gridIndex)) return false;
 
         int index = indexFromGridPosition(grid, gridIndex);
-
-        comparisons = int(getGroupedIndex(grid.dimensions, gridIndex));
 
         voxel = getVoxelFromGrid(grid.voxels, grid.dimensions, gridIndex);
         if (voxel.lookupIndex > 0) return true;
