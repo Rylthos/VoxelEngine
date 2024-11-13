@@ -5,25 +5,37 @@
 
 #include <unordered_map>
 
+#include "Events.hpp"
 #include "Image.hpp"
 
-class PaletteManager
+class PaletteManager : public EventReceiver
 {
   public:
     PaletteManager();
+
+    void initResources(VkDevice device, VmaAllocator allocator);
+    void freeResources();
 
     void flushColours();
     uint8_t getColourIndex(glm::vec4 colour);
     void setColourIndex(uint8_t index, glm::vec4 colour);
     uint8_t getEmptyIndex() { return 0; }
+    Image& getImage() { return m_LookupTexture; }
 
-    void copyToBuffer(Buffer& image);
+    void updateImage();
+
+    void receive(const Event* event);
 
   private:
     size_t m_MaxColours;
     std::unordered_map<glm::vec4, size_t> m_Mapping;
     std::vector<glm::vec4> m_Colours;
     size_t m_CurrentColour = 1;
+
+    Image m_LookupTexture;
+    Buffer m_StagingBuffer;
+
+    bool m_HasChanged = false;
 
   private:
     uint8_t addColour(glm::vec4 colour);

@@ -82,7 +82,6 @@ class Engine : EventReceiver
 
     Image m_DrawImage;
     Image m_RayImage;
-    Image m_LookupTexture;
 
     bool m_RenderRay = false;
 
@@ -107,8 +106,6 @@ class Engine : EventReceiver
     size_t m_TotalVoxels;
     Buffer m_VoxelStagingBuffer;
     Buffer m_VoxelBuffer;
-
-    Buffer m_LookupStagingBuffer;
 
     Stats m_Stats;
 
@@ -140,6 +137,8 @@ class Engine : EventReceiver
     void initDescriptorSets();
 
     void initQueryPool();
+
+    void updateImGui();
 
     void update(float frameDelta);
     void renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView, VkExtent2D extent);

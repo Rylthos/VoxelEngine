@@ -6,7 +6,7 @@
 
 #include "EventHandler.hpp"
 
-enum class EventType { UNDEFINED, KeyboardInput, MouseMove, GameUpdate, GameRender };
+enum class EventType { UNDEFINED, KeyboardInput, MouseMove, GameUpdate, GameRender, ImGuiRender };
 
 struct Event {
     virtual ~Event() = default;
@@ -40,6 +40,10 @@ struct GameRender : public Event {
     EventType getType() const override { return EventType::GameRender; }
 
     float frameDelta;
+};
+
+struct ImGuiRender : public Event {
+    EventType getType() const override { return EventType::ImGuiRender; }
 };
 
 class EventReceiver

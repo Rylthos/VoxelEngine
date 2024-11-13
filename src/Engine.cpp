@@ -24,6 +24,8 @@ void Engine::init()
     m_SceneManager = SceneManager({ VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE }, &m_PaletteManager);
 
     initVulkan();
+    m_PaletteManager.initResources(m_Device, m_Allocator);
+
     initSwapchain();
     initCommandPool();
     ImmediateSubmit::init(m_Device, m_GraphicsQueue.queue, m_GraphicsQueue.queueFamily);
@@ -40,10 +42,13 @@ void Engine::init()
 
     m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f, VOXEL_SIZE / 2.f, -1.f));
 
-    EventHandler::subscribe(EventType::KeyboardInput, this);
+    EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
 
-    EventHandler::subscribe(
-        { EventType::KeyboardInput, EventType::MouseMove, EventType::GameUpdate }, &m_Camera);
+    EventHandler::subscribe({ EventType::KeyboardInput, EventType::MouseMove, EventType::GameUpdate,
+                              EventType::ImGuiRender },
+                            &m_Camera);
+
+    EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 }
 
 void Engine::start()
@@ -107,8 +112,7 @@ void Engine::cleanup()
     m_DrawImage.free();
     m_RayImage.free();
 
-    m_LookupStagingBuffer.free();
-    m_LookupTexture.free();
+    m_PaletteManager.freeResources();
 
     destroySwapchain();
 
@@ -132,6 +136,11 @@ void Engine::receive(const Event* event)
             if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
                 m_RenderRay = !m_RenderRay;
 
+            break;
+        }
+    case EventType::ImGuiRender:
+        {
+            updateImGui();
             break;
         }
     default:
@@ -385,19 +394,6 @@ void Engine::initImages()
                       VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
-
-    VkExtent3D lookupExtent = { 256, 1, 1 };
-    m_LookupTexture.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, lookupExtent,
-                           VK_IMAGE_TYPE_1D,
-                           VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-                           VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    m_LookupTexture.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_1D);
-
-    m_LookupStagingBuffer.create(m_Allocator, 256 * sizeof(glm::vec4),
-                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                 VMA_MEMORY_USAGE_CPU_TO_GPU);
 }
 
 void Engine::initVoxelBuffer()
@@ -422,10 +418,7 @@ void Engine::updateScene()
     vkDeviceWaitIdle(m_Device);
     m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
 
-    m_PaletteManager.copyToBuffer(m_LookupStagingBuffer);
-
-    ImmediateSubmit::submit(
-        [&](VkCommandBuffer cmd) { m_LookupTexture.copyFromBuffer(cmd, m_LookupStagingBuffer); });
+    m_PaletteManager.updateImage();
 }
 
 void Engine::initDescriptorPool()
@@ -502,7 +495,7 @@ void Engine::initDescriptorSets()
         DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
             .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
             .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_RayImage.getImageView())
-            .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_LookupTexture.getImageView())
+            .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_PaletteManager.getImage().getImageView())
             .build()
             .at(0);
 
@@ -528,15 +521,8 @@ void Engine::initQueryPool()
     vkResetQueryPool(m_Device, m_QueryPool, 0, m_Frames.size() * 2);
 }
 
-void Engine::update(float frameDelta)
+void Engine::updateImGui()
 {
-    GameUpdate update;
-    update.frameDelta = frameDelta;
-    EventHandler::dispatchEvent(&update);
-
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-
     const size_t frameTimeSize = 200;
     static float frameTimes[frameTimeSize];
     static int currentFrame = 0;
@@ -563,8 +549,6 @@ void Engine::update(float frameDelta)
         currentFrame += 1;
     }
 
-    ImGui::NewFrame();
-
     if (ImGui::Begin("Stats"))
     {
         ImGui::PushItemWidth(ImGui::GetWindowContentRegionMax().x - 10.0f);
@@ -581,26 +565,6 @@ void Engine::update(float frameDelta)
 
         ImGui::Text("Dispatch Time: %.1f ms",
                     m_PreviousFrameTime * m_QueryTimestampInterval / 1000000);
-    }
-    ImGui::End();
-
-    if (ImGui::Begin("Camera"))
-    {
-        glm::vec3 camPos = m_Camera.getPosition();
-        ImGui::Text("Camera Position");
-        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camPos.x, camPos.y, camPos.z);
-
-        glm::vec3 camForward = m_Camera.getForward();
-        ImGui::Text("Camera Forward");
-        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camForward.x, camForward.y, camForward.z);
-
-        glm::vec3 camRight = m_Camera.getRight();
-        ImGui::Text("Camera Right");
-        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camRight.x, camRight.y, camRight.z);
-
-        glm::vec3 camUp = m_Camera.getUp();
-        ImGui::Text("Camera Up");
-        ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
     }
     ImGui::End();
 
@@ -636,7 +600,23 @@ void Engine::update(float frameDelta)
     }
     ImGui::End();
 
-    // ImGui::ShowDemoWindow();
+    ImGui::ShowDemoWindow();
+}
+
+void Engine::update(float frameDelta)
+{
+    GameUpdate update;
+    update.frameDelta = frameDelta;
+    EventHandler::dispatchEvent(&update);
+
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+
+    ImGui::NewFrame();
+
+    ImGuiRender imGuiRender;
+    EventHandler::dispatchEvent(&imGuiRender);
+
     ImGui::Render();
 }
 
@@ -708,7 +688,8 @@ void Engine::render(float frameDelta)
 
     m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     m_RayImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    m_LookupTexture.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
+                                           VK_IMAGE_LAYOUT_GENERAL);
 
     Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                       VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);

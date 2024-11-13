@@ -7,6 +7,8 @@
 
 #include <algorithm>
 
+#include <imgui.h>
+
 Camera::Camera() : m_Position{ 0.f, 0.f, 0.f }, m_Yaw{ 0.f }, m_Pitch{ 0.f } { updateAxis(); }
 
 Camera::Camera(glm::vec3 position) : m_Position{ position }, m_Yaw{ 0.f }, m_Pitch{ 0.f }
@@ -75,6 +77,28 @@ void Camera::receive(const Event* event)
             m_Position += direction * speed * gu->frameDelta;
 
             break;
+        }
+    case EventType::ImGuiRender:
+        {
+            if (ImGui::Begin("Camera"))
+            {
+                glm::vec3 camPos = getPosition();
+                ImGui::Text("Camera Position");
+                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camPos.x, camPos.y, camPos.z);
+
+                glm::vec3 camForward = getForward();
+                ImGui::Text("Camera Forward");
+                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camForward.x, camForward.y, camForward.z);
+
+                glm::vec3 camRight = getRight();
+                ImGui::Text("Camera Right");
+                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camRight.x, camRight.y, camRight.z);
+
+                glm::vec3 camUp = getUp();
+                ImGui::Text("Camera Up");
+                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
+            }
+            ImGui::End();
         }
     default:
         break;
