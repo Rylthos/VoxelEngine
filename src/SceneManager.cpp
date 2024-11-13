@@ -20,10 +20,10 @@ std::string stringOfScene(const Scene& scene)
     }
 }
 
-SceneManager::SceneManager() : m_CurrentScene{ Scene::SQUARE }, m_Dimensions(0) {}
+SceneManager::SceneManager() : m_Dimensions(0) {}
 
-SceneManager::SceneManager(glm::ivec3 voxelDimensions)
-    : m_CurrentScene{ Scene::SQUARE }, m_Dimensions(voxelDimensions)
+SceneManager::SceneManager(glm::ivec3 voxelDimensions, PaletteManager* paletteManager)
+    : m_Dimensions(voxelDimensions), m_PaletteManager(paletteManager)
 {
     m_Voxels.resize(voxelDimensions.x * voxelDimensions.y * voxelDimensions.z);
     loadScene(m_CurrentScene);
@@ -62,6 +62,17 @@ void SceneManager::squareScene()
 
     spdlog::info("Loaded Scene: Square");
 
+    m_PaletteManager->flushColours();
+    const uint8_t RED = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 0.0f, 1.0f });
+    const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 0.0f, 1.0f });
+    const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 1.0f, 1.0f });
+    const uint8_t AQUA = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 1.0f, 1.0f });
+
+    spdlog::info("Red: {}", RED);
+    spdlog::info("Green: {}", GREEN);
+    spdlog::info("Blue: {}", BLUE);
+    spdlog::info("Aqua: {}", AQUA);
+
     for (uint32_t y = 0; y < VOXEL_SIZE; y++)
     {
         for (uint32_t z = 0; z < VOXEL_SIZE; z++)
@@ -79,16 +90,16 @@ void SceneManager::squareScene()
                 if (y % 2 == 0)
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = 2 };
+                        m_Voxels.at(index) = { .colourIndex = RED };
                     else
-                        m_Voxels.at(index) = { .colourIndex = 3 };
+                        m_Voxels.at(index) = { .colourIndex = GREEN };
                 }
                 else
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = 4 };
+                        m_Voxels.at(index) = { .colourIndex = BLUE };
                     else
-                        m_Voxels.at(index) = { .colourIndex = 5 };
+                        m_Voxels.at(index) = { .colourIndex = AQUA };
                 }
             }
         }
@@ -101,6 +112,14 @@ void SceneManager::holedSquareScene()
 
     spdlog::info("Loaded Scene: Holed Square");
 
+    m_PaletteManager->flushColours();
+    const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
+    const uint8_t YELLOW = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 0.0f, 1.0f });
+    const uint8_t MAGENTA = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 1.0f, 1.0f });
+
+    spdlog::info("Yellow: {}", YELLOW);
+    spdlog::info("Magenta: {}", MAGENTA);
+
     for (uint32_t y = 0; y < VOXEL_SIZE; y++)
     {
         for (uint32_t z = 0; z < VOXEL_SIZE; z++)
@@ -118,16 +137,16 @@ void SceneManager::holedSquareScene()
                 if (y % 2 == 0)
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = 2 };
+                        m_Voxels.at(index) = { .colourIndex = YELLOW };
                     else
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                 }
                 else
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = 3 };
+                        m_Voxels.at(index) = { .colourIndex = MAGENTA };
                     else
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                 }
             }
         }
@@ -141,10 +160,16 @@ void SceneManager::randomObjectsScene()
 
     spdlog::info("Loaded Scene: Random Objects");
 
+    m_PaletteManager->flushColours();
+    const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
+
     { // Top Left Front
         const float R = HALF_VOXEL_SIZE / 4.f;
         const float r = HALF_VOXEL_SIZE / 6.f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
+
+        const uint8_t BLACK = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 0.0f, 1.0f });
+        const uint8_t RED = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 0.0f, 1.0f });
 
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
         {
@@ -163,13 +188,13 @@ void SceneManager::randomObjectsScene()
                     if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 1 };
+                            m_Voxels.at(index) = { .colourIndex = BLACK };
                         else
-                            m_Voxels.at(index) = { .colourIndex = 2 };
+                            m_Voxels.at(index) = { .colourIndex = RED };
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                     }
                 }
             }
@@ -180,6 +205,10 @@ void SceneManager::randomObjectsScene()
         const float R = HALF_VOXEL_SIZE / 3.f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.x += HALF_VOXEL_SIZE;
+
+        const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 1.0f, 1.0f });
+        const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 0.0f, 1.0f });
+
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
         {
             for (uint32_t z = 0; z < HALF_VOXEL_SIZE; z++)
@@ -196,13 +225,13 @@ void SceneManager::randomObjectsScene()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 3 };
+                            m_Voxels.at(index) = { .colourIndex = BLUE };
                         else
-                            m_Voxels.at(index) = { .colourIndex = 4 };
+                            m_Voxels.at(index) = { .colourIndex = GREEN };
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                     }
                 }
             }
@@ -213,6 +242,10 @@ void SceneManager::randomObjectsScene()
         const float R = HALF_VOXEL_SIZE / 2.f;
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.z += HALF_VOXEL_SIZE;
+
+        const uint8_t MAGENTA = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 1.0f, 1.0f });
+        const uint8_t YELLOW = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 0.0f, 1.0f });
+
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
         {
             for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
@@ -230,13 +263,13 @@ void SceneManager::randomObjectsScene()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 5 };
+                            m_Voxels.at(index) = { .colourIndex = MAGENTA };
                         else
-                            m_Voxels.at(index) = { .colourIndex = 6 };
+                            m_Voxels.at(index) = { .colourIndex = YELLOW };
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                     }
                 }
             }
@@ -248,6 +281,10 @@ void SceneManager::randomObjectsScene()
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.x += HALF_VOXEL_SIZE;
         center.z += HALF_VOXEL_SIZE;
+
+        const uint8_t WHITE = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 1.0f, 1.0f });
+        const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 1.0f, 1.0f });
+
         for (uint32_t y = 0; y < HALF_VOXEL_SIZE; y++)
         {
             for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
@@ -266,13 +303,13 @@ void SceneManager::randomObjectsScene()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 7 };
+                            m_Voxels.at(index) = { .colourIndex = BLUE };
                         else
-                            m_Voxels.at(index) = { .colourIndex = 8 };
+                            m_Voxels.at(index) = { .colourIndex = WHITE };
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                     }
                 }
             }
@@ -284,6 +321,9 @@ void SceneManager::randomObjectsScene()
 
         glm::vec3 center = glm::vec3(HALF_VOXEL_SIZE / 2.f);
         center.y += HALF_VOXEL_SIZE;
+
+        const uint8_t YELLOW = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 1.0f, 1.0f });
+        const uint8_t BLACK = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 0.0f, 1.0f });
 
         for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
         {
@@ -305,13 +345,13 @@ void SceneManager::randomObjectsScene()
                     if (fmax(yz - 1, fmax(zx - 1, xy - 1)) < R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 5 };
+                            m_Voxels.at(index) = { .colourIndex = YELLOW };
                         else
-                            m_Voxels.at(index) = { .colourIndex = 1 };
+                            m_Voxels.at(index) = { .colourIndex = BLACK };
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                     }
                 }
             }
@@ -369,6 +409,9 @@ void SceneManager::randomObjectsScene()
         center.z += HALF_VOXEL_SIZE;
         center.y += HALF_VOXEL_SIZE;
 
+        const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 0.0f, 1.0f });
+        const uint8_t BLACK = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 0.0f, 1.0f });
+
         for (uint32_t y = HALF_VOXEL_SIZE; y < VOXEL_SIZE; y++)
         {
             for (uint32_t z = HALF_VOXEL_SIZE; z < VOXEL_SIZE; z++)
@@ -390,13 +433,13 @@ void SceneManager::randomObjectsScene()
                     if (implicit <= 0)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 3 };
+                            m_Voxels.at(index) = { .colourIndex = GREEN };
                         else
-                            m_Voxels.at(index) = { .colourIndex = 8 };
+                            m_Voxels.at(index) = { .colourIndex = BLACK };
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        m_Voxels.at(index) = { .colourIndex = EMPTY };
                     }
                 }
             }
@@ -452,6 +495,11 @@ void SceneManager::sphereScene()
     const float R = m_Dimensions.x / 2.0f;
     glm::vec3 center(m_Dimensions.x / 2.f);
 
+    m_PaletteManager->flushColours();
+    const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
+    const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.f, 0.f, 1.f, 1.f });
+    const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.f, 1.f, 0.f, 1.f });
+
     spdlog::info("Loaded Scene: Sphere");
 
     for (int32_t y = 0; y < m_Dimensions.y; y++)
@@ -470,13 +518,13 @@ void SceneManager::sphereScene()
                 if (dot(position, position) < R * R)
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = 3 };
+                        m_Voxels.at(index) = { .colourIndex = GREEN };
                     else
-                        m_Voxels.at(index) = { .colourIndex = 4 };
+                        m_Voxels.at(index) = { .colourIndex = BLUE };
                 }
                 else
                 {
-                    m_Voxels.at(index) = { .colourIndex = 0 };
+                    m_Voxels.at(index) = { .colourIndex = EMPTY };
                 }
             }
         }

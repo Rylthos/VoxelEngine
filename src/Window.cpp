@@ -41,12 +41,10 @@ void Window::initGLFW()
         spdlog::error("Failed to initialize GLFW");
         exit(-1);
     }
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, GLFW_FALSE);
-    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-
-    glfwWindowHint(GLFW_WAYLAND_APP_ID, 0xFF);
 }
 
 void Window::initWindow(const char* title)

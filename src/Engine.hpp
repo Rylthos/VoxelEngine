@@ -12,6 +12,7 @@
 #include "EventHandler.hpp"
 #include "Events.hpp"
 #include "Image.hpp"
+#include "PaletteManager.hpp"
 #include "SceneManager.hpp"
 #include "Voxel.hpp"
 #include "Window.hpp"
@@ -107,9 +108,12 @@ class Engine : EventReceiver
     Buffer m_VoxelStagingBuffer;
     Buffer m_VoxelBuffer;
 
+    Buffer m_LookupStagingBuffer;
+
     Stats m_Stats;
 
     SceneManager m_SceneManager;
+    PaletteManager m_PaletteManager;
 
   private:
     void initVulkan();

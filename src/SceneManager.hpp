@@ -4,6 +4,7 @@
 #include <string>
 
 #include "Buffer.hpp"
+#include "PaletteManager.hpp"
 #include "Voxel.hpp"
 
 enum class Scene {
@@ -23,7 +24,7 @@ class SceneManager
 {
   public:
     SceneManager();
-    SceneManager(glm::ivec3 voxelDimensions);
+    SceneManager(glm::ivec3 voxelDimensions, PaletteManager* paletteManager);
 
     void loadScene(Scene newScene);
     Scene currentScene() { return m_CurrentScene; }
@@ -31,9 +32,10 @@ class SceneManager
     void copyDataToBuffer(Buffer& buffer);
 
   private:
-    Scene m_CurrentScene;
+    Scene m_CurrentScene = Scene::SQUARE;
     glm::ivec3 m_Dimensions;
     std::vector<Voxel> m_Voxels;
+    PaletteManager* m_PaletteManager;
 
   private:
     void squareScene();

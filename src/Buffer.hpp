@@ -3,6 +3,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
+#include <cstring>
 #include <memory>
 #include <span>
 
@@ -48,7 +49,7 @@ class Buffer
         stagingBuffer.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                              VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-        memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
+        std::memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
 
         copyFromBuffer(stagingBuffer, size);
     }
@@ -58,6 +59,6 @@ class Buffer
     {
         size_t size = data.size() * sizeof(T);
 
-        memcpy(getAllocationInfo().pMappedData, data.data(), size);
+        std::memcpy(getAllocationInfo().pMappedData, data.data(), size);
     }
 };

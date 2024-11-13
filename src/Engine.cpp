@@ -21,7 +21,7 @@ void Engine::init()
 {
     m_Window.create("Voxel Engine", 960, 960);
 
-    m_SceneManager = SceneManager({ VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE });
+    m_SceneManager = SceneManager({ VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE }, &m_PaletteManager);
 
     initVulkan();
     initSwapchain();
@@ -106,6 +106,8 @@ void Engine::cleanup()
 
     m_DrawImage.free();
     m_RayImage.free();
+
+    m_LookupStagingBuffer.free();
     m_LookupTexture.free();
 
     destroySwapchain();
@@ -384,7 +386,7 @@ void Engine::initImages()
 
     m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
-    VkExtent3D lookupExtent = { 8, 1, 1 };
+    VkExtent3D lookupExtent = { 256, 1, 1 };
     m_LookupTexture.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, lookupExtent,
                            VK_IMAGE_TYPE_1D,
                            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
@@ -392,28 +394,10 @@ void Engine::initImages()
 
     m_LookupTexture.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_1D);
 
-    std::vector<glm::vec4> colours = {
-        { 0., 0., 0., 0. },
-        { 0., 0., 0., 1. },
-        { 1., 0., 0., 1. },
-        { 0., 1., 0., 1. },
-        { 0., 0., 1., 1. },
-        { 1., 1., 0., 1. },
-        { 1., 0., 1., 1. },
-        { 0., 1., 1., 1. },
-        { 1., 1., 1., 1. },
-    };
-
-    Buffer uploadBuffer;
-    uploadBuffer.create(m_Allocator, colours.size() * sizeof(glm::vec4),
-                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                        VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    uploadBuffer.copyFromData<glm::vec4>(colours);
-    ImmediateSubmit::submit(
-        [&](VkCommandBuffer cmd) { m_LookupTexture.copyFromBuffer(cmd, uploadBuffer); });
-
-    uploadBuffer.free();
+    m_LookupStagingBuffer.create(m_Allocator, 256 * sizeof(glm::vec4),
+                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                 VMA_MEMORY_USAGE_CPU_TO_GPU);
 }
 
 void Engine::initVoxelBuffer()
@@ -437,6 +421,11 @@ void Engine::updateScene()
 
     vkDeviceWaitIdle(m_Device);
     m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
+
+    m_PaletteManager.copyToBuffer(m_LookupStagingBuffer);
+
+    ImmediateSubmit::submit(
+        [&](VkCommandBuffer cmd) { m_LookupTexture.copyFromBuffer(cmd, m_LookupStagingBuffer); });
 }
 
 void Engine::initDescriptorPool()
