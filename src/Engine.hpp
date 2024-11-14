@@ -45,6 +45,13 @@ struct Stats {
     float frameDelta;
 };
 
+struct TreeNode {
+    uint32_t childPointer : 15;
+    uint32_t far : 1;
+    uint32_t validMask : 8;
+    uint32_t leafMask : 8;
+} __attribute__((packed));
+
 class Engine : EventReceiver
 {
   public:
@@ -102,7 +109,7 @@ class Engine : EventReceiver
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 1024;
+    const uint32_t VOXEL_SIZE = 2;
     size_t m_TotalVoxels;
     Buffer m_VoxelStagingBuffer;
     Buffer m_VoxelBuffer;

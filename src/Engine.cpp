@@ -398,12 +398,13 @@ void Engine::initImages()
 
 void Engine::initVoxelBuffer()
 {
-    size_t totalSize = VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE;
+    // size_t totalSize = VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE;
 
-    m_VoxelStagingBuffer.create(m_Allocator, totalSize * sizeof(Voxel),
+    size_t size = 9;
+    m_VoxelStagingBuffer.create(m_Allocator, size * sizeof(TreeNode),
                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    m_VoxelBuffer.create(m_Allocator, totalSize * sizeof(Voxel),
+    m_VoxelBuffer.create(m_Allocator, size * sizeof(TreeNode),
                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                              VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                          VMA_MEMORY_USAGE_GPU_ONLY);
@@ -413,12 +414,19 @@ void Engine::initVoxelBuffer()
 
 void Engine::updateScene()
 {
-    m_SceneManager.copyDataToBuffer(m_VoxelStagingBuffer);
+    std::vector<TreeNode> tree = {
+        { .childPointer = 0x1, .far = 0, .validMask = 0xFF, .leafMask = 0xFF }
+    };
 
-    vkDeviceWaitIdle(m_Device);
+    m_VoxelStagingBuffer.copyFromData_CPUOnly<TreeNode>(tree);
     m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
 
-    m_PaletteManager.updateImage();
+    // m_SceneManager.copyDataToBuffer(m_VoxelStagingBuffer);
+    //
+    // vkDeviceWaitIdle(m_Device);
+    // m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
+    //
+    // m_PaletteManager.updateImage();
 }
 
 void Engine::initDescriptorPool()
@@ -468,7 +476,7 @@ void Engine::initPipelines()
             vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_VoxelPipelineLayout));
 
         ShaderModule voxelShader;
-        voxelShader.create("res/shaders/FastVoxelTraversal.comp.spv", m_Device);
+        voxelShader.create("res/shaders/EfficientSVT.comp.spv", m_Device);
 
         VkPipelineShaderStageCreateInfo shaderStageCI{};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

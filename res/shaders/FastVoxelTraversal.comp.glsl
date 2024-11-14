@@ -9,13 +9,13 @@
 
 #define MAX_COMPARISONS 1024
 
-layout (local_size_x = 16, local_size_y = 16) in;
+layout(local_size_x = 16, local_size_y = 16) in;
 
-layout (rgba16f, set = 0, binding = 0) uniform image2D o_Image;
-layout (rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
-layout (rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
+layout(rgba16f, set = 0, binding = 0) uniform image2D o_Image;
+layout(rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
+layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 
-layout (push_constant) uniform constants
+layout(push_constant) uniform constants
 {
     vec4 p_CameraPosition;
     vec4 p_CameraFront;
@@ -32,15 +32,14 @@ void main()
     ivec2 size = imageSize(o_Image);
     vec2 uv = vec2(texelCoord) / vec2(size);
 
-
     const vec3 clearColour = vec3(0.1);
     imageStore(o_ComparisonImage, texelCoord, vec4(clearColour, 0.0));
     imageStore(o_Image, texelCoord, vec4(clearColour, 1.0));
 
     Ray ray = generateRay(uv,
-                        vec3(p_CameraPosition), vec3(p_CameraFront),
-                        vec3(p_CameraRight),
-                        vec3(p_CameraUp));
+            vec3(p_CameraPosition), vec3(p_CameraFront),
+            vec3(p_CameraRight),
+            vec3(p_CameraUp));
 
     Grid grid = generateGrid(vec3(0.), p_Dimensions, p_Size, p_Voxels);
 
