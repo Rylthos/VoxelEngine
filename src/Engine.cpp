@@ -21,6 +21,7 @@ void Engine::init()
 {
     m_Window.create("Voxel Engine", 960, 960);
 
+    m_PaletteManager.defaultPalette();
     m_SceneManager = SceneManager({ VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE }, &m_PaletteManager);
 
     initVulkan();

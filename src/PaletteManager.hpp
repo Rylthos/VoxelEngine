@@ -26,6 +26,8 @@ class PaletteManager : public EventReceiver
 
     void receive(const Event* event);
 
+    void defaultPalette();
+
   private:
     size_t m_MaxColours;
     std::unordered_map<glm::vec4, size_t> m_Mapping;

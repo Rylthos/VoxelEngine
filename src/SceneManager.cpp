@@ -62,7 +62,7 @@ void SceneManager::squareScene()
 
     spdlog::info("Loaded Scene: Square");
 
-    m_PaletteManager->flushColours();
+    // m_PaletteManager->flushColours();
     const uint8_t RED = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 0.0f, 1.0f });
     const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 0.0f, 1.0f });
     const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 1.0f, 1.0f });
@@ -107,7 +107,7 @@ void SceneManager::holedSquareScene()
 
     spdlog::info("Loaded Scene: Holed Square");
 
-    m_PaletteManager->flushColours();
+    // m_PaletteManager->flushColours();
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
     const uint8_t YELLOW = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 0.0f, 1.0f });
     const uint8_t MAGENTA = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 1.0f, 1.0f });
@@ -152,7 +152,7 @@ void SceneManager::randomObjectsScene()
 
     spdlog::info("Loaded Scene: Random Objects");
 
-    m_PaletteManager->flushColours();
+    // m_PaletteManager->flushColours();
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
 
     { // Top Left Front
@@ -487,7 +487,7 @@ void SceneManager::sphereScene()
     const float R = m_Dimensions.x / 2.0f;
     glm::vec3 center(m_Dimensions.x / 2.f);
 
-    m_PaletteManager->flushColours();
+    // m_PaletteManager->flushColours();
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
     const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.f, 0.f, 1.f, 1.f });
     const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.f, 1.f, 0.f, 1.f });

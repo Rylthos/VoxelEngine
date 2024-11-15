@@ -135,6 +135,26 @@ void PaletteManager::receive(const Event* event)
     }
 }
 
+void PaletteManager::defaultPalette()
+{
+    addColour({ 1.0f, 0.0f, 0.0f, 1.0f });
+    addColour({ 1.0f, 0.11f, 0.0f, 1.0f });
+    addColour({ 1.0f, 0.22f, 0.0f, 1.0f });
+    addColour({ 0.96f, 1.0f, 0.0f, 1.0f });
+    addColour({ 0.0f, 1.0f, 0.32f, 1.0f });
+    addColour({ 0.0f, 1.0f, 0.32f, 1.0f });
+    addColour({ 0.0f, 1.0f, 1.0f, 1.0f });
+    addColour({ 0.0f, 0.6f, 1.0f, 1.0f });
+    addColour({ 0.0f, 0.13f, 1.0f, 1.0f });
+    addColour({ 0.0f, 0.0f, 1.0f, 1.0f });
+    addColour({ 0.13f, 0.0f, 1.0f, 1.0f });
+    addColour({ 0.13f, 0.0f, 1.0f, 1.0f });
+    addColour({ 0.6f, 0.0f, 1.0f, 1.0f });
+    addColour({ 1.0f, 0.0f, 0.6f, 1.0f });
+    addColour({ 1.0f, 0.0f, 0.13f, 1.0f });
+    addColour({ 1.0f, 1.0f, 1.0f, 1.0f });
+}
+
 uint8_t PaletteManager::addColour(glm::vec4 colour)
 {
     size_t index = m_CurrentColour;
