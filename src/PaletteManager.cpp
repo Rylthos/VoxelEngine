@@ -32,7 +32,7 @@ void PaletteManager::flushColours()
     }
     m_Mapping.clear();
 
-    m_CurrentColour = 1;
+    m_CurrentColour = 0;
     m_HasChanged = true;
 }
 

@@ -30,7 +30,7 @@ class PaletteManager : public EventReceiver
     size_t m_MaxColours;
     std::unordered_map<glm::vec4, size_t> m_Mapping;
     std::vector<glm::vec4> m_Colours;
-    size_t m_CurrentColour = 1;
+    size_t m_CurrentColour = 0;
 
     Image m_LookupTexture;
     Buffer m_StagingBuffer;

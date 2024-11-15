@@ -68,11 +68,6 @@ void SceneManager::squareScene()
     const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 1.0f, 1.0f });
     const uint8_t AQUA = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 1.0f, 1.0f });
 
-    spdlog::info("Red: {}", RED);
-    spdlog::info("Green: {}", GREEN);
-    spdlog::info("Blue: {}", BLUE);
-    spdlog::info("Aqua: {}", AQUA);
-
     for (uint32_t y = 0; y < VOXEL_SIZE; y++)
     {
         for (uint32_t z = 0; z < VOXEL_SIZE; z++)
@@ -116,9 +111,6 @@ void SceneManager::holedSquareScene()
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
     const uint8_t YELLOW = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 0.0f, 1.0f });
     const uint8_t MAGENTA = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 1.0f, 1.0f });
-
-    spdlog::info("Yellow: {}", YELLOW);
-    spdlog::info("Magenta: {}", MAGENTA);
 
     for (uint32_t y = 0; y < VOXEL_SIZE; y++)
     {

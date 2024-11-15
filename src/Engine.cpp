@@ -179,15 +179,19 @@ void Engine::initVulkan()
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
     features12.hostQueryReset = true;
+    features12.shaderInt8 = true;
+    features12.storageBuffer8BitAccess = true;
 
     VkPhysicalDeviceVulkan11Features features11{};
     features11.shaderDrawParameters = true;
+    features11.storageBuffer16BitAccess = true;
 
     VkPhysicalDeviceFeatures features{};
     features.robustBufferAccess = true;
     features.fragmentStoresAndAtomics = true;
     features.imageCubeArray = true;
     features.geometryShader = true;
+    features.shaderInt16 = true;
 
     vkb::PhysicalDeviceSelector selector{ vkbInst };
     auto vkbMaybeDevice =
@@ -398,53 +402,135 @@ void Engine::initImages()
 
 void Engine::initVoxelBuffer()
 {
-    // size_t totalSize = VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE;
-
-    size_t size = 9;
-    m_VoxelStagingBuffer.create(m_Allocator, size * sizeof(TreeNode),
-                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-    m_VoxelBuffer.create(m_Allocator, size * sizeof(TreeNode),
-                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                         VMA_MEMORY_USAGE_GPU_ONLY);
-
-    spdlog::info("Created Vertex Buffer");
-}
-
-void Engine::updateScene()
-{
     std::vector<TreeNode> tree = {
         // Solid Tree
-        /*
-        { .childPointer = 0x1, .validMask = 0xFF, .leafMask = 0xFF }
-        */
+        // /*
+        // { .childPointer = 0x1, .validMask = 0xFF, .leafMask = 0xFF },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 1    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 2    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 3    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 4    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 5    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 6    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 7    },
+        // { .childPointer = 0x0, .validMask = 0x00, .leafMask = 8    },
+        // */
 
         // Four Octants Air
         /*
-        { .childPointer = 0x0, .validMask = 0b10010110, .leafMask = 0b10010110 },
+        { .childPointer = 0x1, .validMask = 0b10010110, .leafMask = 0b10010110 },
+        { .childPointer = 0x0, .validMask = 0x00,       .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x00,       .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x00,       .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x00,       .leafMask = 3          },
         */
 
         // Top Left Front Octant split, top left front + back air
         /*
         { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b11111110 },
-        { .childPointer = 0x0, .validMask = 0b11111010, .leafMask = 0b11111010 },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x1, .validMask = 0b11111010, .leafMask = 0b11111010 },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 8          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 9          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 10         },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 11         },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 12         },
         */
 
         // All small corners Air
-        /*
-        { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b00000000 },
-        { .childPointer = 0x0, .validMask = 0b01111111, .leafMask = 0b01111111 },
-        { .childPointer = 0x0, .validMask = 0b10111111, .leafMask = 0b10111111 },
-        { .childPointer = 0x0, .validMask = 0b11011111, .leafMask = 0b11011111 },
-        { .childPointer = 0x0, .validMask = 0b11101111, .leafMask = 0b11101111 },
-        { .childPointer = 0x0, .validMask = 0b11110111, .leafMask = 0b11110111 },
-        { .childPointer = 0x0, .validMask = 0b11111011, .leafMask = 0b11111011 },
-        { .childPointer = 0x0, .validMask = 0b11111101, .leafMask = 0b11111101 },
-        { .childPointer = 0x0, .validMask = 0b11111110, .leafMask = 0b11111110 },
-        */
+        // /*
+        { .childPointer = 1,   .validMask = 0b11111111, .leafMask = 0b00000000 },
+        { .childPointer = 8,   .validMask = 0b01111111, .leafMask = 0b01111111 }, // B
+        { .childPointer = 14,  .validMask = 0b10111111, .leafMask = 0b10111111 }, // C
+        { .childPointer = 20,  .validMask = 0b11011111, .leafMask = 0b11011111 }, // D
+        { .childPointer = 26,  .validMask = 0b11101111, .leafMask = 0b11101111 }, // E
+        { .childPointer = 32,  .validMask = 0b11110111, .leafMask = 0b11110111 }, // F
+        { .childPointer = 38,  .validMask = 0b11111011, .leafMask = 0b11111011 }, // G
+        { .childPointer = 44,  .validMask = 0b11111101, .leafMask = 0b11111101 }, // H
+        { .childPointer = 50,  .validMask = 0b11111110, .leafMask = 0b11111110 }, // I
+
+        // B
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+
+        // C
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+
+        // D
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+
+        // E
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+
+        // F
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+
+        // G
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+
+        // H
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+
+        // I
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
+        // */
 
         // Checkboard
+        /*
         { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b00000000 }, // Root
         { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBR
         { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBL
@@ -454,10 +540,26 @@ void Engine::updateScene()
         { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBL
         { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTR
         { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTL
+                                                                               */
     };
+
+    size_t size = tree.size();
+    m_VoxelStagingBuffer.create(m_Allocator, size * sizeof(TreeNode),
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    m_VoxelBuffer.create(m_Allocator, size * sizeof(TreeNode),
+                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                         VMA_MEMORY_USAGE_GPU_ONLY);
 
     m_VoxelStagingBuffer.copyFromData_CPUOnly<TreeNode>(tree);
     m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
+
+    spdlog::info("Created Vertex Buffer");
+}
+
+void Engine::updateScene()
+{
 
     // m_SceneManager.copyDataToBuffer(m_VoxelStagingBuffer);
     //
