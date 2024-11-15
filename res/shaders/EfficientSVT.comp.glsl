@@ -39,8 +39,17 @@ layout(push_constant) uniform constants {
 struct HitRecord {
     float t;
     vec3 position;
+    vec3 normal;
     int parent;
-    uint octantMask;
+};
+
+struct StackMember
+{
+    float tMax;
+    uint parent;
+    float scale;
+
+    vec3 minBound;
 };
 
 uint nodeGetLeaf(Node node)
@@ -69,14 +78,15 @@ int signZero(float x)
 }
 
 HitRecord castRay(uint root, Ray ray) {
-    // const int sMax = 23;
-    // uvec2 stack[sMax + 1];
+    const int sMax = 23;
+    int currentStack = 0;
+    StackMember stack[sMax + 1];
 
     HitRecord hit;
     hit.t = -1;
     hit.parent = -1;
 
-    const float epsilon = 0.00001;
+    const float epsilon = 0.000001;
 
     vec3 origin = ray.origin;
     vec3 position = ray.origin;
@@ -112,7 +122,20 @@ HitRecord castRay(uint root, Ray ray) {
     for (int i = 0; i < MAX_ITERATIONS; i++)
     {
         if (t >= tMax) // Ascend, Go up stack
-        {}
+        {
+            if (currentStack == 0) break;
+
+            StackMember member = stack[--currentStack];
+            tMax = member.tMax;
+            parent = member.parent;
+            scale = member.scale;
+            minBound = member.minBound;
+
+            node = p_Tree.nodes[parent];
+            valid = nodeGetValid(node);
+            leaf = nodeGetLeaf(node);
+            childPtr = nodeGetChildPtr(node);
+        }
 
         vec3 center = minBound + scale * dimensions;
         int octantMask = 0;
@@ -128,29 +151,44 @@ HitRecord castRay(uint root, Ray ray) {
             hit.t = t;
             hit.position = calculatePosition(origin, direction, t);
             hit.parent = int(parent);
-            hit.octantMask = octantMask;
+            hit.normal = vec3(1., 0., 0.);
             return hit;
         }
 
         if (isValid && !isLeaf) // Parent Voxel, Add to stack
         {
-            break;
-            // if (childPtr == 0)
-            //     break;
-            //
-            // parent = parent + childPtr + bitCount((~leaf) >> (octantMask + 1));
-            // node = p_Tree.nodes[parent];
-            //
-            // if ((octantMask & 1) == 1)
-            //     minBound.x += scale * dimensions.x;
-            // if ((octantMask & 2) == 1)
-            //     minBound.y += scale * dimensions.y;
-            // if ((octantMask & 4) == 1)
-            //     minBound.z += scale * dimensions.z;
-            //
-            // if (!rayBoxIntersect(ray, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
-            //
-            // scale *= 0.5;
+            if (childPtr == 0)
+                break;
+
+            StackMember stackMember;
+            stackMember.parent = parent;
+            stackMember.tMax = tMax;
+            stackMember.scale = scale;
+            stackMember.minBound = minBound;
+
+            stack[currentStack++] = stackMember;
+
+            uint count = (~leaf & 0xFF) >> (octantMask + 1);
+            parent = parent + childPtr + bitCount(count);
+            node = p_Tree.nodes[parent];
+
+            if ((octantMask & 0x1) != 0)
+                minBound.x += scale * dimensions.x;
+            if ((octantMask & 0x2) != 0)
+                minBound.z += scale * dimensions.z;
+            if ((octantMask & 0x4) != 0)
+                minBound.y += scale * dimensions.y;
+
+            maxBound = minBound + scale * dimensions;
+
+            if (!rayBoxIntersect(ray, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
+
+            node = p_Tree.nodes[parent];
+            valid = nodeGetValid(node);
+            leaf = nodeGetLeaf(node);
+            childPtr = nodeGetChildPtr(node);
+
+            scale *= 0.5;
         }
 
         if (!isValid)
@@ -164,10 +202,6 @@ HitRecord castRay(uint root, Ray ray) {
                 octantMinBound.y += scale * dimensions.y;
 
             vec3 octantMaxBound = octantMinBound + scale * dimensions;
-
-            // hit.t = octantMask;
-            // hit.position = octantMinBound;
-            // return hit;
 
             float t0, t1;
             if (!rayBoxIntersect(ray, octantMinBound, octantMaxBound, tMin, tMax, t0, t1)) break;
@@ -199,5 +233,5 @@ void main()
     HitRecord hit = castRay(0, ray);
 
     if (hit.t >= 0)
-        imageStore(o_Image, texelCoord, vec4(hit.position, hit.t));
+        imageStore(o_Image, texelCoord, vec4(hit.position, hit.parent));
 }

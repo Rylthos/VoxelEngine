@@ -419,9 +419,41 @@ void Engine::updateScene()
         /*
         { .childPointer = 0x1, .validMask = 0xFF, .leafMask = 0xFF }
         */
-        // One Octant Air
-        { .childPointer = 0x1, .validMask = 0b10010110, .leafMask = 0b10010110 },
-        { .childPointer = 0x0, .validMask = 0xFF,       .leafMask = 0xFF       }
+
+        // Four Octants Air
+        /*
+        { .childPointer = 0x0, .validMask = 0b10010110, .leafMask = 0b10010110 },
+        */
+
+        // Top Left Front Octant split, top left front + back air
+        /*
+        { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b11111110 },
+        { .childPointer = 0x0, .validMask = 0b11111010, .leafMask = 0b11111010 },
+        */
+
+        // All small corners Air
+        /*
+        { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b00000000 },
+        { .childPointer = 0x0, .validMask = 0b01111111, .leafMask = 0b01111111 },
+        { .childPointer = 0x0, .validMask = 0b10111111, .leafMask = 0b10111111 },
+        { .childPointer = 0x0, .validMask = 0b11011111, .leafMask = 0b11011111 },
+        { .childPointer = 0x0, .validMask = 0b11101111, .leafMask = 0b11101111 },
+        { .childPointer = 0x0, .validMask = 0b11110111, .leafMask = 0b11110111 },
+        { .childPointer = 0x0, .validMask = 0b11111011, .leafMask = 0b11111011 },
+        { .childPointer = 0x0, .validMask = 0b11111101, .leafMask = 0b11111101 },
+        { .childPointer = 0x0, .validMask = 0b11111110, .leafMask = 0b11111110 },
+        */
+
+        // Checkboard
+        { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b00000000 }, // Root
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBR
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBL
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BFR
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BFL
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBR
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBL
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTR
+        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTL
     };
 
     m_VoxelStagingBuffer.copyFromData_CPUOnly<TreeNode>(tree);
