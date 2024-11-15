@@ -446,7 +446,7 @@ void Engine::initVoxelBuffer()
         */
 
         // All small corners Air
-        // /*
+        /*
         { .childPointer = 1,   .validMask = 0b11111111, .leafMask = 0b00000000 },
         { .childPointer = 8,   .validMask = 0b01111111, .leafMask = 0b01111111 }, // B
         { .childPointer = 14,  .validMask = 0b10111111, .leafMask = 0b10111111 }, // C
@@ -528,20 +528,56 @@ void Engine::initVoxelBuffer()
         { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
         { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
         { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 7          },
-        // */
+        */
 
         // Checkboard
-        /*
-        { .childPointer = 0x1, .validMask = 0b11111111, .leafMask = 0b00000000 }, // Root
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBR
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBL
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BFR
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // BFL
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBR
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBL
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTR
-        { .childPointer = 0x0, .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTL
-                                                                               */
+        // /*
+        { .childPointer = 1,   .validMask = 0b11111111, .leafMask = 0b00000000 }, // Root
+        { .childPointer = 8,   .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBR
+        { .childPointer = 11,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // BBL
+        { .childPointer = 14,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // BFR
+        { .childPointer = 17,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // BFL
+        { .childPointer = 20,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBR
+        { .childPointer = 23,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // TBL
+        { .childPointer = 26,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTR
+        { .childPointer = 29,  .validMask = 0b01101001, .leafMask = 0b01101001 }, // FTL
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 0          },
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 1          },
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 2          },
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 3          },
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 4          },
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 5          },
+
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+        { .childPointer = 0x0, .validMask = 0x0,        .leafMask = 6          },
+
+        // */
     };
 
     size_t size = tree.size();
