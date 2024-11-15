@@ -46,8 +46,7 @@ struct Stats {
 };
 
 struct TreeNode {
-    uint32_t childPointer : 15;
-    uint32_t far : 1;
+    uint32_t childPointer : 16;
     uint32_t validMask : 8;
     uint32_t leafMask : 8;
 } __attribute__((packed));

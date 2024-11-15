@@ -15,9 +15,9 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
     const float viewportHalfHeight = viewportHeight / 2.0;
 
     const vec3 viewportTopLeft = position
-                            + front * viewportDepth
-                            - right * viewportHalfWidth
-                            + up * viewportHalfHeight;
+            + front * viewportDepth
+            - right * viewportHalfWidth
+            + up * viewportHalfHeight;
 
     const vec3 deltaRight = right * viewportWidth;
     const vec3 deltaDown = -up * viewportHeight;
@@ -35,7 +35,7 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
 }
 
 bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float maxT,
-                     out float tMin, out float tMax)
+    out float tMin, out float tMax)
 {
     vec3 tbot = ray.invDir * (minBound - ray.origin);
     vec3 ttop = ray.invDir * (maxBound - ray.origin);
@@ -50,4 +50,9 @@ bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float ma
     tMin = t0;
     tMax = t1;
     return t1 > max(t0, 0.0) && tMax > minT && tMin < maxT;
+}
+
+vec3 rayPosition(Ray ray, float t)
+{
+    return ray.origin + ray.direction * t;
 }

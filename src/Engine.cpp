@@ -40,7 +40,7 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f, VOXEL_SIZE / 2.f, -1.f));
+    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f, VOXEL_SIZE / 2.f, -2.f));
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
 
@@ -415,7 +415,13 @@ void Engine::initVoxelBuffer()
 void Engine::updateScene()
 {
     std::vector<TreeNode> tree = {
-        { .childPointer = 0x1, .far = 0, .validMask = 0xFF, .leafMask = 0xFF }
+        // Solid Tree
+        /*
+        { .childPointer = 0x1, .validMask = 0xFF, .leafMask = 0xFF }
+        */
+        // One Octant Air
+        { .childPointer = 0x1, .validMask = 0b10010110, .leafMask = 0b10010110 },
+        { .childPointer = 0x0, .validMask = 0xFF,       .leafMask = 0xFF       }
     };
 
     m_VoxelStagingBuffer.copyFromData_CPUOnly<TreeNode>(tree);

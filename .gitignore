@@ -6,3 +6,4 @@ build/*
 *.sh
 res/shaders/*.spv
 imgui.ini
+*.xopp

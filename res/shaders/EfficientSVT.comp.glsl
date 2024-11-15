@@ -6,6 +6,10 @@
 #extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_debug_printf : enable
 
+#define MAX_ITERATIONS 10
+#define MIN_T 0.
+#define MAX_T 10000.
+
 #include "Ray.other.glsl"
 
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -35,201 +39,145 @@ layout(push_constant) uniform constants {
 struct HitRecord {
     float t;
     vec3 position;
+    int parent;
+    uint octantMask;
 };
 
-HitRecord castRay(uint root, Ray ray) {
-    const int sMax = 23;
-    const float epsilon = pow(2., -sMax);
+uint nodeGetLeaf(Node node)
+{
+    return (node.data >> 24) & 0xFF;
+}
 
+uint nodeGetValid(Node node)
+{
+    return (node.data >> 16) & 0xFF;
+}
+
+uint nodeGetChildPtr(Node node)
+{
+    return (node.data >> 0) & 0xFFFF;
+}
+
+vec3 calculatePosition(vec3 origin, vec3 direction, float t)
+{
+    return origin + direction * t;
+}
+
+int signZero(float x)
+{
+    return x >= 0 ? 1 : -1;
+}
+
+HitRecord castRay(uint root, Ray ray) {
+    // const int sMax = 23;
+    // uvec2 stack[sMax + 1];
+
+    HitRecord hit;
+    hit.t = -1;
+    hit.parent = -1;
+
+    const float epsilon = 0.00001;
+
+    vec3 origin = ray.origin;
     vec3 position = ray.origin;
     vec3 direction = ray.direction;
 
-    uvec2 stack[sMax + 1];
+    uint parent = 0;
 
-    if (abs(direction.x) < epsilon)
-        direction.x = sign(direction.x) * epsilon;
+    vec3 dimensions = p_Dimensions * p_Size;
 
-    if (abs(direction.y) < epsilon)
-        direction.y = sign(direction.y) * epsilon;
+    vec3 minBound = vec3(0.);
+    vec3 maxBound = minBound + dimensions;
 
-    if (abs(direction.z) < epsilon)
-        direction.z = sign(direction.z) * epsilon;
+    vec3 bias = direction * epsilon;
 
-    vec3 t_coef = 1.0 / -abs(direction);
-    vec3 t_bias = t_coef * position;
+    float tMin, tMax;
+    bool didHit = rayBoxIntersect(ray, minBound, maxBound, MIN_T, MAX_T, tMin, tMax);
 
-    int octant_mask = 7;
-    if (direction.x > 0.0) {
-        octant_mask ^= 1;
-        t_bias.x = 3.0 * t_coef.x - t_bias.x;
-    }
+    if (!didHit)
+        return hit;
 
-    if (direction.y > 0.0) {
-        octant_mask ^= 2;
-        t_bias.y = 3.0 * t_coef.y - t_bias.y;
-    }
+    float t = max(tMin, 0.);
 
-    if (direction.z > 0.0) {
-        octant_mask ^= 4;
-        t_bias.z = 3.0 * t_coef.z - t_bias.z;
-    }
+    float scale = 0.5;
 
-    float tMin = max(max(2. * t_coef.x - t_bias.x, 2. * t_coef.y - t_bias.y),
-            2. * t_coef.z - t_bias.z);
+    position = calculatePosition(origin, ray.direction, tMin);
 
-    float tMax = min(min(t_coef.x - t_bias.x, t_coef.y - t_bias.y),
-            t_coef.z - t_bias.z);
+    Node node = p_Tree.nodes[parent];
 
-    float h = tMax;
-    tMin = max(tMin, 0.0f);
-    tMax = min(tMax, 1.0f);
+    uint valid = nodeGetValid(node);
+    uint leaf = nodeGetLeaf(node);
+    uint childPtr = nodeGetChildPtr(node);
 
-    uint parent = root;
-    uint32_t childDescriptor = 0;
-    int idx = 0;
-    vec3 pos = vec3(1.0f);
-    int scale = sMax - 1;
-    float scaleExp2 = 0.5;
-
-    vec3 test = 1.5 * t_coef - t_bias;
-    if (test.x > tMin) {
-        idx ^= 1;
-        pos.x = 1.5;
-    }
-
-    if (test.y > tMin) {
-        idx ^= 2;
-        pos.y = 1.5;
-    }
-
-    if (test.z > tMin) {
-        idx ^= 4;
-        pos.z = 1.5;
-    }
-
-    while (scale < sMax)
+    for (int i = 0; i < MAX_ITERATIONS; i++)
     {
-        if (childDescriptor == 0)
-            childDescriptor = p_Tree.nodes[parent].data;
+        if (t >= tMax) // Ascend, Go up stack
+        {}
 
-        vec3 t_corner = pos * t_coef - t_bias;
-        float tc_max = min(min(t_corner.x, t_corner.y), t_corner.z);
+        vec3 center = minBound + scale * dimensions;
+        int octantMask = 0;
+        if (position.x >= center.x) octantMask ^= 1;
+        if (position.z >= center.z) octantMask ^= 2;
+        if (position.y >= center.y) octantMask ^= 4;
 
-        int childShift = idx ^ octant_mask;
-        uint childMasks = childDescriptor << childShift;
-        if ((childMasks & 0x8000) != 0 && tMin < tMax)
+        bool isValid = bool((valid >> octantMask) & 1);
+        bool isLeaf = bool((leaf >> octantMask) & 1);
+
+        if (isValid && isLeaf) // Solid Voxel
         {
-            float tv_max = min(tMax, tc_max);
-            float halfScale = scaleExp2 * 0.5;
-            vec3 center = halfScale * t_coef + t_corner;
-
-            if (tMin <= tv_max)
-            {
-                if ((childMasks & 0x0080) == 0)
-                    break;
-
-                // PUSH
-                // Write Parent to stack
-                if (tc_max < h)
-                    stack[scale] = uvec2(parent, floatBitsToInt(tMax));
-
-                h = tc_max;
-
-                uint ofs = uint(childDescriptor >> 17);
-                if ((childDescriptor & 0x10000) != 0) // Far
-                    ofs = p_Tree.nodes[parent + ofs * 2].data;
-
-                ofs += bitCount(childMasks & 0x7F);
-                parent += ofs * 2;
-
-                idx = 0;
-                scale--;
-                scaleExp2 = halfScale;
-
-                if (center.x > tMin) {
-                    idx ^= 1;
-                    pos.x += scaleExp2;
-                }
-
-                if (center.y > tMin) {
-                    idx ^= 2;
-                    pos.y += scaleExp2;
-                }
-
-                if (center.z > tMin) {
-                    idx ^= 4;
-                    pos.z += scaleExp2;
-                }
-
-                tMax = tv_max;
-                childDescriptor = 0;
-                continue;
-            }
+            hit.t = t;
+            hit.position = calculatePosition(origin, direction, t);
+            hit.parent = int(parent);
+            hit.octantMask = octantMask;
+            return hit;
         }
 
-        // ADVANCEk
-        // Step along the ray
-        int stepMask = 0;
-        if (t_corner.x <= tc_max) {
-            stepMask ^= 1;
-            pos.x -= scaleExp2;
-        }
-
-        if (t_corner.y <= tc_max) {
-            stepMask ^= 2;
-            pos.y -= scaleExp2;
-        }
-
-        if (t_corner.z <= tc_max) {
-            stepMask ^= 4;
-            pos.z -= scaleExp2;
-        }
-
-        tMin = tc_max;
-        idx ^= stepMask;
-
-        if ((idx & stepMask) != 0)
+        if (isValid && !isLeaf) // Parent Voxel, Add to stack
         {
-            // POP
-            uint differingBits = 0;
-            if ((stepMask & 1) != 0)
-                differingBits |= floatBitsToInt(pos.x) ^ floatBitsToInt(pos.x + scaleExp2);
+            break;
+            // if (childPtr == 0)
+            //     break;
+            //
+            // parent = parent + childPtr + bitCount((~leaf) >> (octantMask + 1));
+            // node = p_Tree.nodes[parent];
+            //
+            // if ((octantMask & 1) == 1)
+            //     minBound.x += scale * dimensions.x;
+            // if ((octantMask & 2) == 1)
+            //     minBound.y += scale * dimensions.y;
+            // if ((octantMask & 4) == 1)
+            //     minBound.z += scale * dimensions.z;
+            //
+            // if (!rayBoxIntersect(ray, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
+            //
+            // scale *= 0.5;
+        }
 
-            if ((stepMask & 2) != 0)
-                differingBits |= floatBitsToInt(pos.y) ^ floatBitsToInt(pos.y + scaleExp2);
+        if (!isValid)
+        {
+            vec3 octantMinBound = minBound;
+            if ((octantMask & 0x1) != 0)
+                octantMinBound.x += scale * dimensions.x;
+            if ((octantMask & 0x2) != 0)
+                octantMinBound.z += scale * dimensions.z;
+            if ((octantMask & 0x4) != 0)
+                octantMinBound.y += scale * dimensions.y;
 
-            if ((stepMask & 4) != 0)
-                differingBits |= floatBitsToInt(pos.z) ^ floatBitsToInt(pos.z + scaleExp2);
+            vec3 octantMaxBound = octantMinBound + scale * dimensions;
 
-            scale = (floatBitsToInt(float(differingBits)) >> 23) - 127;
-            scaleExp2 = intBitsToFloat((scale - sMax + 127) << 23);
+            // hit.t = octantMask;
+            // hit.position = octantMinBound;
+            // return hit;
 
-            uvec2 stackEntry = stack[scale];
-            parent = stackEntry.x;
-            tMax = uintBitsToFloat(stackEntry.y);
+            float t0, t1;
+            if (!rayBoxIntersect(ray, octantMinBound, octantMaxBound, tMin, tMax, t0, t1)) break;
 
-            ivec3 sh = floatBitsToInt(pos) >> scale;
-            pos = intBitsToFloat(sh << scale);
-            idx = (sh.x & 1) | ((sh.y & 1) << 1) | ((sh.z & 1) << 2);
-
-            h = 0.0f;
-            childDescriptor = 0;
+            t = t1;
+            position = calculatePosition(origin, direction, t) + bias;
         }
     }
 
-    if (scale >= sMax)
-        tMin = 2.0;
-
-    if ((octant_mask & 1) == 0) pos.x = 3.0f - scaleExp2 - pos.x;
-    if ((octant_mask & 2) == 0) pos.y = 3.0f - scaleExp2 - pos.y;
-    if ((octant_mask & 4) == 0) pos.z = 3.0f - scaleExp2 - pos.z;
-
-    HitRecord hit;
-    hit.t = tMin;
-    hit.position.x = min(max(position.x + tMin * direction.x, position.x + epsilon), pos.x + scaleExp2 - epsilon);
-    hit.position.y = min(max(position.y + tMin * direction.y, position.y + epsilon), pos.y + scaleExp2 - epsilon);
-    hit.position.z = min(max(position.z + tMin * direction.z, position.z + epsilon), pos.z + scaleExp2 - epsilon);
-
+    hit.t = -1;
     return hit;
 }
 
@@ -241,7 +189,7 @@ void main()
 
     const vec3 clearColour = vec3(0.1);
     imageStore(o_ComparisonImage, texelCoord, vec4(clearColour, 0.0));
-    imageStore(o_Image, texelCoord, vec4(clearColour, 1.0));
+    imageStore(o_Image, texelCoord, vec4(clearColour, 0.0));
 
     Ray ray = generateRay(uv,
             vec3(p_CameraPosition), vec3(p_CameraFront),
@@ -250,5 +198,6 @@ void main()
 
     HitRecord hit = castRay(0, ray);
 
-    imageStore(o_Image, texelCoord, vec4(hit.position, hit.t));
+    if (hit.t >= 0)
+        imageStore(o_Image, texelCoord, vec4(hit.position, hit.t));
 }
