@@ -42,7 +42,7 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f, VOXEL_SIZE / 2.f, -2.f));
+    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f + 1.f, VOXEL_SIZE / 2.f + 1.f, -4.5f));
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
 

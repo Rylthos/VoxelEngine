@@ -102,7 +102,7 @@ class Engine : EventReceiver
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 1 << 6;
+    const uint32_t VOXEL_SIZE = 1 << 5;
     size_t m_TotalVoxels;
     Buffer m_VoxelStagingBuffer;
     Buffer m_VoxelBuffer;
