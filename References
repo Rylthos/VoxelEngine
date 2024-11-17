@@ -6,3 +6,11 @@ https://github.com/cgyurgyik/fast-voxel-traversal-algorithm/blob/master/overview
 
 [64 Trees]
 https://dubiousconst282.github.io/2024/10/03/voxel-ray-tracing/
+
+
+[Morton Codes]
+https://www.forceflow.be/2012/07/24/out-of-core-construction-of-sparse-voxel-octrees/
+
+TODO:
+Change to 64 bit format, 32 bit Absolute pointer for address + 8 bit Colour for general node
+Implement system from blog above

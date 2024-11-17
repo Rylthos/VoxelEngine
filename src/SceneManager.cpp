@@ -1,5 +1,6 @@
 #include "SceneManager.hpp"
 
+#include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
 std::string stringOfScene(const Scene& scene)
@@ -20,18 +21,19 @@ std::string stringOfScene(const Scene& scene)
     }
 }
 
-SceneManager::SceneManager() : m_Dimensions(0) {}
+SceneManager::SceneManager() : m_Dimension(0) {}
 
-SceneManager::SceneManager(glm::ivec3 voxelDimensions, PaletteManager* paletteManager)
-    : m_Dimensions(voxelDimensions), m_PaletteManager(paletteManager)
+SceneManager::SceneManager(uint32_t voxelDimension, PaletteManager* paletteManager)
+    : m_Dimension(voxelDimension), m_PaletteManager(paletteManager)
 {
-    m_Voxels.resize(voxelDimensions.x * voxelDimensions.y * voxelDimensions.z);
+    m_Voxels.resize(voxelDimension * voxelDimension * voxelDimension);
     loadScene(m_CurrentScene);
 }
 
 void SceneManager::loadScene(Scene newScene)
 {
     m_CurrentScene = newScene;
+
     switch (m_CurrentScene)
     {
     case Scene::SQUARE:
@@ -53,12 +55,140 @@ void SceneManager::loadScene(Scene newScene)
 
 void SceneManager::copyDataToBuffer(Buffer& buffer)
 {
-    buffer.copyFromData_CPUOnly<Voxel>(m_Voxels);
+    std::vector<SVONode> svo = serializeScene();
+    buffer.copyFromData_CPUOnly<SVONode>(svo);
+}
+
+Voxel SceneManager::getVoxel(glm::uvec3 position)
+{
+    size_t mortenCode = mortenEncode(position);
+    assert(mortenCode < m_Voxels.size() && "Position exceeds array size");
+
+    return m_Voxels[mortenCode];
+}
+
+void SceneManager::setVoxel(glm::uvec3 position, bool solid, uint8_t materialIndex)
+{
+    size_t mortenCode = mortenEncode(position);
+    assert(mortenCode < m_Voxels.size() && "Position exceeds array size");
+
+    m_Voxels[mortenCode] = { .isSolid = solid, .colourIndex = materialIndex };
+}
+
+void SceneManager::setVoxel(glm::uvec3 position, Voxel voxel)
+{
+    size_t mortenCode = mortenEncode(position);
+    assert(mortenCode < m_Voxels.size() && "Position exceeds array size");
+
+    m_Voxels[mortenCode] = voxel;
+}
+
+std::vector<SVONode> SceneManager::serializeScene()
+{
+    size_t maxDepth = std::log2(m_Dimension);
+
+    std::vector<std::vector<SVOConstructionNode>> queues;
+
+    std::vector<SVOConstructionNode> parsedNodes;
+
+    queues.resize(maxDepth + 1);
+    for (size_t i = 0; i < queues.size(); i++)
+    {
+        queues[i].reserve(8);
+    }
+
+    int depth = maxDepth;
+    for (size_t i = 0; i < m_Voxels.size(); i++)
+    {
+        SVOConstructionNode node = { .mortenCode = (int64_t)i };
+
+        queues[depth].push_back(node);
+        int d = depth;
+        while (d > 0 && queues[d].size() == 8)
+        {
+            SVOConstructionNode parent;
+            parent.mortenCode = -1;
+            for (size_t j = 0; j < 8; j++)
+            {
+                size_t currentSize = parsedNodes.size();
+                parent.childrenIndices[j] = -1;
+
+                int64_t childMortenCode = queues[d][j].mortenCode;
+                if (childMortenCode == -1)
+                {
+                    parent.childrenIndices[j] = currentSize;
+                    parsedNodes.push_back(queues[d][j]);
+                }
+                else
+                {
+                    Voxel childVoxel = m_Voxels.at(queues[d][j].mortenCode);
+                    if (childVoxel.isSolid)
+                    {
+                        parent.childrenIndices[j] = currentSize;
+                        parsedNodes.push_back(queues[d][j]);
+                    }
+                }
+            }
+
+            queues[d].clear();
+            queues[d - 1].push_back(parent);
+            d--;
+        }
+    }
+    parsedNodes.push_back(queues[0][0]);
+
+    std::vector<SVONode> finalNodes;
+    size_t i = parsedNodes.size() - 1;
+    for (auto itr = parsedNodes.rbegin(); itr != parsedNodes.rend(); itr++)
+    {
+        SVONode node;
+
+        node.validMask = 0;
+        node.leafMask = 0;
+
+        if (itr->mortenCode == -1)
+        {
+            int childrenStartIndex = -1;
+            for (int j = 7; j >= 0; j--)
+            {
+                if (childrenStartIndex < 0 && (*itr).childrenIndices[j] >= 0)
+                {
+                    childrenStartIndex = (*itr).childrenIndices[j];
+                }
+
+                if ((itr->childrenIndices[j]) >= 0)
+                {
+                    int mask = 1 << j;
+                    node.validMask |= mask;
+
+                    if ((parsedNodes.at(itr->childrenIndices[j]).mortenCode) >= 0)
+                        node.leafMask |= mask;
+                }
+            }
+
+            uint32_t offset = (i - childrenStartIndex);
+
+            node.childPointer = offset;
+        }
+        else
+        {
+            node.childPointer = 0x0;
+            node.leafMask = m_Voxels.at(itr->mortenCode).colourIndex;
+        }
+        finalNodes.push_back(node);
+
+        i--;
+    }
+
+    spdlog::info("Generated {} nodes ({} bytes)", finalNodes.size(),
+                 finalNodes.size() * sizeof(SVONode));
+
+    return finalNodes;
 }
 
 void SceneManager::squareScene()
 {
-    const uint32_t VOXEL_SIZE = m_Dimensions.x;
+    const uint32_t VOXEL_SIZE = m_Dimension;
 
     spdlog::info("Loaded Scene: Square");
 
@@ -85,16 +215,16 @@ void SceneManager::squareScene()
                 if (y % 2 == 0)
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = RED };
+                        setVoxel({ x, y, z }, true, RED);
                     else
-                        m_Voxels.at(index) = { .colourIndex = GREEN };
+                        setVoxel({ x, y, z }, true, GREEN);
                 }
                 else
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = BLUE };
+                        setVoxel({ x, y, z }, true, BLUE);
                     else
-                        m_Voxels.at(index) = { .colourIndex = AQUA };
+                        setVoxel({ x, y, z }, true, AQUA);
                 }
             }
         }
@@ -103,7 +233,7 @@ void SceneManager::squareScene()
 
 void SceneManager::holedSquareScene()
 {
-    const uint32_t VOXEL_SIZE = m_Dimensions.x;
+    const uint32_t VOXEL_SIZE = m_Dimension;
 
     spdlog::info("Loaded Scene: Holed Square");
 
@@ -129,16 +259,16 @@ void SceneManager::holedSquareScene()
                 if (y % 2 == 0)
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = YELLOW };
+                        setVoxel({ x, y, z }, true, YELLOW);
                     else
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                 }
                 else
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = MAGENTA };
+                        setVoxel({ x, y, z }, true, MAGENTA);
                     else
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                 }
             }
         }
@@ -147,8 +277,8 @@ void SceneManager::holedSquareScene()
 
 void SceneManager::randomObjectsScene()
 {
-    const uint32_t VOXEL_SIZE = m_Dimensions.x;
-    const uint32_t HALF_VOXEL_SIZE = m_Dimensions.x / 2;
+    const uint32_t VOXEL_SIZE = m_Dimension;
+    const uint32_t HALF_VOXEL_SIZE = m_Dimension / 2;
 
     spdlog::info("Loaded Scene: Random Objects");
 
@@ -484,8 +614,8 @@ void SceneManager::randomObjectsScene()
 
 void SceneManager::sphereScene()
 {
-    const float R = m_Dimensions.x / 2.0f;
-    glm::vec3 center(m_Dimensions.x / 2.f);
+    const float R = m_Dimension / 2.0f;
+    glm::vec3 center(m_Dimension / 2.f);
 
     // m_PaletteManager->flushColours();
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
@@ -494,31 +624,70 @@ void SceneManager::sphereScene()
 
     spdlog::info("Loaded Scene: Sphere");
 
-    for (int32_t y = 0; y < m_Dimensions.y; y++)
+    for (uint32_t y = 0; y < m_Dimension; y++)
     {
-        for (int32_t z = 0; z < m_Dimensions.z; z++)
+        for (uint32_t z = 0; z < m_Dimension; z++)
         {
-            for (int32_t x = 0; x < m_Dimensions.x; x++)
+            for (uint32_t x = 0; x < m_Dimension; x++)
             {
                 uint32_t layerSum = x + z;
                 uint32_t sum = x + y + z;
-                uint32_t layerIndex = z * m_Dimensions.x + x;
-                uint32_t index = layerIndex + y * m_Dimensions.x * m_Dimensions.z;
+                uint32_t layerIndex = z * m_Dimension + x;
+                uint32_t index = layerIndex + y * m_Dimension * m_Dimension;
 
                 glm::vec3 position = glm::vec3(x, y, z) - center;
 
                 if (dot(position, position) < R * R)
                 {
                     if (sum % 2 == 0)
-                        m_Voxels.at(index) = { .colourIndex = GREEN };
+                        setVoxel({ x, y, z }, true, GREEN);
                     else
-                        m_Voxels.at(index) = { .colourIndex = BLUE };
+                        setVoxel({ x, y, z }, true, BLUE);
                 }
                 else
                 {
-                    m_Voxels.at(index) = { .colourIndex = EMPTY };
+                    setVoxel({ x, y, z }, false);
                 }
             }
         }
     }
+}
+
+// https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/
+int64_t SceneManager::splitBy3(uint32_t a)
+{
+    int64_t x = a;
+    x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
+    x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
+    x = (x ^ (x << 8)) & 0x0300f00f;  // x = ---- --98 ---- ---- 7654 ---- ---- 3210
+    x = (x ^ (x << 4)) & 0x030c30c3;  // x = ---- --98 ---- 76-- --54 ---- 32-- --10
+    x = (x ^ (x << 2)) & 0x09249249;  // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
+    return x;
+}
+
+int64_t SceneManager::mortenEncode(glm::uvec3 position)
+{
+    return (splitBy3(position.x) | (splitBy3(position.y) << 2) | splitBy3(position.z) << 1);
+}
+
+// https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
+uint32_t SceneManager::compactBy3(int64_t a)
+{
+    size_t x = a;
+    x &= 0x09249249;                  // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
+    x = (x ^ (x >> 2)) & 0x030c30c3;  // x = ---- --98 ---- 76-- --54 ---- 32-- --10
+    x = (x ^ (x >> 4)) & 0x0300f00f;  // x = ---- --98 ---- ---- 7654 ---- ---- 3210
+    x = (x ^ (x >> 8)) & 0xff0000ff;  // x = ---- --98 ---- ---- ---- ---- 7654 3210
+    x = (x ^ (x >> 16)) & 0x000003ff; // x = ---- ---- ---- ---- ---- --98 7654 3210
+    return x;
+}
+
+glm::uvec3 SceneManager::mortenDecode(int64_t code)
+{
+    glm::uvec3 position;
+    position.x = compactBy3(code >> 0);
+    position.y = compactBy3(code >> 2);
+    position.z = compactBy3(code >> 1);
+
+    return position;
 }

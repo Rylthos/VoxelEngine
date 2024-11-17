@@ -19,7 +19,8 @@ layout(rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
 layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 
 struct Node {
-    uint16_t childPtr;
+    uint32_t childPtr;
+    uint16_t unused;
     uint8_t validMask;
     uint8_t leafMask;
 };
