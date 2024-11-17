@@ -389,7 +389,7 @@ void Engine::initImGui()
     vulkanII.PipelineRenderingCreateInfo = pipelineCI;
 
     ImGui_ImplVulkan_Init(&vulkanII);
-    spdlog::info("Initializsed ImGui");
+    spdlog::info("Initialized ImGui");
 }
 
 void Engine::initImages()
@@ -656,7 +656,7 @@ void Engine::initPipelines()
             vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_VoxelPipelineLayout));
 
         ShaderModule voxelShader;
-        voxelShader.create("res/shaders/EfficientSVT.comp.spv", m_Device);
+        voxelShader.create("res/shaders/EfficientSVO.comp.spv", m_Device);
 
         VkPipelineShaderStageCreateInfo shaderStageCI{};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
