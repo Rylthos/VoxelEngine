@@ -43,10 +43,12 @@ bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float ma
     vec3 tmin = min(ttop, tbot);
     vec3 tmax = max(ttop, tbot);
 
-    vec2 t = max(tmin.xx, tmin.yz);
-    float t0 = max(t.x, t.y);
-    t = min(tmax.xx, tmax.yz);
-    float t1 = min(t.x, t.y);
+    // vec2 t = max(tmin.xx, tmin.yz);
+    // float t0 = max(t.x, t.y);
+    float t0 = max(tmin.x, max(tmin.y, tmin.z));
+    // t = min(tmax.xx, tmax.yz);
+    // float t1 = min(t.x, t.y);
+    float t1 = min(tmax.x, min(tmax.y, tmax.z));
     tMin = t0;
     tMax = t1;
     return t1 > max(t0, 0.0) && tMax > minT && tMin < maxT;

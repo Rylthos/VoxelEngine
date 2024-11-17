@@ -6,7 +6,7 @@
 #extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_debug_printf : enable
 
-#define MAX_ITERATIONS 1024
+#define MAX_ITERATIONS 256
 #define MIN_T 0.
 #define MAX_T 10000.
 
@@ -59,11 +59,26 @@ struct StackMember
 
 vec3 calculatePosition(vec3 origin, vec3 direction, float t)
 {
-    return origin + direction * t;
+    return origin + t * direction;
 }
 
 HitRecord castRay(uint root, Ray ray) {
-    const int sMax = 23;
+    const int sMax = 10;
+    // const float epsilon = exp2(-sMax);
+
+    const vec3 origin = ray.origin;
+    const vec3 direction = ray.direction;
+
+    const vec3 dimensions = p_Dimensions * p_Size;
+    const vec3 bias = direction * 0.001;
+
+    vec3 position = ray.origin;
+
+    uint parent = 0;
+
+    vec3 minBound = vec3(0.);
+    vec3 maxBound = minBound + dimensions;
+
     int currentStack = -1;
     StackMember stack[sMax + 1];
 
@@ -71,26 +86,8 @@ HitRecord castRay(uint root, Ray ray) {
     hit.t = -2;
     hit.deepest = -1;
 
-    const float epsilon = 0.000001;
-
-    vec3 origin = ray.origin;
-    vec3 position = ray.origin;
-    vec3 direction = ray.direction;
-
-    uint parent = 0;
-
-    vec3 dimensions = p_Dimensions * p_Size;
-
-    vec3 minBound = vec3(0.);
-    vec3 maxBound = minBound + dimensions;
-
-    vec3 bias = direction * epsilon;
-
     float tMin, tMax;
-    bool didHit = rayBoxIntersect(ray, minBound, maxBound, MIN_T, MAX_T, tMin, tMax);
-
-    if (!didHit)
-        return hit;
+    if (!rayBoxIntersect(ray, minBound, maxBound, MIN_T, MAX_T, tMin, tMax)) return hit;
 
     float t = max(tMin, 0.);
 
@@ -103,10 +100,9 @@ HitRecord castRay(uint root, Ray ray) {
 
     for (int i = 0; i < MAX_ITERATIONS; i++)
     {
-        if (currentStack + 1 > hit.deepest)
-            hit.deepest = currentStack + 1;
+        hit.deepest = (currentStack + 1 > hit.deepest) ? currentStack + 1 : hit.deepest;
 
-        while (t >= tMax) // Ascend, Go up stack
+        if (t >= tMax) // Ascend, Go up stack
         {
             if (currentStack == -1) break;
 
@@ -117,18 +113,30 @@ HitRecord castRay(uint root, Ray ray) {
             parent = member.parent;
             minBound = member.minBound;
 
+            node = p_Tree.nodes[parent];
+
             scale *= 2;
 
-            node = p_Tree.nodes[parent];
+            continue;
         }
 
         hit.depth = currentStack + 1;
 
         vec3 center = minBound + scale * dimensions;
+        vec3 boundOffset = vec3(0);
         int octantMask = 0;
-        if (position.x >= center.x) octantMask ^= 1;
-        if (position.z >= center.z) octantMask ^= 2;
-        if (position.y >= center.y) octantMask ^= 4;
+        if (position.x >= center.x) {
+            octantMask ^= 1;
+            boundOffset.x = dimensions.x;
+        }
+        if (position.z >= center.z) {
+            octantMask ^= 2;
+            boundOffset.z = dimensions.z;
+        }
+        if (position.y >= center.y) {
+            octantMask ^= 4;
+            boundOffset.y = dimensions.y;
+        }
 
         bool isValid = bool((node.validMask >> octantMask) & 1);
         bool isLeaf = bool((node.leafMask >> octantMask) & 1);
@@ -150,16 +158,11 @@ HitRecord castRay(uint root, Ray ray) {
             parent = parent + node.childPtr + bitCount(count);
             node = p_Tree.nodes[parent];
 
-            if ((octantMask & 0x1) != 0)
-                minBound.x += scale * dimensions.x;
-            if ((octantMask & 0x2) != 0)
-                minBound.z += scale * dimensions.z;
-            if ((octantMask & 0x4) != 0)
-                minBound.y += scale * dimensions.y;
+            minBound += boundOffset * scale;
 
             maxBound = minBound + scale * dimensions;
 
-            if (!rayBoxIntersect(ray, minBound, maxBound, 0., tMax + 10, tMin, tMax)) break;
+            if (!rayBoxIntersect(ray, minBound, maxBound, 0., tMax, tMin, tMax)) break;
 
             node = p_Tree.nodes[parent];
 
@@ -185,14 +188,7 @@ HitRecord castRay(uint root, Ray ray) {
 
         if (!isValid)
         {
-            vec3 octantMinBound = minBound;
-            if ((octantMask & 0x1) != 0)
-                octantMinBound.x += scale * dimensions.x;
-            if ((octantMask & 0x2) != 0)
-                octantMinBound.z += scale * dimensions.z;
-            if ((octantMask & 0x4) != 0)
-                octantMinBound.y += scale * dimensions.y;
-
+            vec3 octantMinBound = minBound + boundOffset * scale;
             vec3 octantMaxBound = octantMinBound + scale * dimensions;
 
             float t0, t1;

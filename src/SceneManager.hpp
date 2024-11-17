@@ -54,7 +54,7 @@ class SceneManager
     std::vector<SVONode> serializeScene();
 
   private:
-    Scene m_CurrentScene = Scene::SPHERE;
+    Scene m_CurrentScene = Scene::RANDOM_OBJECTS;
     uint32_t m_Dimension;
     std::vector<Voxel> m_Voxels;
     PaletteManager* m_PaletteManager;

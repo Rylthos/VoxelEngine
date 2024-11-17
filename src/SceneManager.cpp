@@ -365,13 +365,13 @@ void SceneManager::randomObjectsScene()
                     if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = BLACK };
+                            setVoxel({ x, y, z }, true, BLACK);
                         else
-                            m_Voxels.at(index) = { .colourIndex = RED };
+                            setVoxel({ x, y, z }, true, RED);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -402,13 +402,13 @@ void SceneManager::randomObjectsScene()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = BLUE };
+                            setVoxel({ x, y, z }, true, BLUE);
                         else
-                            m_Voxels.at(index) = { .colourIndex = GREEN };
+                            setVoxel({ x, y, z }, true, GREEN);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -440,13 +440,13 @@ void SceneManager::randomObjectsScene()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = MAGENTA };
+                            setVoxel({ x, y, z }, true, MAGENTA);
                         else
-                            m_Voxels.at(index) = { .colourIndex = YELLOW };
+                            setVoxel({ x, y, z }, true, YELLOW);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -480,13 +480,13 @@ void SceneManager::randomObjectsScene()
                     if (dot(position, position) < R * R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = BLUE };
+                            setVoxel({ x, y, z }, true, BLUE);
                         else
-                            m_Voxels.at(index) = { .colourIndex = WHITE };
+                            setVoxel({ x, y, z }, true, WHITE);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -522,13 +522,13 @@ void SceneManager::randomObjectsScene()
                     if (fmax(yz - 1, fmax(zx - 1, xy - 1)) < R)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = YELLOW };
+                            setVoxel({ x, y, z }, true, YELLOW);
                         else
-                            m_Voxels.at(index) = { .colourIndex = BLACK };
+                            setVoxel({ x, y, z }, true, BLACK);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -565,13 +565,13 @@ void SceneManager::randomObjectsScene()
                     if (implicit <= 0)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 6 };
+                            setVoxel({ x, y, z }, true, 6);
                         else
-                            m_Voxels.at(index) = { .colourIndex = 3 };
+                            setVoxel({ x, y, z }, true, 3);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -610,13 +610,13 @@ void SceneManager::randomObjectsScene()
                     if (implicit <= 0)
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = GREEN };
+                            setVoxel({ x, y, z }, true, GREEN);
                         else
-                            m_Voxels.at(index) = { .colourIndex = BLACK };
+                            setVoxel({ x, y, z }, true, BLACK);
                     }
                     else
                     {
-                        m_Voxels.at(index) = { .colourIndex = EMPTY };
+                        setVoxel({ x, y, z }, false);
                     }
                 }
             }
@@ -652,14 +652,14 @@ void SceneManager::randomObjectsScene()
 
                     if (implicit <= 0)
                     {
-                        m_Voxels.at(index) = { .colourIndex = 0 };
+                        setVoxel({ x, y, z }, false);
                     }
                     else
                     {
                         if (sum % 2 == 0)
-                            m_Voxels.at(index) = { .colourIndex = 2 };
+                            setVoxel({ x, y, z }, true, 2);
                         else
-                            m_Voxels.at(index) = { .colourIndex = 5 };
+                            setVoxel({ x, y, z }, true, 5);
                     }
                 }
             }

@@ -109,8 +109,6 @@ foreach(file ${RESOURCES_COMPUTE})
     PRE_BUILD
     COMMAND glslangValidator -e main --target-env vulkan1.3 -V -o ${InputRes}/shaders/${name}.spv
             ${InputRes}/shaders/${name}.glsl
-    # COMMAND glslc -fshader-stage=comp -o ${InputRes}/shaders/${name}.spv
-    # ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")
 endforeach()
 
