@@ -100,34 +100,76 @@ std::vector<SVONode> SceneManager::serializeScene()
     int depth = maxDepth;
     for (size_t i = 0; i < m_Voxels.size(); i++)
     {
-        SVOConstructionNode node = { .mortenCode = (int64_t)i };
+        Voxel v = m_Voxels.at(i);
+        SVOConstructionNode node = { .mortenCode = (int64_t)i,
+                                     .colour = (int16_t)((v.isSolid) ? v.colourIndex : -1) };
 
         queues[depth].push_back(node);
         int d = depth;
         while (d > 0 && queues[d].size() == 8)
         {
+            std::unordered_map<int16_t, int> coloursUsed;
+
             SVOConstructionNode parent;
             parent.mortenCode = -1;
+            bool isEmpty = true;
             for (size_t j = 0; j < 8; j++)
             {
+                SVOConstructionNode child = queues[d][j];
+
                 size_t currentSize = parsedNodes.size();
                 parent.childrenIndices[j] = -1;
 
-                int64_t childMortenCode = queues[d][j].mortenCode;
-                if (childMortenCode == -1)
+                int64_t childMortenCode = child.mortenCode;
+
+                if (childMortenCode == -1 && child.colour >= 0)
                 {
+                    isEmpty = false;
                     parent.childrenIndices[j] = currentSize;
-                    parsedNodes.push_back(queues[d][j]);
+                    parsedNodes.push_back(child);
+
+                    if (coloursUsed.find(child.colour) != coloursUsed.end())
+                        coloursUsed.at(child.colour) += 1;
+                    else
+                        coloursUsed[child.colour] = 1;
                 }
-                else
+
+                if (childMortenCode >= 0)
                 {
-                    Voxel childVoxel = m_Voxels.at(queues[d][j].mortenCode);
-                    if (childVoxel.isSolid)
+                    Voxel childVoxel = m_Voxels.at(child.mortenCode);
+
+                    if (child.colour >= 0)
                     {
+                        isEmpty = false;
                         parent.childrenIndices[j] = currentSize;
-                        parsedNodes.push_back(queues[d][j]);
+                        parsedNodes.push_back(child);
+
+                        if (coloursUsed.find(child.colour) != coloursUsed.end())
+                            coloursUsed.at(child.colour) += 1;
+                        else
+                            coloursUsed[child.colour] = 1;
                     }
                 }
+            }
+
+            if (isEmpty)
+            {
+                parent.colour = -1;
+            }
+            else
+            {
+                int most = -1;
+                uint8_t colour;
+                for (auto pair : coloursUsed)
+                {
+                    if (pair.second > most)
+                    {
+                        most = pair.second;
+                        colour = pair.first;
+                    }
+                }
+
+                parent.colour = colour;
             }
 
             queues[d].clear();
@@ -143,10 +185,16 @@ std::vector<SVONode> SceneManager::serializeScene()
     {
         SVONode node;
 
+        // spdlog::debug("{} | {} | {} | {}:{}:{}:{}:{}:{}:{}:{}", i, itr->mortenCode, itr->colour,
+        //               itr->childrenIndices[0], itr->childrenIndices[1], itr->childrenIndices[2],
+        //               itr->childrenIndices[3], itr->childrenIndices[4], itr->childrenIndices[5],
+        //               itr->childrenIndices[6], itr->childrenIndices[7]);
+
         node.validMask = 0;
         node.leafMask = 0;
+        // node.materialIndex = itr->colour;
 
-        if (itr->mortenCode == -1)
+        if (itr->mortenCode == -1 && itr->colour >= 0)
         {
             int childrenStartIndex = -1;
             for (int j = 7; j >= 0; j--)
@@ -170,15 +218,22 @@ std::vector<SVONode> SceneManager::serializeScene()
 
             node.childPointer = offset;
         }
-        else
+        else if (itr->mortenCode >= 0)
         {
             node.childPointer = 0x0;
-            node.leafMask = m_Voxels.at(itr->mortenCode).colourIndex;
+            node.materialIndex = itr->colour;
         }
         finalNodes.push_back(node);
 
         i--;
     }
+
+    // for (size_t i = 0; i < finalNodes.size(); i++)
+    // {
+    //     SVONode node = finalNodes.at(i);
+    //     spdlog::debug("{} | {} : {} : {} : {}", i, node.childPointer, node.materialIndex,
+    //                   node.validMask, node.leafMask);
+    // }
 
     spdlog::info("Generated {} nodes ({} bytes)", finalNodes.size(),
                  finalNodes.size() * sizeof(SVONode));

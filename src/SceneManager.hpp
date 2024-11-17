@@ -22,13 +22,15 @@ enum class Scene {
 
 struct SVONode {
     uint32_t childPointer;
-    uint16_t unused;
+    uint8_t unused;
+    uint8_t materialIndex;
     uint8_t validMask;
     uint8_t leafMask;
 } __attribute__((packed));
 
 struct SVOConstructionNode {
     int64_t mortenCode;
+    int16_t colour;
     int64_t childrenIndices[8];
 };
 

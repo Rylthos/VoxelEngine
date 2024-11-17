@@ -20,7 +20,8 @@ layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 
 struct Node {
     uint32_t childPtr;
-    uint16_t unused;
+    uint8_t unused;
+    uint8_t materialIndex;
     uint8_t validMask;
     uint8_t leafMask;
 };
@@ -53,8 +54,6 @@ struct StackMember
 {
     float tMax;
     uint parent;
-    float scale;
-
     vec3 minBound;
 };
 
@@ -70,7 +69,6 @@ HitRecord castRay(uint root, Ray ray) {
 
     HitRecord hit;
     hit.t = -2;
-    hit.depth = -1;
     hit.deepest = -1;
 
     const float epsilon = 0.000001;
@@ -117,12 +115,11 @@ HitRecord castRay(uint root, Ray ray) {
 
             tMax = member.tMax;
             parent = member.parent;
-            scale = member.scale;
             minBound = member.minBound;
 
-            node = p_Tree.nodes[parent];
+            scale *= 2;
 
-            hit.position = minBound;
+            node = p_Tree.nodes[parent];
         }
 
         hit.depth = currentStack + 1;
@@ -136,20 +133,6 @@ HitRecord castRay(uint root, Ray ray) {
         bool isValid = bool((node.validMask >> octantMask) & 1);
         bool isLeaf = bool((node.leafMask >> octantMask) & 1);
 
-        if (isValid && isLeaf) // Solid Voxel
-        {
-            uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
-            uint8_t materialIndex = p_Tree.nodes[nodeIndex].leafMask;
-
-            hit.t = t;
-            hit.position = calculatePosition(origin, direction, t);
-            hit.parent = parent;
-            hit.normal = vec3(1., 0., 0.);
-            hit.materialIndex = materialIndex;
-            hit.depth = currentStack + 1;
-            return hit;
-        }
-
         if (isValid && !isLeaf) // Parent Voxel, Add to stack
         {
             if (node.childPtr == 0)
@@ -158,7 +141,6 @@ HitRecord castRay(uint root, Ray ray) {
             StackMember stackMember;
             stackMember.parent = parent;
             stackMember.tMax = tMax;
-            stackMember.scale = scale;
             stackMember.minBound = minBound;
 
             stack[currentStack + 1] = stackMember;
@@ -182,6 +164,23 @@ HitRecord castRay(uint root, Ray ray) {
             node = p_Tree.nodes[parent];
 
             scale *= 0.5;
+
+            continue;
+        }
+
+        if (isValid && isLeaf) // Solid Voxel
+        {
+            uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
+            uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
+
+            hit.t = t;
+            hit.position = calculatePosition(origin, direction, t);
+            hit.parent = parent;
+            hit.normal = vec3(1., 0., 0.);
+            hit.materialIndex = materialIndex;
+            hit.depth = currentStack + 1;
+            hit.deepest += 1;
+            return hit;
         }
 
         if (!isValid)
@@ -201,6 +200,8 @@ HitRecord castRay(uint root, Ray ray) {
 
             t = t1 + 0.0001;
             position = calculatePosition(origin, direction, t);
+
+            continue;
         }
     }
 
@@ -234,6 +235,6 @@ void main()
         imageStore(o_Image, texelCoord, lookupColour);
     }
 
-    if (hit.depth >= 0)
-        imageStore(o_ComparisonImage, texelCoord, vec4(vec3((hit.deepest + 1) / 5), 1.0));
+    if (hit.deepest >= 0)
+        imageStore(o_ComparisonImage, texelCoord, vec4((hit.deepest) / 5.));
 }
