@@ -3,6 +3,8 @@
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
+#include <GLFW/glfw3.h>
+
 std::string stringOfScene(const Scene& scene)
 {
     switch (scene)
@@ -86,6 +88,8 @@ void SceneManager::setVoxel(glm::uvec3 position, Voxel voxel)
 std::vector<SVONode> SceneManager::serializeScene()
 {
     size_t maxDepth = std::log2(m_Dimension);
+
+    double before = glfwGetTime();
 
     std::vector<std::vector<SVOConstructionNode>> queues;
 
@@ -228,6 +232,8 @@ std::vector<SVONode> SceneManager::serializeScene()
         i--;
     }
 
+    double after = glfwGetTime();
+
     // for (size_t i = 0; i < finalNodes.size(); i++)
     // {
     //     SVONode node = finalNodes.at(i);
@@ -235,8 +241,10 @@ std::vector<SVONode> SceneManager::serializeScene()
     //                   node.validMask, node.leafMask);
     // }
 
-    spdlog::info("Generated {} nodes ({} bytes)", finalNodes.size(),
-                 finalNodes.size() * sizeof(SVONode));
+    size_t bytes = finalNodes.size() * sizeof(SVONode);
+    spdlog::info("Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB). Took {}s",
+                 finalNodes.size(), m_Voxels.size(), bytes, bytes / 1024, bytes / (1024 * 1024),
+                 after - before);
 
     return finalNodes;
 }

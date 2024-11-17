@@ -232,5 +232,8 @@ void main()
     }
 
     if (hit.deepest >= 0)
-        imageStore(o_ComparisonImage, texelCoord, vec4((hit.deepest) / 5.));
+    {
+        const int maxDepth = 10;
+        imageStore(o_ComparisonImage, texelCoord, vec4((hit.deepest) / float(maxDepth)));
+    }
 }

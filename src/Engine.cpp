@@ -601,7 +601,7 @@ void Engine::initVoxelBuffer()
 
 void Engine::updateScene()
 {
-    m_SceneManager.copyDataToBuffer(m_VoxelStagingBuffer);
+    // m_SceneManager.copyDataToBuffer(m_VoxelStagingBuffer);
 
     vkDeviceWaitIdle(m_Device);
     m_VoxelBuffer.copyFromBuffer(m_VoxelStagingBuffer, m_VoxelStagingBuffer.getSize());
