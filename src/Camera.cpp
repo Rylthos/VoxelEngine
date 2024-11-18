@@ -66,10 +66,13 @@ void Camera::receive(const Event* event)
             glm::vec3 direction{ 0.f };
             float speed = m_MovementSpeed;
 
-            if (m_PressedKeys[GLFW_KEY_W]) direction += m_Forward;
-            if (m_PressedKeys[GLFW_KEY_S]) direction -= m_Forward;
-            if (m_PressedKeys[GLFW_KEY_A]) direction -= m_Right;
-            if (m_PressedKeys[GLFW_KEY_D]) direction += m_Right;
+            glm::vec3 movementAxis = { 1.f, 1.f, 1.f };
+            if (m_LockXZPlaneMovement) movementAxis.y = 0.0f;
+
+            if (m_PressedKeys[GLFW_KEY_W]) direction += m_Forward * movementAxis;
+            if (m_PressedKeys[GLFW_KEY_S]) direction -= m_Forward * movementAxis;
+            if (m_PressedKeys[GLFW_KEY_A]) direction -= m_Right * movementAxis;
+            if (m_PressedKeys[GLFW_KEY_D]) direction += m_Right * movementAxis;
             if (m_PressedKeys[GLFW_KEY_SPACE]) direction += m_WorldUp;
             if (m_PressedKeys[GLFW_KEY_LEFT_CONTROL]) direction -= m_WorldUp;
             if (m_PressedKeys[GLFW_KEY_LEFT_SHIFT]) speed *= m_Speedup;
@@ -97,6 +100,12 @@ void Camera::receive(const Event* event)
                 glm::vec3 camUp = getUp();
                 ImGui::Text("Camera Up");
                 ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
+
+                // ImGui::Text("Lock XZ Movement");
+                ImGui::Checkbox("Lock XZ Movement", &m_LockXZPlaneMovement);
+
+                ImGui::Text("Speedup Movement Speed");
+                ImGui::SliderFloat("##MovementSpeed", &m_Speedup, 0.5f, 15.0f);
             }
             ImGui::End();
         }

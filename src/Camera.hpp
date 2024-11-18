@@ -35,6 +35,8 @@ class Camera : public EventReceiver
     glm::vec3 m_WorldRight = glm::vec3(1.f, 0.f, 0.f);
     glm::vec3 m_WorldUp = glm::vec3(0.f, -1.f, 0.f);
 
+    bool m_LockXZPlaneMovement = true;
+
   private:
     void updateAxis();
 };
