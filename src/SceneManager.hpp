@@ -16,6 +16,7 @@ enum class Scene {
     HOLED_SQUARE,
     RANDOM_OBJECTS,
     SPHERE,
+    TORUS,
 
     END
 };
@@ -79,6 +80,7 @@ class SceneManager
     void holedSquareScene();
     void randomObjectsScene();
     void sphereScene();
+    void torusScene();
 
     int64_t splitBy3(uint32_t a);
     int64_t mortenEncode(glm::uvec3 position);

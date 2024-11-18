@@ -17,13 +17,13 @@ std::string stringOfScene(const Scene& scene)
         return "Random Objects";
     case Scene::SPHERE:
         return "Sphere";
+    case Scene::TORUS:
+        return "Torus";
 
     default:
         return "ERROR";
     }
 }
-
-// SceneManager::SceneManager() : m_Dimension(0) {}
 
 SceneManager::SceneManager(uint32_t voxelDimension, PaletteManager* paletteManager)
     : m_Dimension(voxelDimension), m_PaletteManager(paletteManager)
@@ -67,6 +67,8 @@ void SceneManager::loadScene(Scene newScene)
 
     m_CurrentScene = newScene;
 
+    spdlog::info("Loading Scene: {}", stringOfScene(m_CurrentScene));
+
     switch (m_CurrentScene)
     {
     case Scene::SQUARE:
@@ -80,6 +82,9 @@ void SceneManager::loadScene(Scene newScene)
         break;
     case Scene::SPHERE:
         sphereScene();
+        break;
+    case Scene::TORUS:
+        torusScene();
         break;
     default:
         throw std::runtime_error("Invalid Scene");
@@ -305,8 +310,6 @@ void SceneManager::squareScene()
 {
     const uint32_t VOXEL_SIZE = m_Dimension;
 
-    spdlog::info("Loaded Scene: Square");
-
     // m_PaletteManager->flushColours();
     const uint8_t RED = m_PaletteManager->getColourIndex({ 1.0f, 0.0f, 0.0f, 1.0f });
     const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.0f, 1.0f, 0.0f, 1.0f });
@@ -350,8 +353,6 @@ void SceneManager::holedSquareScene()
 {
     const uint32_t VOXEL_SIZE = m_Dimension;
 
-    spdlog::info("Loaded Scene: Holed Square");
-
     // m_PaletteManager->flushColours();
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
     const uint8_t YELLOW = m_PaletteManager->getColourIndex({ 1.0f, 1.0f, 0.0f, 1.0f });
@@ -394,8 +395,6 @@ void SceneManager::randomObjectsScene()
 {
     const uint32_t VOXEL_SIZE = m_Dimension;
     const uint32_t HALF_VOXEL_SIZE = m_Dimension / 2;
-
-    spdlog::info("Loaded Scene: Random Objects");
 
     // m_PaletteManager->flushColours();
     const uint8_t EMPTY = m_PaletteManager->getEmptyIndex();
@@ -737,8 +736,6 @@ void SceneManager::sphereScene()
     const uint8_t BLUE = m_PaletteManager->getColourIndex({ 0.f, 0.f, 1.f, 1.f });
     const uint8_t GREEN = m_PaletteManager->getColourIndex({ 0.f, 1.f, 0.f, 1.f });
 
-    spdlog::info("Loaded Scene: Sphere");
-
     for (uint32_t y = 0; y < m_Dimension; y++)
     {
         for (uint32_t z = 0; z < m_Dimension; z++)
@@ -762,6 +759,46 @@ void SceneManager::sphereScene()
                 else
                 {
                     setVoxel({ x, y, z }, false);
+                }
+            }
+        }
+    }
+}
+
+void SceneManager::torusScene()
+{
+    { // Top Left Front
+        const float R = m_Dimension / 4.f;
+        const float r = m_Dimension / 5.f;
+        glm::vec3 center = glm::vec3(m_Dimension / 2.f);
+
+        const uint8_t BLACK = m_PaletteManager->getColourIndex({ 0.0f, 0.0f, 0.0f, 1.0f });
+        const uint8_t PINK = m_PaletteManager->getColourIndex({ 1.0f, 0.2f, 1.0f, 1.0f });
+
+        for (uint32_t y = 0; y < m_Dimension; y++)
+        {
+            for (uint32_t z = 0; z < m_Dimension; z++)
+            {
+                for (uint32_t x = 0; x < m_Dimension; x++)
+                {
+                    uint32_t layerSum = x + z;
+                    uint32_t sum = x + y + z;
+                    uint32_t layerIndex = z * m_Dimension + x;
+
+                    glm::vec3 position = glm::vec3(x, y, z) - center;
+                    glm::vec3 squared = position * position;
+
+                    if (pow(R - sqrt(squared.x + squared.z), 2) + squared.y < r * r)
+                    {
+                        if (sum % 2 == 0)
+                            setVoxel({ x, y, z }, true, 0);
+                        else
+                            setVoxel({ x, y, z }, true, 1);
+                    }
+                    else
+                    {
+                        setVoxel({ x, y, z }, false);
+                    }
                 }
             }
         }

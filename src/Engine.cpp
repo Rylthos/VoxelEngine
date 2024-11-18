@@ -5,6 +5,8 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
+#include <spdlog/fmt/ranges.h>
+
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
 #include "ShaderModule.hpp"
@@ -41,7 +43,7 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_SceneManager.loadScene(Scene::SPHERE);
+    m_SceneManager.loadScene(Scene::TORUS);
     updateScene();
 
     m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, -9.0f), 0.f, -45.f);
@@ -515,9 +517,8 @@ void Engine::initQueryPool()
 
 void Engine::updateImGui()
 {
-    const size_t frameTimeSize = 200;
-    static float frameTimes[frameTimeSize];
-    static int currentFrame = 0;
+    static std::array<float, 200> frameTimes;
+    static size_t currentFrame = 0;
 
     double dispatchTime = m_PreviousFrameTime * m_QueryTimestampInterval / 1000000;
 
@@ -527,14 +528,18 @@ void Engine::updateImGui()
 
     // frameTimes[currentFrame] = m_Stats.frameDelta;
     frameTimes[currentFrame] = dispatchTime;
-    if (currentFrame >= 0)
+    if (currentFrame > 0)
     {
-        for (int i = 0; i < currentFrame - 1; i++)
+        for (size_t i = 0; i < currentFrame; i++)
         {
             avgTime += frameTimes[i];
             maxTime = fmin(maxTime, frameTimes[i]);
             minTime = fmax(minTime, frameTimes[i]);
-            frameTimes[i] = frameTimes[i + 1];
+
+            if (currentFrame == frameTimes.size() - 1)
+            {
+                frameTimes[i] = frameTimes[i + 1];
+            }
         }
         avgTime += frameTimes[currentFrame];
         maxTime = fmin(maxTime, frameTimes[currentFrame]);
@@ -542,7 +547,7 @@ void Engine::updateImGui()
         avgTime /= (float)currentFrame;
     }
 
-    if (currentFrame + 1 != frameTimeSize)
+    if (currentFrame + 1 < frameTimes.size())
     {
         currentFrame += 1;
     }
@@ -552,8 +557,8 @@ void Engine::updateImGui()
         ImGui::PushItemWidth(ImGui::GetWindowContentRegionMax().x - 10.0f);
         ImGui::Text("Dispatch Time %.3f(ms)", dispatchTime);
 
-        ImGui::PlotLines("##FrametimeGraph", frameTimes, frameTimeSize, 0, NULL, 0.0f, FLT_MAX,
-                         ImVec2(0, 80.0f));
+        ImGui::PlotLines("##FrametimeGraph", frameTimes.data(), frameTimes.size(), 0, NULL, 0.0f,
+                         FLT_MAX, ImVec2(0, 80.0f));
         ImGui::PopItemWidth();
 
         ImGui::Text("MAX: %1.3f : %.3f", maxTime, 1000.0f / maxTime);
@@ -609,6 +614,18 @@ void Engine::update(float frameDelta)
     GameUpdate update;
     update.frameDelta = frameDelta;
     EventHandler::dispatchEvent(&update);
+
+    static float t = 0.0f;
+    t += frameDelta;
+
+    glm::vec4 colour1 = { 1.0f, 1.0f, 0.0f, 1.0f };
+    glm::vec4 colour2 = { 1.0f, 0.0f, 1.0f, 1.0f };
+    glm::vec4 colour3 = { 0.0f, 1.0f, 0.0f, 1.0f };
+    glm::vec4 colour4 = { 0.0f, 0.0f, 1.0f, 1.0f };
+
+    float tValue = sin(0.1 * t) * sin(0.1 * t);
+    m_PaletteManager.setColourIndex(0, glm::mix(colour1, colour2, tValue));
+    m_PaletteManager.setColourIndex(1, glm::mix(colour3, colour4, tValue));
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();

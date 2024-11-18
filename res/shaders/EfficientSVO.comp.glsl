@@ -7,7 +7,7 @@
 #extension GL_EXT_debug_printf : enable
 
 #define MAX_ITERATIONS 256
-#define MIN_T 0.
+#define MIN_T 0.000001
 #define MAX_T 10000.
 
 #include "Ray.other.glsl"
@@ -105,8 +105,7 @@ HitRecord castRay(uint root, Ray ray) {
     hit.deepest = -1;
 
     float tMin, tMax;
-    if (!rayBoxIntersect(ray, minBound, maxBound, MIN_T, MAX_T, tMin, tMax)) return hit;
-    tMin = max(tMin, 0.);
+    if (!rayBoxIntersect(ray, minBound, maxBound, epsilon, MAX_T, tMin, tMax)) return hit;
 
     float t = tMin;
 
@@ -251,7 +250,7 @@ void main()
     {
         vec4 lookupColour = imageLoad(i_Lookup, int(hit.materialIndex));
 
-        const vec3 lightPosition = vec3(p_Dimension / 2., 0., p_Dimension / 2.);
+        const vec3 lightPosition = vec3(p_Dimension / 2., -100., p_Dimension / 2.);
         const vec4 lightColour = vec4(1.);
 
         const vec3 lightDir = normalize(lightPosition - hit.position);
