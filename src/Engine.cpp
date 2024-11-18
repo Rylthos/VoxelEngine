@@ -41,10 +41,10 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_SceneManager.loadScene(Scene::RANDOM_OBJECTS);
+    m_SceneManager.loadScene(Scene::SPHERE);
     updateScene();
 
-    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f + 1.f, VOXEL_SIZE / 2.f + 1.f, -4.5f));
+    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, -9.0f), 0.f, -45.f);
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
 

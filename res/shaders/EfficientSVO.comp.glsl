@@ -64,9 +64,25 @@ vec3 calculatePosition(vec3 origin, vec3 direction, float t)
     return origin + t * direction;
 }
 
+vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
+{
+    bvec3 minBoundHit = lessThanEqual(position - minBound, vec3(0.001));
+    bvec3 maxBoundHit = lessThanEqual(position - maxBound, vec3(0.001));
+
+    if (minBoundHit.x) return vec3(-1, 0, 0);
+    if (minBoundHit.y) return vec3(0, -1, 0);
+    if (minBoundHit.z) return vec3(0, 0, -1);
+
+    if (maxBoundHit.x) return vec3(1, 0, 0);
+    if (maxBoundHit.y) return vec3(0, 1, 0);
+    if (maxBoundHit.z) return vec3(0, 0, 1);
+
+    return vec3(0.);
+}
+
 HitRecord castRay(uint root, Ray ray) {
     const int sMax = 10;
-    // const float epsilon = exp2(-sMax);
+    const float epsilon = exp2(-sMax);
 
     const vec3 origin = ray.origin;
     const vec3 direction = ray.direction;
@@ -90,8 +106,9 @@ HitRecord castRay(uint root, Ray ray) {
 
     float tMin, tMax;
     if (!rayBoxIntersect(ray, minBound, maxBound, MIN_T, MAX_T, tMin, tMax)) return hit;
+    tMin = max(tMin, 0.);
 
-    float t = max(tMin, 0.);
+    float t = tMin;
 
     float scale = 0.5;
 
@@ -143,7 +160,28 @@ HitRecord castRay(uint root, Ray ray) {
         bool isValid = bool((node.validMask >> octantMask) & 1);
         bool isLeaf = bool((node.leafMask >> octantMask) & 1);
 
-        if (isValid && !isLeaf) // Parent Voxel, Add to stack
+        if (isValid && isLeaf) // Solid Voxel
+        {
+            uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
+            uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
+
+            float voxelScale = scale;
+            vec3 voxelMinBound = minBound + boundOffset * voxelScale;
+            vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
+
+            hit.t = t;
+            hit.position = calculatePosition(origin, direction, t);
+            hit.parent = parent;
+            hit.normal = normalFromBounds(position, voxelMinBound, voxelMaxBound);
+            // hit.normal = position - voxelMaxBound;
+            hit.materialIndex = materialIndex;
+            hit.depth = currentStack + 1;
+            hit.deepest += 1;
+
+            return hit;
+        }
+
+        if (isValid && !isLeaf) // Parent Voxel, Add to stack, Descend
         {
             if (node.childPtr == 0)
                 break;
@@ -161,7 +199,6 @@ HitRecord castRay(uint root, Ray ray) {
             node = p_Tree.nodes[parent];
 
             minBound += boundOffset * scale;
-
             maxBound = minBound + scale * dimensions;
 
             if (!rayBoxIntersect(ray, minBound, maxBound, 0., tMax, tMin, tMax)) break;
@@ -173,30 +210,15 @@ HitRecord castRay(uint root, Ray ray) {
             continue;
         }
 
-        if (isValid && isLeaf) // Solid Voxel
-        {
-            uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
-            uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
-
-            hit.t = t;
-            hit.position = calculatePosition(origin, direction, t);
-            hit.parent = parent;
-            hit.normal = vec3(1., 0., 0.);
-            hit.materialIndex = materialIndex;
-            hit.depth = currentStack + 1;
-            hit.deepest += 1;
-            return hit;
-        }
-
         if (!isValid)
         {
             vec3 octantMinBound = minBound + boundOffset * scale;
             vec3 octantMaxBound = octantMinBound + scale * dimensions;
 
-            float t0, t1;
-            if (!rayBoxIntersect(ray, octantMinBound, octantMaxBound, tMin, tMax, t0, t1)) break;
+            float t0;
+            if (!rayBoxIntersect(ray, octantMinBound, octantMaxBound, tMin, tMax, t0, t)) break;
 
-            t = t1 + 0.0001;
+            t = t + epsilon;
             position = calculatePosition(origin, direction, t);
 
             continue;
@@ -229,8 +251,22 @@ void main()
     {
         vec4 lookupColour = imageLoad(i_Lookup, int(hit.materialIndex));
 
-        // imageStore(o_Image, texelCoord, lookupColour);
-        imageStore(o_Image, texelCoord, lookupColour);
+        const vec3 lightPosition = vec3(p_Dimension / 2., 0., p_Dimension / 2.);
+        const vec4 lightColour = vec4(1.);
+
+        const vec3 lightDir = normalize(lightPosition - hit.position);
+
+        float diff = max(dot(hit.normal, lightDir), 0.);
+        vec4 diffuse = lightColour * diff;
+
+        const float ambientStrength = 0.5;
+        vec4 ambient = lightColour * ambientStrength;
+
+        vec4 colour = (ambient + diffuse) * lookupColour;
+
+        imageStore(o_Image, texelCoord, colour);
+        // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.0));
+        // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.0));
     }
 
     if (hit.deepest >= 0)
