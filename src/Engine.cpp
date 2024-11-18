@@ -44,8 +44,7 @@ void Engine::init()
     m_SceneManager.loadScene(Scene::RANDOM_OBJECTS);
     updateScene();
 
-    // m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f + 1.f, VOXEL_SIZE / 2.f + 1.f, -4.5f));
-    m_Camera = Camera(glm::vec3(130, -2.f, 4.0f), 45.0f, -45.0f);
+    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.f + 1.f, VOXEL_SIZE / 2.f + 1.f, -4.5f));
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
 
@@ -54,6 +53,8 @@ void Engine::init()
                             &m_Camera);
 
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
+
+    m_VoxelPushConstants.maxDepthShown = std::log2(VOXEL_SIZE);
 }
 
 void Engine::start()
@@ -588,6 +589,11 @@ void Engine::updateImGui()
 
             ImGui::EndCombo();
         }
+
+        ImGui::Text("Max Depth Shown");
+        int maxDepth = m_VoxelPushConstants.maxDepthShown;
+        if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(VOXEL_SIZE)))
+            m_VoxelPushConstants.maxDepthShown = maxDepth;
     }
     ImGui::End();
 
@@ -693,19 +699,18 @@ void Engine::render(float frameDelta)
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipelineLayout, 0,
                             1, &m_VoxelDescriptorSet, 0, nullptr);
 
-    VoxelPushConstants pushConstants;
-    pushConstants.cameraPosition = m_Camera.getPosition();
-    pushConstants.cameraForward = m_Camera.getForward();
-    pushConstants.cameraRight = m_Camera.getRight();
-    pushConstants.cameraUp = m_Camera.getUp();
+    m_VoxelPushConstants.cameraPosition = m_Camera.getPosition();
+    m_VoxelPushConstants.cameraForward = m_Camera.getForward();
+    m_VoxelPushConstants.cameraRight = m_Camera.getRight();
+    m_VoxelPushConstants.cameraUp = m_Camera.getUp();
 
-    pushConstants.size = 1.0f;
+    m_VoxelPushConstants.size = 1.0f;
 
-    pushConstants.dimensions = { VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE };
-    pushConstants.voxelAddress = m_SceneManager.getBufferAddress(m_Device);
+    m_VoxelPushConstants.dimension = VOXEL_SIZE;
+    m_VoxelPushConstants.voxelAddress = m_SceneManager.getBufferAddress(m_Device);
 
     vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(pushConstants), &pushConstants);
+                       sizeof(m_VoxelPushConstants), &m_VoxelPushConstants);
 
     vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
                   std::ceil(drawExtent.height / 16.0), 1);

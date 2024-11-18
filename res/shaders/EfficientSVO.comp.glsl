@@ -35,8 +35,10 @@ layout(push_constant) uniform constants {
     vec4 p_CameraFront;
     vec4 p_CameraRight;
     vec4 p_CameraUp;
-    uvec3 p_Dimensions;
+    uint32_t p_Dimension;
     float p_Size;
+    uint32_t p_MaxDepthShown;
+    uint32_t p_LOD;
     NodeBuffer p_Tree;
 };
 
@@ -69,7 +71,7 @@ HitRecord castRay(uint root, Ray ray) {
     const vec3 origin = ray.origin;
     const vec3 direction = ray.direction;
 
-    const vec3 dimensions = p_Dimensions * p_Size;
+    const vec3 dimensions = vec3(p_Dimension) * p_Size;
     const vec3 bias = direction * 0.001;
 
     vec3 position = ray.origin;
@@ -233,7 +235,6 @@ void main()
 
     if (hit.deepest >= 0)
     {
-        const int maxDepth = 10;
-        imageStore(o_ComparisonImage, texelCoord, vec4((hit.deepest) / float(maxDepth)));
+        imageStore(o_ComparisonImage, texelCoord, vec4((hit.deepest) / float(p_MaxDepthShown)));
     }
 }

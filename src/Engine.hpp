@@ -7,14 +7,12 @@
 
 #include <vector>
 
-#include "Buffer.hpp"
 #include "Camera.hpp"
 #include "EventHandler.hpp"
 #include "Events.hpp"
 #include "Image.hpp"
 #include "PaletteManager.hpp"
 #include "SceneManager.hpp"
-#include "Voxel.hpp"
 #include "Window.hpp"
 
 struct Queue {
@@ -36,8 +34,10 @@ struct VoxelPushConstants {
     glm::vec4 cameraForward;
     glm::vec4 cameraRight;
     glm::vec4 cameraUp;
-    glm::uvec3 dimensions;
+    uint32_t dimension;
     float size;
+    uint32_t maxDepthShown = 5;
+    uint32_t lod;
     VkDeviceAddress voxelAddress;
 };
 
@@ -108,6 +108,8 @@ class Engine : EventReceiver
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;
+
+    VoxelPushConstants m_VoxelPushConstants;
 
   private:
     void initVulkan();
