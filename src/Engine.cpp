@@ -519,24 +519,30 @@ void Engine::updateImGui()
     static float frameTimes[frameTimeSize];
     static int currentFrame = 0;
 
+    double dispatchTime = m_PreviousFrameTime * m_QueryTimestampInterval / 1000000;
+
     float maxTime = 1000.0f;
     float minTime = 0.0f;
     float avgTime = 0.0f;
 
-    frameTimes[currentFrame] = m_Stats.frameDelta;
-    if (currentFrame + 1 == frameTimeSize)
+    // frameTimes[currentFrame] = m_Stats.frameDelta;
+    frameTimes[currentFrame] = dispatchTime;
+    if (currentFrame >= 0)
     {
-        for (size_t i = 0; i < frameTimeSize - 1; i++)
+        for (int i = 0; i < currentFrame - 1; i++)
         {
             avgTime += frameTimes[i];
             maxTime = fmin(maxTime, frameTimes[i]);
             minTime = fmax(minTime, frameTimes[i]);
             frameTimes[i] = frameTimes[i + 1];
         }
-        avgTime += frameTimes[frameTimeSize - 1];
-        avgTime /= (float)frameTimeSize;
+        avgTime += frameTimes[currentFrame];
+        maxTime = fmin(maxTime, frameTimes[currentFrame]);
+        minTime = fmax(minTime, frameTimes[currentFrame]);
+        avgTime /= (float)currentFrame;
     }
-    else
+
+    if (currentFrame + 1 != frameTimeSize)
     {
         currentFrame += 1;
     }
@@ -544,19 +550,17 @@ void Engine::updateImGui()
     if (ImGui::Begin("Stats"))
     {
         ImGui::PushItemWidth(ImGui::GetWindowContentRegionMax().x - 10.0f);
-        ImGui::Text("Frametime (ms)");
+        ImGui::Text("Dispatch Time %.3f(ms)", dispatchTime);
 
         ImGui::PlotLines("##FrametimeGraph", frameTimes, frameTimeSize, 0, NULL, 0.0f, FLT_MAX,
                          ImVec2(0, 80.0f));
         ImGui::PopItemWidth();
 
-        ImGui::Text("MAX: %1.3f : %.3f", maxTime, 1.0f / maxTime);
-        ImGui::Text("AVG: %1.3f : %.2f", avgTime, 1.0f / avgTime);
-        ImGui::Text("MIN: %1.3f : %.2f", minTime, 1.0f / minTime);
-        ImGui::Text("FPS: %1.3f", 1.0f / m_Stats.frameDelta);
+        ImGui::Text("MAX: %1.3f : %.3f", maxTime, 1000.0f / maxTime);
+        ImGui::Text("AVG: %1.3f : %.2f", avgTime, 1000.0f / avgTime);
+        ImGui::Text("MIN: %1.3f : %.2f", minTime, 1000.0f / minTime);
 
-        ImGui::Text("Dispatch Time: %.1f ms",
-                    m_PreviousFrameTime * m_QueryTimestampInterval / 1000000);
+        ImGui::Text("FPS: %1.3f", 1.0f / m_Stats.frameDelta);
     }
     ImGui::End();
 

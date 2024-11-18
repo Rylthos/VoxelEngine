@@ -34,7 +34,7 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
     return ray;
 }
 
-bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float maxT,
+bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, in float minT, in float maxT,
     out float tMin, out float tMax)
 {
     vec3 tbot = ray.invDir * (minBound - ray.origin);

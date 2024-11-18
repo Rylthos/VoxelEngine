@@ -201,7 +201,7 @@ HitRecord castRay(uint root, Ray ray) {
             minBound += boundOffset * scale;
             maxBound = minBound + scale * dimensions;
 
-            if (!rayBoxIntersect(ray, minBound, maxBound, 0., tMax, tMin, tMax)) break;
+            if (!rayBoxIntersect(ray, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
 
             node = p_Tree.nodes[parent];
 
@@ -265,8 +265,6 @@ void main()
         vec4 colour = (ambient + diffuse) * lookupColour;
 
         imageStore(o_Image, texelCoord, colour);
-        // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.0));
-        // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.0));
     }
 
     if (hit.deepest >= 0)
