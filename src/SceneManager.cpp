@@ -23,17 +23,48 @@ std::string stringOfScene(const Scene& scene)
     }
 }
 
-SceneManager::SceneManager() : m_Dimension(0) {}
+// SceneManager::SceneManager() : m_Dimension(0) {}
 
 SceneManager::SceneManager(uint32_t voxelDimension, PaletteManager* paletteManager)
     : m_Dimension(voxelDimension), m_PaletteManager(paletteManager)
 {
     m_Voxels.resize(voxelDimension * voxelDimension * voxelDimension);
-    loadScene(m_CurrentScene);
 }
+
+SceneManager::SceneManager(SceneManager& other)
+{
+    m_Allocator = other.m_Allocator;
+    m_Dimension = other.m_Dimension;
+    m_PaletteManager = other.m_PaletteManager;
+
+    m_Voxels.resize(m_Dimension * m_Dimension * m_Dimension);
+
+    loadScene(other.m_CurrentScene);
+}
+
+SceneManager SceneManager::operator=(const SceneManager& other)
+{
+    m_Allocator = other.m_Allocator;
+    m_Dimension = other.m_Dimension;
+    m_PaletteManager = other.m_PaletteManager;
+
+    m_Voxels.resize(m_Dimension * m_Dimension * m_Dimension);
+
+    loadScene(other.m_CurrentScene);
+
+    return *this;
+}
+
+void SceneManager::initResources(VmaAllocator allocator) { m_Allocator = allocator; }
+
+void SceneManager::freeResources() { freeBuffers(); }
 
 void SceneManager::loadScene(Scene newScene)
 {
+    if (m_CurrentScene == newScene) return;
+
+    if (newScene == Scene::END) return; // Don't change anything
+
     m_CurrentScene = newScene;
 
     switch (m_CurrentScene)
@@ -55,10 +86,14 @@ void SceneManager::loadScene(Scene newScene)
     }
 }
 
-void SceneManager::copyDataToBuffer(Buffer& buffer)
+void SceneManager::updateBuffers()
 {
+    freeBuffers();
     std::vector<SVONode> svo = serializeScene();
-    buffer.copyFromData_CPUOnly<SVONode>(svo);
+    size_t size = sizeof(SVONode) * svo.size();
+    createBuffers(size);
+    m_Staging.copyFromData_CPUOnly<SVONode>(svo);
+    m_SVO.copyFromBuffer(m_Staging, size);
 }
 
 Voxel SceneManager::getVoxel(glm::uvec3 position)
@@ -247,6 +282,23 @@ std::vector<SVONode> SceneManager::serializeScene()
                  after - before);
 
     return finalNodes;
+}
+
+void SceneManager::createBuffers(size_t size)
+{
+    m_Staging.create(m_Allocator, size * sizeof(SVONode), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                     VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+    m_SVO.create(m_Allocator, size * sizeof(SVONode),
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                 VMA_MEMORY_USAGE_GPU_ONLY);
+}
+
+void SceneManager::freeBuffers()
+{
+    m_Staging.free();
+    m_SVO.free();
 }
 
 void SceneManager::squareScene()

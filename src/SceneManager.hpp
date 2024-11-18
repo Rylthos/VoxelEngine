@@ -39,13 +39,21 @@ extern std::string stringOfScene(const Scene& scene);
 class SceneManager
 {
   public:
-    SceneManager();
+    SceneManager() {}
+    ~SceneManager() { freeBuffers(); }
     SceneManager(uint32_t voxelDimension, PaletteManager* paletteManager);
+    SceneManager(SceneManager& other);
+
+    SceneManager operator=(const SceneManager& other);
+
+    void initResources(VmaAllocator allocator);
+    void freeResources();
 
     void loadScene(Scene newScene);
     Scene currentScene() { return m_CurrentScene; }
 
-    void copyDataToBuffer(Buffer& buffer);
+    VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
+    void updateBuffers();
 
     Voxel getVoxel(glm::uvec3 position);
     void setVoxel(glm::uvec3 position, bool solid, uint8_t materialIndex = 0);
@@ -54,12 +62,19 @@ class SceneManager
     std::vector<SVONode> serializeScene();
 
   private:
-    Scene m_CurrentScene = Scene::RANDOM_OBJECTS;
+    Scene m_CurrentScene = Scene::END;
     uint32_t m_Dimension;
     std::vector<Voxel> m_Voxels;
     PaletteManager* m_PaletteManager;
 
+    VmaAllocator m_Allocator;
+    Buffer m_SVO;
+    Buffer m_Staging;
+
   private:
+    void createBuffers(size_t size);
+    void freeBuffers();
+
     void squareScene();
     void holedSquareScene();
     void randomObjectsScene();

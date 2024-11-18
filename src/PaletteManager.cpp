@@ -1,6 +1,7 @@
 #include "PaletteManager.hpp"
 
 #include <imgui.h>
+#include <spdlog/spdlog.h>
 
 PaletteManager::PaletteManager() { m_Colours.resize(256); }
 
@@ -96,7 +97,7 @@ void PaletteManager::receive(const Event* event)
                     ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
 
                 ImGuiStyle& style = ImGui::GetStyle();
-                ImVec2 buttonSize(40, 40);
+                float buttonWidth = 20.0f;
 
                 for (int i = 0; i < 256; i++)
                 {
@@ -113,10 +114,12 @@ void PaletteManager::receive(const Event* event)
                     }
 
                     float lastButtonX2 = ImGui::GetItemRectMax().x;
-                    float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + buttonSize.x;
+                    float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + buttonWidth;
 
-                    if (i + 1 < 256 && nextButtonX2 < windowVisible && (i + 1) % 8 != 0)
+                    if (nextButtonX2 < windowVisible && (i + 1) % 8 != 0 && i + 1 < 256)
+                    {
                         ImGui::SameLine();
+                    }
 
                     ImGui::PopID();
                 }

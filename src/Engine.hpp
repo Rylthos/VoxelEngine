@@ -102,10 +102,7 @@ class Engine : EventReceiver
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 1 << 9;
-    size_t m_TotalVoxels;
-    Buffer m_VoxelStagingBuffer;
-    Buffer m_VoxelBuffer;
+    const uint32_t VOXEL_SIZE = 1 << 8;
 
     Stats m_Stats;
 
@@ -125,7 +122,6 @@ class Engine : EventReceiver
     void initImGui();
 
     void initImages();
-    void initVoxelBuffer();
 
     void updateScene();
 
