@@ -169,68 +169,66 @@ HitRecord castRay(uint root, Ray ray) {
             boundOffset.y = dimensions.y;
         }
 
-        hit.position.y = octantMask;
-
         bool isValid = bool((node.validMask >> octantMask) & 1);
         bool isLeaf = bool((node.leafMask >> octantMask) & 1);
 
-        if (isValid && isLeaf) // Solid Voxel
+        if (isValid)
         {
-            uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
-            uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
-
-            float voxelScale = scale;
-            vec3 voxelMinBound = minBound + boundOffset * voxelScale;
-            vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
-
-            hit.t = t;
-            hit.position = calculatePosition(origin, direction, t);
-            hit.parent = parent;
-            hit.normal = normalFromBounds(position, voxelMinBound, voxelMaxBound);
-            hit.materialIndex = materialIndex;
-            hit.depth = currentStack + 1;
-            hit.deepest += 1;
-
-            return hit;
-        }
-
-        if (isValid && !isLeaf) // Parent Voxel, Add to stack, Descend
-        {
-            if (node.childPtr == 0)
+            if (isLeaf || currentStack + 1 == p_LOD) // Solid Voxel
             {
-                breakType = 2;
-                break;
+                uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
+                uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
+
+                float voxelScale = scale;
+                vec3 voxelMinBound = minBound + boundOffset * voxelScale;
+                vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
+
+                hit.t = t;
+                hit.position = calculatePosition(origin, direction, t);
+                hit.parent = parent;
+                hit.normal = normalFromBounds(position, voxelMinBound, voxelMaxBound);
+                hit.materialIndex = materialIndex;
+                hit.depth = currentStack + 1;
+                hit.deepest += 1;
+
+                return hit;
             }
+            else // Parent Voxel, Save State, Descend
+            {
+                if (node.childPtr == 0)
+                {
+                    breakType = 2;
+                    break;
+                }
 
-            StackMember stackMember;
-            stackMember.parent = parent;
-            stackMember.tMax = tMax;
-            stackMember.minBound = minBound;
+                StackMember stackMember;
+                stackMember.parent = parent;
+                stackMember.tMax = tMax;
+                stackMember.minBound = minBound;
 
-            stack[currentStack + 1] = stackMember;
-            currentStack++;
+                stack[currentStack + 1] = stackMember;
+                currentStack++;
 
-            uint count = uint(node.validMask) >> (octantMask + 1);
-            parent = parent + node.childPtr + bitCount(count);
-            node = p_Tree.nodes[parent];
+                uint count = uint(node.validMask) >> (octantMask + 1);
+                parent = parent + node.childPtr + bitCount(count);
+                node = p_Tree.nodes[parent];
 
-            minBound += boundOffset * scale;
-            maxBound = minBound + scale * dimensions;
+                minBound += boundOffset * scale;
+                maxBound = minBound + scale * dimensions;
 
-            if (!rayBoxIntersect(origin, invDir, minBound, maxBound, tMin, tMax, tMin, tMax)) {
-                hit.position = maxBound;
-                breakType = 3;
-                break;
+                if (!rayBoxIntersect(origin, invDir, minBound, maxBound, tMin, tMax, tMin, tMax)) {
+                    breakType = 3;
+                    break;
+                }
+
+                node = p_Tree.nodes[parent];
+
+                scale *= 0.5;
+
+                continue;
             }
-
-            node = p_Tree.nodes[parent];
-
-            scale *= 0.5;
-
-            continue;
         }
-
-        if (!isValid) // Traversing through air
+        else // Traversing through air
         {
             vec3 octantMinBound = minBound + boundOffset * scale;
             vec3 octantMaxBound = octantMinBound + scale * dimensions;
@@ -287,7 +285,6 @@ void main()
 
         vec4 colour = (ambient + diffuse) * lookupColour;
 
-        // imageStore(o_Image, texelCoord, vec4(hit.position, 1.0));
         imageStore(o_Image, texelCoord, colour);
     }
 

@@ -603,6 +603,11 @@ void Engine::updateImGui()
         int maxDepth = m_VoxelPushConstants.maxDepthShown;
         if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(VOXEL_SIZE)))
             m_VoxelPushConstants.maxDepthShown = maxDepth;
+
+        ImGui::Text("Max LOD");
+        int LOD = m_VoxelPushConstants.lod;
+        if (ImGui::SliderInt("##MaxLOD", &LOD, 0, std::log2(VOXEL_SIZE) - 1))
+            m_VoxelPushConstants.lod = LOD;
     }
     ImGui::End();
 
