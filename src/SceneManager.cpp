@@ -156,64 +156,69 @@ std::vector<SVONode> SceneManager::serializeScene()
 
             SVOConstructionNode parent;
             parent.mortenCode = -1;
-            bool isEmpty = true;
+
             for (size_t j = 0; j < 8; j++)
             {
+                parent.childrenIndices[j] = 0;
+                parent.leafMask[j] = false;
+
                 SVOConstructionNode child = queues[d][j];
 
-                size_t currentSize = parsedNodes.size();
-                parent.childrenIndices[j] = -1;
+                if (coloursUsed.find(child.colour) != coloursUsed.end())
+                    coloursUsed.at(child.colour) += 1;
+                else
+                    coloursUsed[child.colour] = 1;
+            }
 
-                int64_t childMortenCode = child.mortenCode;
+            int highestCount = -1;
+            int16_t colour = -1;
 
-                if (childMortenCode == -1 && child.colour >= 0)
+            int visibleMaxCount = -1;
+            int16_t visibleColour = -1;
+            for (auto pair : coloursUsed)
+            {
+                if (pair.second > highestCount)
                 {
-                    isEmpty = false;
-                    parent.childrenIndices[j] = currentSize;
-                    parsedNodes.push_back(child);
-
-                    if (coloursUsed.find(child.colour) != coloursUsed.end())
-                        coloursUsed.at(child.colour) += 1;
-                    else
-                        coloursUsed[child.colour] = 1;
+                    colour = pair.first;
+                    highestCount = pair.second;
                 }
 
-                if (childMortenCode >= 0)
+                if (pair.second > visibleMaxCount && pair.first != -1)
                 {
-                    Voxel childVoxel = m_Voxels.at(child.mortenCode);
+                    visibleColour = pair.first;
+                    visibleMaxCount = pair.second;
+                }
+            }
 
-                    if (child.colour >= 0)
+            parent.colour = visibleColour;
+
+            if (highestCount < 8 || d < depth)
+            {
+                for (size_t j = 0; j < 8; j++)
+                {
+                    SVOConstructionNode child = queues[d][j];
+
+                    size_t currentSize = parsedNodes.size();
+
+                    int64_t childMortenCode = child.mortenCode;
+
+                    if (childMortenCode == -1 && child.colour >= 0)
                     {
-                        isEmpty = false;
-                        parent.childrenIndices[j] = currentSize;
+                        parent.childrenIndices[j] = currentSize + 1;
                         parsedNodes.push_back(child);
-
-                        if (coloursUsed.find(child.colour) != coloursUsed.end())
-                            coloursUsed.at(child.colour) += 1;
-                        else
-                            coloursUsed[child.colour] = 1;
                     }
-                }
-            }
-
-            if (isEmpty)
-            {
-                parent.colour = -1;
-            }
-            else
-            {
-                int most = -1;
-                uint8_t colour;
-                for (auto pair : coloursUsed)
-                {
-                    if (pair.second > most)
+                    else if (childMortenCode >= 0)
                     {
-                        most = pair.second;
-                        colour = pair.first;
+                        Voxel childVoxel = m_Voxels.at(child.mortenCode);
+
+                        if (child.colour >= 0)
+                        {
+                            parent.childrenIndices[j] = currentSize + 1;
+                            parent.leafMask[j] = true;
+                            parsedNodes.push_back(child);
+                        }
                     }
                 }
-
-                parent.colour = colour;
             }
 
             queues[d].clear();
@@ -221,40 +226,35 @@ std::vector<SVONode> SceneManager::serializeScene()
             d--;
         }
     }
+
     parsedNodes.push_back(queues[0][0]);
 
     std::vector<SVONode> finalNodes;
+
     size_t i = parsedNodes.size() - 1;
     for (auto itr = parsedNodes.rbegin(); itr != parsedNodes.rend(); itr++)
     {
         SVONode node;
 
-        // spdlog::debug("{} | {} | {} | {}:{}:{}:{}:{}:{}:{}:{}", i, itr->mortenCode, itr->colour,
-        //               itr->childrenIndices[0], itr->childrenIndices[1], itr->childrenIndices[2],
-        //               itr->childrenIndices[3], itr->childrenIndices[4], itr->childrenIndices[5],
-        //               itr->childrenIndices[6], itr->childrenIndices[7]);
-
         node.validMask = 0;
         node.leafMask = 0;
-        // node.materialIndex = itr->colour;
 
         if (itr->mortenCode == -1 && itr->colour >= 0)
         {
             int childrenStartIndex = -1;
             for (int j = 7; j >= 0; j--)
             {
-                if (childrenStartIndex < 0 && (*itr).childrenIndices[j] >= 0)
+                if (childrenStartIndex < 0 && itr->childrenIndices[j] > 0)
                 {
-                    childrenStartIndex = (*itr).childrenIndices[j];
+                    childrenStartIndex = itr->childrenIndices[j] - 1;
                 }
 
-                if ((itr->childrenIndices[j]) >= 0)
+                if ((itr->childrenIndices[j]) > 0)
                 {
                     int mask = 1 << j;
                     node.validMask |= mask;
 
-                    if ((parsedNodes.at(itr->childrenIndices[j]).mortenCode) >= 0)
-                        node.leafMask |= mask;
+                    if (itr->leafMask[j]) node.leafMask |= mask;
                 }
             }
 
@@ -273,13 +273,6 @@ std::vector<SVONode> SceneManager::serializeScene()
     }
 
     double after = glfwGetTime();
-
-    // for (size_t i = 0; i < finalNodes.size(); i++)
-    // {
-    //     SVONode node = finalNodes.at(i);
-    //     spdlog::debug("{} | {} : {} : {} : {}", i, node.childPointer, node.materialIndex,
-    //                   node.validMask, node.leafMask);
-    // }
 
     size_t bytes = finalNodes.size() * sizeof(SVONode);
     spdlog::info("Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB). Took {}s",

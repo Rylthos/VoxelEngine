@@ -32,7 +32,8 @@ struct SVONode {
 struct SVOConstructionNode {
     int64_t mortenCode;
     int16_t colour;
-    int64_t childrenIndices[8];
+    uint32_t childrenIndices[8];
+    bool leafMask[8];
 };
 
 extern std::string stringOfScene(const Scene& scene);
