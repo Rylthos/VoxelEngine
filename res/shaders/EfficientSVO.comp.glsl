@@ -85,8 +85,8 @@ HitRecord castRay(uint root, Ray ray) {
     const int sMax = 10;
     const float epsilon = exp2(-sMax);
 
-    const vec3 origin = ray.origin;
     vec3 direction = ray.direction;
+    const vec3 origin = ray.origin + direction * epsilon;
 
     const vec3 dimensions = vec3(p_Dimension) * p_Size;
     const vec3 bias = direction * 0.001;
@@ -112,7 +112,7 @@ HitRecord castRay(uint root, Ray ray) {
     vec3 invDir = 1. / direction;
 
     float tMin, tMax;
-    if (!rayBoxIntersect(origin, invDir, minBound, maxBound, epsilon, MAX_T, tMin, tMax)) return hit;
+    if (!rayBoxIntersect(origin, invDir, minBound, maxBound, 0., MAX_T, tMin, tMax)) return hit;
 
     float t = tMin;
 
@@ -123,8 +123,6 @@ HitRecord castRay(uint root, Ray ray) {
 
     Node node = p_Tree.nodes[parent];
 
-    int breakType = -1;
-
     for (int i = 0; i < MAX_ITERATIONS; i++)
     {
         hit.heatMap = i;
@@ -132,10 +130,7 @@ HitRecord castRay(uint root, Ray ray) {
 
         if (t >= tMax) // Ascend, Go up stack
         {
-            if (currentStack == -1) {
-                breakType = 1;
-                break;
-            }
+            if (currentStack == -1) break;
 
             StackMember member = stack[currentStack];
             currentStack--;
@@ -156,15 +151,16 @@ HitRecord castRay(uint root, Ray ray) {
         vec3 center = minBound + scale * dimensions;
         vec3 boundOffset = vec3(0);
         int octantMask = 0;
-        if (position.x >= center.x) {
+
+        if (position.x > center.x || (position.x == center.x && direction.x > 0)) {
             octantMask ^= 1;
             boundOffset.x = dimensions.x;
         }
-        if (position.z >= center.z) {
+        if (position.z > center.z || (position.z == center.z && direction.z > 0)) {
             octantMask ^= 2;
             boundOffset.z = dimensions.z;
         }
-        if (position.y >= center.y) {
+        if (position.y > center.y || (position.y == center.y && direction.y > 0)) {
             octantMask ^= 4;
             boundOffset.y = dimensions.y;
         }
@@ -172,9 +168,29 @@ HitRecord castRay(uint root, Ray ray) {
         bool isValid = bool((node.validMask >> octantMask) & 1);
         bool isLeaf = bool((node.leafMask >> octantMask) & 1);
 
+        if (currentStack + 1 >= p_LOD) // Out of LOD
+        {
+            // uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
+            uint8_t materialIndex = p_Tree.nodes[parent].materialIndex;
+
+            float voxelScale = scale;
+            vec3 voxelMinBound = minBound + boundOffset * voxelScale;
+            vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
+
+            hit.t = t;
+            hit.position = calculatePosition(origin, direction, t);
+            hit.parent = parent;
+            hit.normal = normalFromBounds(position, voxelMinBound, voxelMaxBound);
+            hit.materialIndex = materialIndex;
+            hit.depth = currentStack + 1;
+            hit.deepest += 1;
+
+            return hit;
+        }
+
         if (isValid)
         {
-            if (isLeaf || currentStack + 1 == p_LOD) // Solid Voxel
+            if (isLeaf) // Solid Voxel
             {
                 uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
                 uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
@@ -195,11 +211,7 @@ HitRecord castRay(uint root, Ray ray) {
             }
             else // Parent Voxel, Save State, Descend
             {
-                if (node.childPtr == 0)
-                {
-                    breakType = 2;
-                    break;
-                }
+                if (node.childPtr == 0) break;
 
                 StackMember stackMember;
                 stackMember.parent = parent;
@@ -216,10 +228,7 @@ HitRecord castRay(uint root, Ray ray) {
                 minBound += boundOffset * scale;
                 maxBound = minBound + scale * dimensions;
 
-                if (!rayBoxIntersect(origin, invDir, minBound, maxBound, tMin, tMax, tMin, tMax)) {
-                    breakType = 3;
-                    break;
-                }
+                if (!rayBoxIntersect(origin, invDir, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
 
                 node = p_Tree.nodes[parent];
 
@@ -234,20 +243,17 @@ HitRecord castRay(uint root, Ray ray) {
             vec3 octantMaxBound = octantMinBound + scale * dimensions;
 
             float t0;
-            if (!rayBoxIntersect(origin, invDir, octantMinBound, octantMaxBound, tMin, tMax, t0, t)) {
-                breakType = 4;
-                break;
-            }
+            if (!rayBoxIntersect(origin, invDir, octantMinBound, octantMaxBound, tMin, tMax, t0, t)) break;
 
-            t = t + epsilon;
+            t += epsilon;
             position = calculatePosition(origin, direction, t);
 
             continue;
         }
     }
 
-    hit.t = -1;
     hit.depth = currentStack + 1;
+    hit.t = -1;
     return hit;
 }
 
@@ -292,7 +298,8 @@ void main()
     {
         vec4 lowestHitColour = vec4(0.5, 0., 0.5, 1.0);
         vec4 highestHitColour = vec4(1., 1., 0., 1.0);
-        float mixAmount = hit.deepest / float(p_MaxDepthShown);
+        // float mixAmount = hit.deepest / float(p_MaxDepthShown);
+        float mixAmount = hit.heatMap / float(MAX_ITERATIONS);
         imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
     }
 }

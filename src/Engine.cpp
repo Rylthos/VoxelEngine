@@ -57,6 +57,7 @@ void Engine::init()
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_VoxelPushConstants.maxDepthShown = std::log2(VOXEL_SIZE);
+    m_VoxelPushConstants.lod = std::log2(VOXEL_SIZE);
 }
 
 void Engine::start()
@@ -606,7 +607,7 @@ void Engine::updateImGui()
 
         ImGui::Text("Max LOD");
         int LOD = m_VoxelPushConstants.lod;
-        if (ImGui::SliderInt("##MaxLOD", &LOD, 0, std::log2(VOXEL_SIZE) - 1))
+        if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(VOXEL_SIZE)))
             m_VoxelPushConstants.lod = LOD;
     }
     ImGui::End();
