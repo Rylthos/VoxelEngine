@@ -56,7 +56,9 @@ void Engine::init()
 
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
+    m_VoxelPushConstants.maxIterations = MAX_ITERATIONS;
     m_VoxelPushConstants.maxDepthShown = std::log2(VOXEL_SIZE);
+    m_VoxelPushConstants.maxHeatShown = m_VoxelPushConstants.maxIterations;
     m_VoxelPushConstants.lod = std::log2(VOXEL_SIZE);
 }
 
@@ -117,7 +119,7 @@ void Engine::cleanup()
     }
 
     m_DrawImage.free();
-    m_RayImage.free();
+    m_AltImage.free();
 
     m_SceneManager.freeResources();
     m_PaletteManager.freeResources();
@@ -141,8 +143,8 @@ void Engine::receive(const Event* event)
 
             if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS) m_RenderImGui = !m_RenderImGui;
 
-            if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
-                m_RenderRay = !m_RenderRay;
+            // if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
+            //     m_RenderAlt = !m_RenderAlt;
 
             break;
         }
@@ -399,13 +401,13 @@ void Engine::initImGui()
 
 void Engine::initImages()
 {
-    m_RayImage.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, m_DrawImage.getExtent(),
+    m_AltImage.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, m_DrawImage.getExtent(),
                       VK_IMAGE_TYPE_2D,
                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                           VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                       VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-    m_RayImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 }
 
 void Engine::updateScene()
@@ -489,7 +491,7 @@ void Engine::initDescriptorSets()
     m_VoxelDescriptorSet =
         DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
             .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
-            .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_RayImage.getImageView())
+            .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
             .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_PaletteManager.getImage().getImageView())
             .build()
             .at(0);
@@ -600,10 +602,36 @@ void Engine::updateImGui()
             ImGui::EndCombo();
         }
 
-        ImGui::Text("Max Depth Shown");
-        int maxDepth = m_VoxelPushConstants.maxDepthShown;
-        if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(VOXEL_SIZE)))
-            m_VoxelPushConstants.maxDepthShown = maxDepth;
+        ImGui::Text("Max Iterations");
+        int maxIterations = m_VoxelPushConstants.maxIterations;
+        if (ImGui::SliderInt("##MaxIterations", &maxIterations, 1, MAX_ITERATIONS))
+        {
+            m_VoxelPushConstants.maxIterations = maxIterations;
+        }
+
+        if (ImGui::Checkbox("Show Alternative View", &m_RenderAlt)) ImGui::Text("Max Iterations");
+
+        bool showHeatMap = (m_VoxelPushConstants.flags >> SHOW_HEAT_MAP) & 0x1;
+        if (ImGui::Checkbox("Show Heat Map", &showHeatMap))
+        {
+            m_VoxelPushConstants.flags &= ~(1 << SHOW_HEAT_MAP);
+            m_VoxelPushConstants.flags |= (showHeatMap << SHOW_HEAT_MAP);
+        }
+
+        if (showHeatMap)
+        {
+            ImGui::Text("Max Heat Shown");
+            int maxHeat = m_VoxelPushConstants.maxHeatShown;
+            if (ImGui::SliderInt("##MaxHeat", &maxHeat, 1, MAX_ITERATIONS))
+                m_VoxelPushConstants.maxHeatShown = maxHeat;
+        }
+        else
+        {
+            ImGui::Text("Max Depth Shown");
+            int maxDepth = m_VoxelPushConstants.maxDepthShown;
+            if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(VOXEL_SIZE)))
+                m_VoxelPushConstants.maxDepthShown = maxDepth;
+        }
 
         ImGui::Text("Max LOD");
         int LOD = m_VoxelPushConstants.lod;
@@ -704,14 +732,14 @@ void Engine::render(float frameDelta)
     commandBufferBI.pInheritanceInfo = nullptr;
     commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    Image& renderImage = m_RenderRay ? m_RayImage : m_DrawImage;
+    Image& renderImage = m_RenderAlt ? m_AltImage : m_DrawImage;
 
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
 
     vkCmdResetQueryPool(commandBuffer, m_QueryPool, frameIndex * 2, 2);
 
     m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    m_RayImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
                                            VK_IMAGE_LAYOUT_GENERAL);
 

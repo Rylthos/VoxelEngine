@@ -29,6 +29,8 @@ struct FrameData {
     VkFence renderFence;
 };
 
+enum PushConstantFlags { SHOW_HEAT_MAP = 1 << 0 };
+
 struct VoxelPushConstants {
     glm::vec4 cameraPosition;
     glm::vec4 cameraForward;
@@ -38,6 +40,10 @@ struct VoxelPushConstants {
     float size;
     uint32_t maxDepthShown = 5;
     uint32_t lod;
+    uint32_t maxHeatShown;
+    uint32_t flags;
+    uint32_t maxIterations;
+    uint32_t _;
     VkDeviceAddress voxelAddress;
 };
 
@@ -81,9 +87,9 @@ class Engine : EventReceiver
     std::vector<VkImageView> m_SwapchainImageViews;
 
     Image m_DrawImage;
-    Image m_RayImage;
+    Image m_AltImage;
 
-    bool m_RenderRay = false;
+    bool m_RenderAlt = false;
 
     VkDescriptorSet m_VoxelDescriptorSet;
     VkDescriptorSetLayout m_VoxelDescriptorSetLayout;
@@ -103,6 +109,7 @@ class Engine : EventReceiver
     uint64_t m_PreviousFrameTime;
 
     const uint32_t VOXEL_SIZE = 1 << 8;
+    const uint32_t MAX_ITERATIONS = VOXEL_SIZE * 2;
 
     Stats m_Stats;
 

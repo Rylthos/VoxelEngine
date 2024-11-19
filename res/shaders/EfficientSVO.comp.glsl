@@ -6,7 +6,6 @@
 #extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_debug_printf : enable
 
-#define MAX_ITERATIONS 512
 #define MIN_T 0.000001
 #define MAX_T 10000.
 
@@ -30,6 +29,8 @@ layout(buffer_reference, std430) readonly buffer NodeBuffer {
     Node nodes[];
 };
 
+#define FLAGS_SHOW_HEAT_MAP 1
+
 layout(push_constant) uniform constants {
     vec4 p_CameraPosition;
     vec4 p_CameraFront;
@@ -39,6 +40,10 @@ layout(push_constant) uniform constants {
     float p_Size;
     uint32_t p_MaxDepthShown;
     uint32_t p_LOD;
+    uint32_t p_MaxHeatShown;
+    uint32_t p_Flags;
+    uint32_t p_MaxIterations;
+    uint32_t unused;
     NodeBuffer p_Tree;
 };
 
@@ -123,7 +128,7 @@ HitRecord castRay(uint root, Ray ray) {
 
     Node node = p_Tree.nodes[parent];
 
-    for (int i = 0; i < MAX_ITERATIONS; i++)
+    for (int i = 0; i < p_MaxIterations; i++)
     {
         hit.heatMap = i;
         hit.deepest = (currentStack + 1 > hit.deepest) ? currentStack + 1 : hit.deepest;
@@ -298,8 +303,15 @@ void main()
     {
         vec4 lowestHitColour = vec4(0.5, 0., 0.5, 1.0);
         vec4 highestHitColour = vec4(1., 1., 0., 1.0);
-        // float mixAmount = hit.deepest / float(p_MaxDepthShown);
-        float mixAmount = hit.heatMap / float(MAX_ITERATIONS);
+        float mixAmount = 0;
+        if (((p_Flags >> FLAGS_SHOW_HEAT_MAP) & 0x1) == 1)
+        {
+            mixAmount = hit.heatMap / float(p_MaxHeatShown);
+        }
+        else
+        {
+            mixAmount = hit.deepest / float(p_MaxDepthShown);
+        }
         imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
     }
 }
