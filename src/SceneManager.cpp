@@ -285,6 +285,7 @@ std::vector<SVONode> SceneManager::serializeScene()
     spdlog::info("Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB). Took {}s",
                  finalNodes.size(), m_Voxels.size(), bytes, bytes / 1024, bytes / (1024 * 1024),
                  after - before);
+    spdlog::info("~{} bytes per voxel", (float)bytes / (float)m_Voxels.size());
 
     return finalNodes;
 }

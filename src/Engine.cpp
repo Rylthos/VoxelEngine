@@ -46,7 +46,7 @@ void Engine::init()
     m_SceneManager.loadScene(Scene::TORUS);
     updateScene();
 
-    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, -9.0f), 0.f, -45.f);
+    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, 2.0f), 0.f, -45.f);
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
 

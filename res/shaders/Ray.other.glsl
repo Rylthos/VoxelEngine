@@ -34,6 +34,36 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
     return ray;
 }
 
+bool rayBoxIntersect(vec3 origin, vec3 invDir, vec3 minBound, vec3 maxBound, in float minT, in float maxT,
+    out float tMin, out float tMax)
+{
+    vec3 tbot = invDir * (minBound - origin);
+    vec3 ttop = invDir * (maxBound - origin);
+
+    vec3 tmin = min(ttop, tbot);
+    vec3 tmax = max(ttop, tbot);
+
+    vec2 t_int = max(tmin.xx, tmin.yz);
+    float t0 = max(t_int.x, t_int.y);
+    t_int = min(tmax.xx, tmax.yz);
+    float t1 = min(t_int.x, t_int.y);
+
+    if (t1 == t0)
+    {
+        tMin = t0;
+        tMax = t1 + 0.0001;
+        return true;
+    }
+    else if (t1 > max(t0, 0.))
+    {
+        tMin = max(t0, minT);
+        tMax = min(t1, maxT);
+        return true;
+    }
+
+    return false;
+}
+
 bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, in float minT, in float maxT,
     out float tMin, out float tMax)
 {
@@ -46,7 +76,7 @@ bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, in float minT, in fl
     float t0 = max(tmin.x, max(tmin.y, tmin.z));
     float t1 = min(tmax.x, min(tmax.y, tmax.z));
 
-    if (t1 > max(t0, 0.0))
+    if (t1 >= max(t0, 0.0))
     {
         tMin = max(t0, minT);
         tMax = min(t1, maxT);

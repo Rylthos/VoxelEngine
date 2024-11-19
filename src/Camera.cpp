@@ -101,7 +101,6 @@ void Camera::receive(const Event* event)
                 ImGui::Text("Camera Up");
                 ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
 
-                // ImGui::Text("Lock XZ Movement");
                 ImGui::Checkbox("Lock XZ Movement", &m_LockXZPlaneMovement);
 
                 ImGui::Text("Speedup Movement Speed");
