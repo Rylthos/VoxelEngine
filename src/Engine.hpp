@@ -29,7 +29,7 @@ struct FrameData {
     VkFence renderFence;
 };
 
-enum PushConstantFlags { SHOW_HEAT_MAP = 1 << 0 };
+enum PushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct VoxelPushConstants {
     glm::vec4 cameraPosition;
@@ -108,7 +108,7 @@ class Engine : EventReceiver
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 1 << 9;
+    const uint32_t VOXEL_SIZE = 1 << 10;
     const uint32_t MAX_ITERATIONS = VOXEL_SIZE * 2;
 
     Stats m_Stats;

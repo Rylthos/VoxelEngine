@@ -101,7 +101,8 @@ uint32_t SceneManager::updateBuffers()
     createBuffers(size);
     m_Staging.copyFromData_CPUOnly<SVONode>(svo);
     m_SVO.copyFromBuffer(m_Staging, size);
-    return svo.size() - 1;
+    return 0;
+    // return svo.size() - 1;
 }
 
 Voxel SceneManager::getVoxel(glm::uvec3 position)
@@ -115,6 +116,7 @@ Voxel SceneManager::getVoxel(glm::uvec3 position)
 void SceneManager::setVoxel(glm::uvec3 position, bool solid, uint8_t materialIndex)
 {
     size_t mortenCode = mortenEncode(position);
+    if (mortenCode >= m_Voxels.size()) spdlog::error("{} Exceeds {}", mortenCode, m_Voxels.size());
     assert(mortenCode < m_Voxels.size() && "Position exceeds array size");
 
     m_Voxels[mortenCode] = { .isSolid = solid, .colourIndex = materialIndex };
@@ -263,70 +265,27 @@ std::vector<SVONode> SceneManager::serializeScene()
         }
     }
 
-    spdlog::trace("Nodes");
     queues[0][0].childPointer = finalNodes.size() - queues[0][0].childPointer;
     finalNodes.push_back(queues[0][0]);
-    // for (size_t i = 0; i < finalNodes.size(); i++)
-    // {
-    //     SVONode node = finalNodes.at(i);
-    //     spdlog::trace("{} | {} | {} | {} | {}", node.childPointer, toBits(node.flags),
-    //                   node.materialIndex, toBits(node.validMask), toBits(node.leafMask));
-    // }
+    spdlog::trace("Finished Parsing Nodes");
 
-    // exit(-1);
-
-    // std::vector<SVONode> finalNodes;
-
-    // size_t i = parsedNodes.size() - 1;
-    // for (auto itr = parsedNodes.rbegin(); itr != parsedNodes.rend(); itr++)
-    // {
-    //     SVONode node;
-    //
-    //     node.validMask = 0;
-    //     node.leafMask = 0;
-    //
-    //     if (itr->mortenCode == -1 && itr->colour >= 0)
-    //     {
-    //         int childrenStartIndex = -1;
-    //         for (int j = 7; j >= 0; j--)
-    //         {
-    //             if (childrenStartIndex < 0 && itr->childrenIndices[j] > 0)
-    //             {
-    //                 childrenStartIndex = itr->childrenIndices[j] - 1;
-    //             }
-    //
-    //             if ((itr->childrenIndices[j]) > 0)
-    //             {
-    //                 int mask = 1 << j;
-    //                 node.validMask |= mask;
-    //
-    //                 if (itr->leafMask[j]) node.leafMask |= mask;
-    //             }
-    //         }
-    //
-    //         uint32_t offset = (i - childrenStartIndex);
-    //
-    //         node.childPointer = offset;
-    //     }
-    //     else if (itr->mortenCode >= 0)
-    //     {
-    //         node.childPointer = 0x0;
-    //         node.materialIndex = itr->colour;
-    //     }
-    //     finalNodes.push_back(node);
-    //
-    //     i--;
-    // }
+    std::vector<SVONode> reversed;
+    reversed.reserve(finalNodes.size());
+    for (auto itr = finalNodes.rbegin(); itr != finalNodes.rend(); itr++)
+    {
+        reversed.push_back(*itr);
+    }
+    spdlog::trace("Finished Reversing Nodes");
 
     double after = glfwGetTime();
 
-    size_t bytes = finalNodes.size() * sizeof(SVONode);
+    size_t bytes = reversed.size() * sizeof(SVONode);
     spdlog::info("Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB). Took {}s",
-                 finalNodes.size(), m_Voxels.size(), bytes, bytes / 1024, bytes / (1024 * 1024),
+                 reversed.size(), m_Voxels.size(), bytes, bytes / 1024, bytes / (1024 * 1024),
                  after - before);
     spdlog::info("~{} bytes per voxel", (float)bytes / (float)m_Voxels.size());
 
-    return finalNodes;
+    return reversed;
 }
 
 void SceneManager::createBuffers(size_t size)
@@ -791,10 +750,11 @@ void SceneManager::sphereScene()
 
                 if (dot(position, position) < R * R)
                 {
-                    if (sum % 2 == 0)
-                        setVoxel({ x, y, z }, true, GREEN);
-                    else
-                        setVoxel({ x, y, z }, true, BLUE);
+                    setVoxel({ x, y, z }, true, 0);
+                    // if (sum % 2 == 0)
+                    //     setVoxel({ x, y, z }, true, GREEN);
+                    // else
+                    //     setVoxel({ x, y, z }, true, BLUE);
                 }
                 else
                 {

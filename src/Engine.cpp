@@ -43,7 +43,7 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_SceneManager.loadScene(Scene::TORUS);
+    m_SceneManager.loadScene(Scene::SPHERE);
     updateScene();
 
     m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, 2.0f), 0.f, -45.f);
@@ -60,6 +60,11 @@ void Engine::init()
     m_VoxelPushConstants.maxDepthShown = std::log2(VOXEL_SIZE);
     m_VoxelPushConstants.maxHeatShown = m_VoxelPushConstants.maxIterations;
     m_VoxelPushConstants.lod = std::log2(VOXEL_SIZE);
+
+    m_VoxelPushConstants.flags = 0;
+    m_VoxelPushConstants.flags ^= PCF_SHOW_HEAT_MAP;
+
+    m_RenderAlt = false;
 }
 
 void Engine::start()
@@ -611,11 +616,11 @@ void Engine::updateImGui()
 
         if (ImGui::Checkbox("Show Alternative View", &m_RenderAlt)) ImGui::Text("Max Iterations");
 
-        bool showHeatMap = (m_VoxelPushConstants.flags >> SHOW_HEAT_MAP) & 0x1;
+        bool showHeatMap = (m_VoxelPushConstants.flags & PCF_SHOW_HEAT_MAP) != 0;
         if (ImGui::Checkbox("Show Heat Map", &showHeatMap))
         {
-            m_VoxelPushConstants.flags &= ~(1 << SHOW_HEAT_MAP);
-            m_VoxelPushConstants.flags |= (showHeatMap << SHOW_HEAT_MAP);
+            m_VoxelPushConstants.flags &= ~(PCF_SHOW_HEAT_MAP);
+            m_VoxelPushConstants.flags |= (showHeatMap * PCF_SHOW_HEAT_MAP);
         }
 
         if (showHeatMap)

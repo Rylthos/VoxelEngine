@@ -87,7 +87,7 @@ vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
 }
 
 HitRecord castRay(uint root, Ray ray) {
-    const int sMax = 10;
+    const int sMax = 13;
     const float epsilon = exp2(-sMax);
 
     vec3 direction = ray.direction;
@@ -197,7 +197,7 @@ HitRecord castRay(uint root, Ray ray) {
         {
             if (isLeaf) // Solid Voxel
             {
-                uint nodeIndex = parent - node.childPtr - bitCount(uint(node.validMask) >> (octantMask + 1));
+                uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
                 uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
 
                 float voxelScale = scale;
@@ -227,7 +227,7 @@ HitRecord castRay(uint root, Ray ray) {
                 currentStack++;
 
                 uint count = uint(node.validMask) >> (octantMask + 1);
-                parent = parent - node.childPtr - bitCount(count);
+                parent = parent + node.childPtr + bitCount(count);
                 node = p_Tree.nodes[parent];
 
                 minBound += boundOffset * scale;
@@ -304,7 +304,7 @@ void main()
         vec4 lowestHitColour = vec4(0.5, 0., 0.5, 1.0);
         vec4 highestHitColour = vec4(1., 1., 0., 1.0);
         float mixAmount = 0;
-        if (((p_Flags >> FLAGS_SHOW_HEAT_MAP) & 0x1) == 1)
+        if ((p_Flags & FLAGS_SHOW_HEAT_MAP) != 0x0)
         {
             mixAmount = hit.heatMap / float(p_MaxHeatShown);
         }
