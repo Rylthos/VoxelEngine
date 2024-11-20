@@ -43,7 +43,7 @@ layout(push_constant) uniform constants {
     uint32_t p_MaxHeatShown;
     uint32_t p_Flags;
     uint32_t p_MaxIterations;
-    uint32_t unused;
+    uint32_t p_InitialParent;
     NodeBuffer p_Tree;
 };
 
@@ -98,7 +98,7 @@ HitRecord castRay(uint root, Ray ray) {
 
     vec3 position = ray.origin;
 
-    uint parent = 0;
+    uint parent = p_InitialParent;
 
     vec3 minBound = vec3(0.);
     vec3 maxBound = minBound + dimensions;
@@ -197,7 +197,7 @@ HitRecord castRay(uint root, Ray ray) {
         {
             if (isLeaf) // Solid Voxel
             {
-                uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
+                uint nodeIndex = parent - node.childPtr - bitCount(uint(node.validMask) >> (octantMask + 1));
                 uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
 
                 float voxelScale = scale;
@@ -227,7 +227,7 @@ HitRecord castRay(uint root, Ray ray) {
                 currentStack++;
 
                 uint count = uint(node.validMask) >> (octantMask + 1);
-                parent = parent + node.childPtr + bitCount(count);
+                parent = parent - node.childPtr - bitCount(count);
                 node = p_Tree.nodes[parent];
 
                 minBound += boundOffset * scale;

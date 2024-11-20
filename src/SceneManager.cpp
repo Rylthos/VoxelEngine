@@ -69,6 +69,8 @@ void SceneManager::loadScene(Scene newScene)
 
     spdlog::info("Loading Scene: {}", stringOfScene(m_CurrentScene));
 
+    // m_Voxels.assign(m_Voxels.size(), { .isSolid = true, .colourIndex = 1 });
+
     switch (m_CurrentScene)
     {
     case Scene::SQUARE:
@@ -91,7 +93,7 @@ void SceneManager::loadScene(Scene newScene)
     }
 }
 
-void SceneManager::updateBuffers()
+uint32_t SceneManager::updateBuffers()
 {
     freeBuffers();
     std::vector<SVONode> svo = serializeScene();
@@ -99,6 +101,7 @@ void SceneManager::updateBuffers()
     createBuffers(size);
     m_Staging.copyFromData_CPUOnly<SVONode>(svo);
     m_SVO.copyFromBuffer(m_Staging, size);
+    return svo.size() - 1;
 }
 
 Voxel SceneManager::getVoxel(glm::uvec3 position)
@@ -125,15 +128,23 @@ void SceneManager::setVoxel(glm::uvec3 position, Voxel voxel)
     m_Voxels[mortenCode] = voxel;
 }
 
+std::string toBits(uint8_t x)
+{
+    std::string returnStr = "";
+    for (int i = 7; i >= 0; i--)
+        returnStr += ((x >> i) & 0x1) ? "1" : "0";
+    return returnStr;
+}
+
 std::vector<SVONode> SceneManager::serializeScene()
 {
     size_t maxDepth = std::log2(m_Dimension);
 
     double before = glfwGetTime();
 
-    std::vector<std::vector<SVOConstructionNode>> queues;
+    std::vector<std::vector<SVONode>> queues;
 
-    std::vector<SVOConstructionNode> parsedNodes;
+    std::vector<SVONode> finalNodes;
 
     queues.resize(maxDepth + 1);
     for (size_t i = 0; i < queues.size(); i++)
@@ -145,36 +156,66 @@ std::vector<SVONode> SceneManager::serializeScene()
     for (size_t i = 0; i < m_Voxels.size(); i++)
     {
         Voxel v = m_Voxels.at(i);
-        SVOConstructionNode node = { .mortenCode = (int64_t)i,
-                                     .colour = (int16_t)((v.isSolid) ? v.colourIndex : -1) };
+        SVONode node;
+        node.childPointer = 0;
+        node.validMask = 0;
+        node.leafMask = 0;
+
+        node.flags = 0;
+        node.flags ^= SVONODE_IS_SOLID;
+        node.flags ^= SVONODE_IS_AIR * !v.isSolid;
+
+        node.materialIndex = v.colourIndex;
+        // spdlog::debug("New Node | Solid: {} | Material: {}", v.isSolid, v.colourIndex);
+        // SVOConstructionNode node = { .mortenCode = (int64_t)i,
+        //                              .colour = (int16_t)((v.isSolid) ? v.colourIndex : -1) };
 
         queues[depth].push_back(node);
         int d = depth;
         while (d > 0 && queues[d].size() == 8)
         {
-            std::unordered_map<int16_t, int> coloursUsed;
+            // spdlog::debug("Reduce");
+            std::unordered_map<uint8_t, int> coloursUsed;
 
-            SVOConstructionNode parent;
-            parent.mortenCode = -1;
+            SVONode parent;
+            parent.flags = 0;
+            parent.childPointer = 0;
+            parent.leafMask = 0;
+            parent.validMask = 0;
+            parent.flags ^= SVONODE_IS_PARENT;
 
+            bool childrenSolid = true;
+            // bool isSolid = true;
             for (size_t j = 0; j < 8; j++)
             {
-                parent.childrenIndices[j] = 0;
-                parent.leafMask[j] = false;
+                // parent.childrenIndices[j] = 0;
 
-                SVOConstructionNode child = queues[d][j];
+                SVONode child = queues[d][j];
+                // spdlog::info("\t{} | Material: {} | Flags: {} ", j, child.materialIndex,
+                //              toBits(child.flags));
 
-                if (coloursUsed.find(child.colour) != coloursUsed.end())
-                    coloursUsed.at(child.colour) += 1;
+                if ((child.flags & SVONODE_IS_AIR) == 0) // Node is not air
+                {
+                    parent.validMask |= (1 << j);
+                    if (coloursUsed.find(child.materialIndex) != coloursUsed.end())
+                        coloursUsed.at(child.materialIndex) += 1;
+                    else
+                        coloursUsed[child.materialIndex] = 1;
+                }
+
+                if ((child.flags & SVONODE_IS_SOLID) == 0) // Children not solid
+                {
+                    childrenSolid = false;
+                }
                 else
-                    coloursUsed[child.colour] = 1;
+                {
+                    parent.leafMask |= (1 << j);
+                }
             }
 
             int highestCount = -1;
-            int16_t colour = -1;
+            uint8_t colour = 0;
 
-            int visibleMaxCount = -1;
-            int16_t visibleColour = -1;
             for (auto pair : coloursUsed)
             {
                 if (pair.second > highestCount)
@@ -182,41 +223,36 @@ std::vector<SVONode> SceneManager::serializeScene()
                     colour = pair.first;
                     highestCount = pair.second;
                 }
-
-                if (pair.second > visibleMaxCount && pair.first != -1)
-                {
-                    visibleColour = pair.first;
-                    visibleMaxCount = pair.second;
-                }
             }
+            // spdlog::debug("\tCount: {}, Colour: {}, Solid: {}", highestCount, colour,
+            //               childrenSolid);
 
-            parent.colour = visibleColour;
+            if (highestCount == 8 && childrenSolid)
+            {
+                parent.validMask = 0;
+                parent.flags ^= SVONODE_IS_SOLID;
+            }
+            if (highestCount == -1) parent.flags ^= SVONODE_IS_AIR; // All Children are air
+            parent.materialIndex = colour;
 
-            if (highestCount < 8 || d < depth)
+            // Not all Children are the same
+            if ((parent.flags & SVONODE_IS_SOLID) == 0 && (parent.flags & SVONODE_IS_AIR) == 0)
             {
                 for (size_t j = 0; j < 8; j++)
                 {
-                    SVOConstructionNode child = queues[d][j];
+                    SVONode child = queues[d][j];
 
-                    size_t currentSize = parsedNodes.size();
+                    // size_t currentIndex = finalNodes.size();
 
-                    int64_t childMortenCode = child.mortenCode;
-
-                    if (childMortenCode == -1 && child.colour >= 0)
+                    if (child.childPointer != 0)
                     {
-                        parent.childrenIndices[j] = currentSize + 1;
-                        parsedNodes.push_back(child);
+                        child.childPointer = finalNodes.size() - child.childPointer;
                     }
-                    else if (childMortenCode >= 0)
-                    {
-                        Voxel childVoxel = m_Voxels.at(child.mortenCode);
 
-                        if (child.colour >= 0)
-                        {
-                            parent.childrenIndices[j] = currentSize + 1;
-                            parent.leafMask[j] = true;
-                            parsedNodes.push_back(child);
-                        }
+                    if ((child.flags & SVONODE_IS_AIR) == 0) // Is Not Air
+                    {
+                        parent.childPointer = finalNodes.size();
+                        finalNodes.push_back(child);
                     }
                 }
             }
@@ -227,50 +263,60 @@ std::vector<SVONode> SceneManager::serializeScene()
         }
     }
 
-    parsedNodes.push_back(queues[0][0]);
+    spdlog::trace("Nodes");
+    queues[0][0].childPointer = finalNodes.size() - queues[0][0].childPointer;
+    finalNodes.push_back(queues[0][0]);
+    // for (size_t i = 0; i < finalNodes.size(); i++)
+    // {
+    //     SVONode node = finalNodes.at(i);
+    //     spdlog::trace("{} | {} | {} | {} | {}", node.childPointer, toBits(node.flags),
+    //                   node.materialIndex, toBits(node.validMask), toBits(node.leafMask));
+    // }
 
-    std::vector<SVONode> finalNodes;
+    // exit(-1);
 
-    size_t i = parsedNodes.size() - 1;
-    for (auto itr = parsedNodes.rbegin(); itr != parsedNodes.rend(); itr++)
-    {
-        SVONode node;
+    // std::vector<SVONode> finalNodes;
 
-        node.validMask = 0;
-        node.leafMask = 0;
-
-        if (itr->mortenCode == -1 && itr->colour >= 0)
-        {
-            int childrenStartIndex = -1;
-            for (int j = 7; j >= 0; j--)
-            {
-                if (childrenStartIndex < 0 && itr->childrenIndices[j] > 0)
-                {
-                    childrenStartIndex = itr->childrenIndices[j] - 1;
-                }
-
-                if ((itr->childrenIndices[j]) > 0)
-                {
-                    int mask = 1 << j;
-                    node.validMask |= mask;
-
-                    if (itr->leafMask[j]) node.leafMask |= mask;
-                }
-            }
-
-            uint32_t offset = (i - childrenStartIndex);
-
-            node.childPointer = offset;
-        }
-        else if (itr->mortenCode >= 0)
-        {
-            node.childPointer = 0x0;
-            node.materialIndex = itr->colour;
-        }
-        finalNodes.push_back(node);
-
-        i--;
-    }
+    // size_t i = parsedNodes.size() - 1;
+    // for (auto itr = parsedNodes.rbegin(); itr != parsedNodes.rend(); itr++)
+    // {
+    //     SVONode node;
+    //
+    //     node.validMask = 0;
+    //     node.leafMask = 0;
+    //
+    //     if (itr->mortenCode == -1 && itr->colour >= 0)
+    //     {
+    //         int childrenStartIndex = -1;
+    //         for (int j = 7; j >= 0; j--)
+    //         {
+    //             if (childrenStartIndex < 0 && itr->childrenIndices[j] > 0)
+    //             {
+    //                 childrenStartIndex = itr->childrenIndices[j] - 1;
+    //             }
+    //
+    //             if ((itr->childrenIndices[j]) > 0)
+    //             {
+    //                 int mask = 1 << j;
+    //                 node.validMask |= mask;
+    //
+    //                 if (itr->leafMask[j]) node.leafMask |= mask;
+    //             }
+    //         }
+    //
+    //         uint32_t offset = (i - childrenStartIndex);
+    //
+    //         node.childPointer = offset;
+    //     }
+    //     else if (itr->mortenCode >= 0)
+    //     {
+    //         node.childPointer = 0x0;
+    //         node.materialIndex = itr->colour;
+    //     }
+    //     finalNodes.push_back(node);
+    //
+    //     i--;
+    // }
 
     double after = glfwGetTime();
 

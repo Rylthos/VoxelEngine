@@ -21,20 +21,25 @@ enum class Scene {
     END
 };
 
+enum SVONodeFlags {
+    SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
+    SVONODE_IS_PARENT = 1 << 1, // Has Smaller Nodes
+    SVONODE_IS_AIR = 1 << 2     // Is air
+};
+
 struct SVONode {
     uint32_t childPointer;
-    uint8_t unused;
+    uint8_t flags;
     uint8_t materialIndex;
     uint8_t validMask;
     uint8_t leafMask;
 } __attribute__((packed));
 
-struct SVOConstructionNode {
-    int64_t mortenCode;
-    int16_t colour;
-    uint32_t childrenIndices[8];
-    bool leafMask[8];
-};
+// Remove morten code
+// colour 16 bit
+// children indices 1 32 bit
+// leaf mask
+// valid mask
 
 extern std::string stringOfScene(const Scene& scene);
 
@@ -55,7 +60,7 @@ class SceneManager
     Scene currentScene() { return m_CurrentScene; }
 
     VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
-    void updateBuffers();
+    uint32_t updateBuffers();
 
     Voxel getVoxel(glm::uvec3 position);
     void setVoxel(glm::uvec3 position, bool solid, uint8_t materialIndex = 0);

@@ -414,7 +414,7 @@ void Engine::updateScene()
 {
     vkDeviceWaitIdle(m_Device);
 
-    m_SceneManager.updateBuffers();
+    m_VoxelPushConstants.initialParent = m_SceneManager.updateBuffers();
     m_PaletteManager.updateImage();
 }
 

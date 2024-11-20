@@ -43,7 +43,7 @@ struct VoxelPushConstants {
     uint32_t maxHeatShown;
     uint32_t flags;
     uint32_t maxIterations;
-    uint32_t _;
+    uint32_t initialParent;
     VkDeviceAddress voxelAddress;
 };
 
