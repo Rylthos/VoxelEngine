@@ -28,7 +28,7 @@ elseif(CMAKE_BUILD_TYPE MATCHES Release)
   message("Release Build")
 
   set(outputDirectory "${outputDirectory}/release")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 endif()
 
 add_compile_definitions(GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE

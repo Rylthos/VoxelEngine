@@ -152,15 +152,16 @@ std::vector<SVONode> SceneManager::serializeScene()
     std::vector<SVONode> finalNodes;
 
     queues.resize(maxDepth + 1);
-    for (size_t i = 0; i < queues.size(); i++)
+    for (size_t i = 0; i < queues.size(); ++i)
     {
         queues[i].reserve(8);
     }
 
     int depth = maxDepth;
-    for (size_t i = 0; i < m_Voxels.size(); i++)
+    size_t voxelSize = m_Voxels.size();
+    for (size_t i = 0; i < voxelSize; ++i)
     {
-        Voxel v = m_Voxels.at(i);
+        const Voxel& v = m_Voxels.at(i);
         SVONode node;
         node.childPointer = 0;
         node.validMask = 0;
@@ -171,16 +172,14 @@ std::vector<SVONode> SceneManager::serializeScene()
         node.flags ^= SVONODE_IS_AIR * (v.colourIndex < 0);
 
         node.materialIndex = v.colourIndex;
-        // spdlog::debug("New Node | Solid: {} | Material: {}", v.isSolid, v.colourIndex);
-        // SVOConstructionNode node = { .mortenCode = (int64_t)i,
-        //                              .colour = (int16_t)((v.isSolid) ? v.colourIndex : -1) };
 
         queues[depth].push_back(node);
         int d = depth;
         while (d > 0 && queues[d].size() == 8)
         {
-            // spdlog::debug("Reduce");
             std::unordered_map<uint8_t, int> coloursUsed;
+
+            std::vector<SVONode>& childQueue = queues[d];
 
             SVONode parent;
             parent.flags = 0;
@@ -190,32 +189,24 @@ std::vector<SVONode> SceneManager::serializeScene()
             parent.flags ^= SVONODE_IS_PARENT;
 
             bool childrenSolid = true;
-            // bool isSolid = true;
-            for (size_t j = 0; j < 8; j++)
+            for (size_t j = 0; j < 8; ++j)
             {
-                // parent.childrenIndices[j] = 0;
+                const SVONode& child = childQueue[j];
+                bool isAir = child.flags & SVONODE_IS_AIR;
+                bool isSolid = child.flags & SVONODE_IS_SOLID;
 
-                SVONode child = queues[d][j];
-                // spdlog::info("\t{} | Material: {} | Flags: {} ", j, child.materialIndex,
-                //              toBits(child.flags));
+                parent.validMask |= (!isAir << j);
 
-                if ((child.flags & SVONODE_IS_AIR) == 0) // Node is not air
+                if (!isAir) // Node is not air
                 {
-                    parent.validMask |= (1 << j);
                     if (coloursUsed.find(child.materialIndex) != coloursUsed.end())
                         coloursUsed.at(child.materialIndex) += 1;
                     else
                         coloursUsed[child.materialIndex] = 1;
                 }
 
-                if ((child.flags & SVONODE_IS_SOLID) == 0) // Children not solid
-                {
-                    childrenSolid = false;
-                }
-                else
-                {
-                    parent.leafMask |= (1 << j);
-                }
+                childrenSolid &= isSolid;
+                parent.leafMask |= (isSolid << j);
             }
 
             int highestCount = -1;
@@ -229,10 +220,8 @@ std::vector<SVONode> SceneManager::serializeScene()
                     highestCount = pair.second;
                 }
             }
-            // spdlog::debug("\tCount: {}, Colour: {}, Solid: {}", highestCount, colour,
-            //               childrenSolid);
 
-            if (highestCount == 8 && childrenSolid)
+            if (childrenSolid && highestCount == 8)
             {
                 parent.validMask = 0;
                 parent.flags ^= SVONODE_IS_SOLID;
@@ -240,14 +229,12 @@ std::vector<SVONode> SceneManager::serializeScene()
             if (highestCount == -1) parent.flags ^= SVONODE_IS_AIR; // All Children are air
             parent.materialIndex = colour;
 
-            // Not all Children are the same
-            if ((parent.flags & SVONODE_IS_SOLID) == 0 && (parent.flags & SVONODE_IS_AIR) == 0)
+            // Not all Children are the same so create children nodes
+            if (!(parent.flags & SVONODE_IS_SOLID) && !(parent.flags & SVONODE_IS_AIR))
             {
-                for (size_t j = 0; j < 8; j++)
+                for (size_t j = 0; j < 8; ++j)
                 {
-                    SVONode child = queues[d][j];
-
-                    // size_t currentIndex = finalNodes.size();
+                    SVONode& child = childQueue[j];
 
                     if (child.childPointer != 0)
                     {
@@ -262,7 +249,8 @@ std::vector<SVONode> SceneManager::serializeScene()
                 }
             }
 
-            queues[d].clear();
+            childQueue.clear();
+            // queues[d].clear();
             queues[d - 1].push_back(parent);
             d--;
         }

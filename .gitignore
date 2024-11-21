@@ -7,3 +7,4 @@ build/*
 res/shaders/*.spv
 imgui.ini
 *.xopp
+callgrind.out.*
