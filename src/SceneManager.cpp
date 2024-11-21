@@ -71,26 +71,26 @@ void SceneManager::loadScene(Scene newScene)
 
     // m_Voxels.assign(m_Voxels.size(), { .isSolid = true, .colourIndex = 1 });
 
-    switch (m_CurrentScene)
-    {
-    case Scene::SQUARE:
-        squareScene();
-        break;
-    case Scene::HOLED_SQUARE:
-        holedSquareScene();
-        break;
-    case Scene::RANDOM_OBJECTS:
-        randomObjectsScene();
-        break;
-    case Scene::SPHERE:
-        sphereScene();
-        break;
-    case Scene::TORUS:
-        torusScene();
-        break;
-    default:
-        throw std::runtime_error("Invalid Scene");
-    }
+    // switch (m_CurrentScene)
+    // {
+    // case Scene::SQUARE:
+    //     squareScene();
+    //     break;
+    // case Scene::HOLED_SQUARE:
+    //     holedSquareScene();
+    //     break;
+    // case Scene::RANDOM_OBJECTS:
+    //     randomObjectsScene();
+    //     break;
+    // case Scene::SPHERE:
+    //     sphereScene();
+    //     break;
+    // case Scene::TORUS:
+    //     torusScene();
+    //     break;
+    // default:
+    //     throw std::runtime_error("Invalid Scene");
+    // }
 }
 
 uint32_t SceneManager::updateBuffers()
@@ -119,7 +119,10 @@ void SceneManager::setVoxel(glm::uvec3 position, bool solid, uint8_t materialInd
     if (mortenCode >= m_Voxels.size()) spdlog::error("{} Exceeds {}", mortenCode, m_Voxels.size());
     assert(mortenCode < m_Voxels.size() && "Position exceeds array size");
 
-    m_Voxels[mortenCode] = { .isSolid = solid, .colourIndex = materialIndex };
+    if (solid)
+        m_Voxels[mortenCode] = { .colourIndex = materialIndex };
+    else
+        m_Voxels[mortenCode] = { .colourIndex = -1 };
 }
 
 void SceneManager::setVoxel(glm::uvec3 position, Voxel voxel)
@@ -165,7 +168,7 @@ std::vector<SVONode> SceneManager::serializeScene()
 
         node.flags = 0;
         node.flags ^= SVONODE_IS_SOLID;
-        node.flags ^= SVONODE_IS_AIR * !v.isSolid;
+        node.flags ^= SVONODE_IS_AIR * (v.colourIndex < 0);
 
         node.materialIndex = v.colourIndex;
         // spdlog::debug("New Node | Solid: {} | Material: {}", v.isSolid, v.colourIndex);

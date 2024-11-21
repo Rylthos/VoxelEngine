@@ -55,6 +55,21 @@ class Buffer
     }
 
     template<typename T>
+    void copyToVector(std::vector<T>& data)
+    {
+        size_t elements = m_Size / sizeof(T);
+        data.resize(elements);
+        std::memcpy(data.data(), getAllocationInfo().pMappedData, m_Size);
+        // Buffer stagingBuffer;
+        // stagingBuffer.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        //                      VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+        // std::memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
+
+        // copyFromBuffer(stagingBuffer, size);
+    }
+
+    template<typename T>
     void copyFromData_CPUOnly(const std::span<T>& data)
     {
         size_t size = data.size() * sizeof(T);

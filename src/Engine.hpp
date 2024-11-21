@@ -47,6 +47,13 @@ struct VoxelPushConstants {
     VkDeviceAddress voxelAddress;
 };
 
+struct VoxelGenerationPushConstants {
+    uint32_t dimension;
+    float size;
+    glm::ivec2 _;
+    VkDeviceAddress targetBuffer;
+};
+
 struct Stats {
     float frameDelta;
 };
@@ -97,6 +104,10 @@ class Engine : EventReceiver
     VkPipeline m_VoxelPipeline;
     VkPipelineLayout m_VoxelPipelineLayout;
 
+    VkPipeline m_VoxelGenerationPipeline;
+    VkPipelineLayout m_VoxelGenerationPipelineLayout;
+    Buffer m_GeneratedVoxels;
+
     std::vector<FrameData> m_Frames;
 
     VkDescriptorPool m_DescriptorPool;
@@ -108,7 +119,7 @@ class Engine : EventReceiver
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 1 << 10;
+    const uint32_t VOXEL_SIZE = 1 << 9;
     const uint32_t MAX_ITERATIONS = VOXEL_SIZE * 2;
 
     Stats m_Stats;

@@ -62,6 +62,8 @@ class SceneManager
     VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
     uint32_t updateBuffers();
 
+    std::vector<Voxel>& getVoxels() { return m_Voxels; }
+
     Voxel getVoxel(glm::uvec3 position);
     void setVoxel(glm::uvec3 position, bool solid, uint8_t materialIndex = 0);
     void setVoxel(glm::uvec3 position, Voxel voxel);

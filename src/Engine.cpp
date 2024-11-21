@@ -101,6 +101,10 @@ void Engine::cleanup()
     vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_VoxelPipelineLayout, nullptr);
 
+    vkDestroyPipeline(m_Device, m_VoxelGenerationPipeline, nullptr);
+    vkDestroyPipelineLayout(m_Device, m_VoxelGenerationPipelineLayout, nullptr);
+    m_GeneratedVoxels.free();
+
     vkDestroyDescriptorSetLayout(m_Device, m_VoxelDescriptorSetLayout, nullptr);
 
     vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
@@ -207,6 +211,7 @@ void Engine::initVulkan()
     features.imageCubeArray = true;
     features.geometryShader = true;
     features.shaderInt16 = true;
+    features.shaderInt64 = true;
 
     vkb::PhysicalDeviceSelector selector{ vkbInst };
     auto vkbMaybeDevice =
@@ -419,6 +424,21 @@ void Engine::updateScene()
 {
     vkDeviceWaitIdle(m_Device);
 
+    ImmediateSubmit::submit([&](VkCommandBuffer buffer) {
+        vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelGenerationPipeline);
+
+        VoxelGenerationPushConstants pushConstant;
+        pushConstant.size = 1.0f;
+        pushConstant.dimension = VOXEL_SIZE;
+        pushConstant.targetBuffer = m_GeneratedVoxels.getDeviceAddress(m_Device);
+        vkCmdPushConstants(buffer, m_VoxelGenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                           sizeof(VoxelGenerationPushConstants), &pushConstant);
+
+        vkCmdDispatch(buffer, VOXEL_SIZE / 4, VOXEL_SIZE / 4, VOXEL_SIZE / 4);
+    });
+
+    m_GeneratedVoxels.copyToVector<Voxel>(m_SceneManager.getVoxels());
+
     m_VoxelPushConstants.initialParent = m_SceneManager.updateBuffers();
     m_PaletteManager.updateImage();
 }
@@ -487,6 +507,50 @@ void Engine::initPipelines()
 
         VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
                                           &m_VoxelPipeline));
+        spdlog::info("Created Background Pipeline and Pipeline Layout");
+    }
+
+    {
+        m_GeneratedVoxels.create(m_Allocator, VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE * sizeof(Voxel),
+                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                 VMA_MEMORY_USAGE_GPU_TO_CPU);
+
+        VkPushConstantRange pushConstant{};
+        pushConstant.offset = 0;
+        pushConstant.size = sizeof(VoxelGenerationPushConstants);
+        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        VkPipelineLayoutCreateInfo computeLayoutCI{};
+        computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        computeLayoutCI.pNext = nullptr;
+        computeLayoutCI.setLayoutCount = 0;
+        computeLayoutCI.pSetLayouts = nullptr;
+        computeLayoutCI.pushConstantRangeCount = 1;
+        computeLayoutCI.pPushConstantRanges = &pushConstant;
+
+        VK_CHECK(vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr,
+                                        &m_VoxelGenerationPipelineLayout));
+
+        ShaderModule voxelShader;
+        voxelShader.create("res/shaders/Generation.comp.spv", m_Device);
+
+        VkPipelineShaderStageCreateInfo shaderStageCI{};
+        shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStageCI.pNext = nullptr;
+        shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        shaderStageCI.module = voxelShader.getShaderModule();
+        shaderStageCI.pName = "main";
+
+        VkComputePipelineCreateInfo computePipelineCI{};
+        computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        computePipelineCI.pNext = nullptr;
+        computePipelineCI.layout = m_VoxelGenerationPipelineLayout;
+        computePipelineCI.stage = shaderStageCI;
+
+        VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
+                                          &m_VoxelGenerationPipeline));
         spdlog::info("Created Background Pipeline and Pipeline Layout");
     }
 }
