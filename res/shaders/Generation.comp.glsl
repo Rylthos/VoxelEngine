@@ -84,633 +84,62 @@ void sphereScene(uvec3 position, uint flatIndex)
     p_TargetBuffer.voxels[flatIndex] = outputVoxel;
 }
 
-vec3 grad3[] = {
-        vec3(0, 1, 1),
-        vec3(0, 1, -1),
-        vec3(0, -1, 1),
-        vec3(0, -1, -1),
-        vec3(1, 0, 1),
-        vec3(1, 0, -1),
-        vec3(-1, 0, 1),
-        vec3(-1, 0, -1),
-        vec3(1, 1, 0),
-        vec3(1, -1, 0),
-        vec3(-1, 1, 0),
-        vec3(-1, -1, 0)
-    };
-
-const int perm[] = {
-        151,
-        160,
-        137,
-        91,
-        90,
-        15,
-        131,
-        13,
-        201,
-        95,
-        96,
-        53,
-        194,
-        233,
-        7,
-        225,
-        140,
-        36,
-        103,
-        30,
-        69,
-        142,
-        8,
-        99,
-        37,
-        240,
-        21,
-        10,
-        23,
-        190,
-        6,
-        148,
-        247,
-        120,
-        234,
-        75,
-        0,
-        26,
-        197,
-        62,
-        94,
-        252,
-        219,
-        203,
-        117,
-        35,
-        11,
-        32,
-        57,
-        177,
-        33,
-        88,
-        237,
-        149,
-        56,
-        87,
-        174,
-        20,
-        125,
-        136,
-        171,
-        168,
-        68,
-        175,
-        74,
-        165,
-        71,
-        134,
-        139,
-        48,
-        27,
-        166,
-        77,
-        146,
-        158,
-        231,
-        83,
-        111,
-        229,
-        122,
-        60,
-        211,
-        133,
-        230,
-        220,
-        105,
-        92,
-        41,
-        55,
-        46,
-        245,
-        40,
-        244,
-        102,
-        143,
-        54,
-        65,
-        25,
-        63,
-        161,
-        1,
-        216,
-        80,
-        73,
-        209,
-        76,
-        132,
-        187,
-        208,
-        89,
-        18,
-        169,
-        200,
-        196,
-        135,
-        130,
-        116,
-        188,
-        159,
-        86,
-        164,
-        100,
-        109,
-        198,
-        173,
-        186,
-        3,
-        64,
-        52,
-        217,
-        226,
-        250,
-        124,
-        123,
-        5,
-        202,
-        38,
-        147,
-        118,
-        126,
-        255,
-        82,
-        85,
-        212,
-        207,
-        206,
-        59,
-        227,
-        47,
-        16,
-        58,
-        17,
-        182,
-        189,
-        28,
-        42,
-        223,
-        183,
-        170,
-        213,
-        119,
-        248,
-        152,
-        2,
-        44,
-        154,
-        163,
-        70,
-        221,
-        153,
-        101,
-        155,
-        167,
-        43,
-        172,
-        9,
-        129,
-        22,
-        39,
-        253,
-        19,
-        98,
-        108,
-        110,
-        79,
-        113,
-        224,
-        232,
-        178,
-        185,
-        112,
-        104,
-        218,
-        246,
-        97,
-        228,
-        251,
-        34,
-        242,
-        193,
-        238,
-        210,
-        144,
-        12,
-        191,
-        179,
-        162,
-        241,
-        81,
-        51,
-        145,
-        235,
-        249,
-        14,
-        239,
-        107,
-        49,
-        192,
-        214,
-        31,
-        181,
-        199,
-        106,
-        157,
-        184,
-        84,
-        204,
-        176,
-        115,
-        121,
-        50,
-        45,
-        127,
-        4,
-        150,
-        254,
-        138,
-        236,
-        205,
-        93,
-        222,
-        114,
-        67,
-        29,
-        24,
-        72,
-        243,
-        141,
-        128,
-        195,
-        78,
-        66,
-        215,
-        61,
-        156,
-        180,
-        151,
-        160,
-        137,
-        91,
-        90,
-        15,
-        131,
-        13,
-        201,
-        95,
-        96,
-        53,
-        194,
-        233,
-        7,
-        225,
-        140,
-        36,
-        103,
-        30,
-        69,
-        142,
-        8,
-        99,
-        37,
-        240,
-        21,
-        10,
-        23,
-        190,
-        6,
-        148,
-        247,
-        120,
-        234,
-        75,
-        0,
-        26,
-        197,
-        62,
-        94,
-        252,
-        219,
-        203,
-        117,
-        35,
-        11,
-        32,
-        57,
-        177,
-        33,
-        88,
-        237,
-        149,
-        56,
-        87,
-        174,
-        20,
-        125,
-        136,
-        171,
-        168,
-        68,
-        175,
-        74,
-        165,
-        71,
-        134,
-        139,
-        48,
-        27,
-        166,
-        77,
-        146,
-        158,
-        231,
-        83,
-        111,
-        229,
-        122,
-        60,
-        211,
-        133,
-        230,
-        220,
-        105,
-        92,
-        41,
-        55,
-        46,
-        245,
-        40,
-        244,
-        102,
-        143,
-        54,
-        65,
-        25,
-        63,
-        161,
-        1,
-        216,
-        80,
-        73,
-        209,
-        76,
-        132,
-        187,
-        208,
-        89,
-        18,
-        169,
-        200,
-        196,
-        135,
-        130,
-        116,
-        188,
-        159,
-        86,
-        164,
-        100,
-        109,
-        198,
-        173,
-        186,
-        3,
-        64,
-        52,
-        217,
-        226,
-        250,
-        124,
-        123,
-        5,
-        202,
-        38,
-        147,
-        118,
-        126,
-        255,
-        82,
-        85,
-        212,
-        207,
-        206,
-        59,
-        227,
-        47,
-        16,
-        58,
-        17,
-        182,
-        189,
-        28,
-        42,
-        223,
-        183,
-        170,
-        213,
-        119,
-        248,
-        152,
-        2,
-        44,
-        154,
-        163,
-        70,
-        221,
-        153,
-        101,
-        155,
-        167,
-        43,
-        172,
-        9,
-        129,
-        22,
-        39,
-        253,
-        19,
-        98,
-        108,
-        110,
-        79,
-        113,
-        224,
-        232,
-        178,
-        185,
-        112,
-        104,
-        218,
-        246,
-        97,
-        228,
-        251,
-        34,
-        242,
-        193,
-        238,
-        210,
-        144,
-        12,
-        191,
-        179,
-        162,
-        241,
-        81,
-        51,
-        145,
-        235,
-        249,
-        14,
-        239,
-        107,
-        49,
-        192,
-        214,
-        31,
-        181,
-        199,
-        106,
-        157,
-        184,
-        84,
-        204,
-        176,
-        115,
-        121,
-        50,
-        45,
-        127,
-        4,
-        150,
-        254,
-        138,
-        236,
-        205,
-        93,
-        222,
-        114,
-        67,
-        29,
-        24,
-        72,
-        243,
-        141,
-        128,
-        195,
-        78,
-        66,
-        215,
-        61,
-        156,
-        180
-    };
-
-float noise(vec3 pos)
+vec3 random3(vec3 c)
 {
-    float n0, n1, n2, n3;
+    float j = 4096. * sin(dot(c, vec3(17., 59.4, 15.)));
+    vec3 r;
+    r.z = fract(512. * j);
+    j *= .125;
+    r.x = fract(512. * j);
+    j *= .125;
+    r.y = fract(512. * j);
+    return r - 0.5;
+}
 
+float simplex3D(vec3 pos)
+{
     const float F3 = 1. / 3.;
-    float s = (pos.x + pos.y + pos.z) * F3;
-    ivec3 skewed = ivec3(floor(pos + s));
-
     const float G3 = 1. / 6.;
-    float t = (skewed.x + skewed.y + skewed.z) * G3;
-    vec3 unskew = skewed - t;
-    vec3 origin = pos - unskew;
 
-    ivec3 offsetSecond;
-    ivec3 offsetThird;
+    vec3 s = floor(pos + dot(pos, vec3(F3)));
+    vec3 x = pos - s + dot(s, vec3(G3));
 
-    if (origin.x >= origin.y)
-    {
-        if (origin.y >= origin.z)
-        {
-            offsetSecond = ivec3(1, 0, 0);
-            offsetThird = ivec3(1, 1, 0);
-        }
-        else if (origin.x >= origin.z)
-        {
-            offsetSecond = ivec3(1, 0, 0);
-            offsetThird = ivec3(1, 0, 1);
-        }
-        else
-        {
-            offsetSecond = ivec3(0, 0, 1);
-            offsetThird = ivec3(1, 0, 1);
-        }
-    }
-    else
-    {
-        if (origin.y < origin.z)
-        {
-            offsetSecond = ivec3(0, 0, 1);
-            offsetThird = ivec3(0, 1, 1);
-        }
-        else if (origin.x < origin.z)
-        {
-            offsetSecond = ivec3(0, 0, 1);
-            offsetThird = ivec3(0, 1, 1);
-        }
-        else
-        {
-            offsetSecond = ivec3(0, 1, 0);
-            offsetThird = ivec3(1, 1, 0);
-        }
-    }
+    vec3 e = step(vec3(0.), x - x.yzx);
+    vec3 i1 = e * (1. * e.zxy);
+    vec3 i2 = 1. - e.zxy * (1. - e);
 
-    vec3 offsetSecondXYZ = origin - offsetSecond + G3;
-    vec3 offsetThirdXYZ = origin - offsetThird + 2. * G3;
-    vec3 offsetFourthXYZ = origin - 1. + 3. * G3;
+    vec3 x1 = x - i1 + G3;
+    vec3 x2 = x - i2 + 2. * G3;
+    vec3 x3 = x - 1. + 3. * G3;
 
-    ivec3 hash = ivec3(skewed.x & 255, skewed.y & 255, skewed.z & 255);
-    ivec4 gi;
-    gi.x = perm[hash.x + perm[hash.y + perm[hash.z]]] % 12;
-    gi.y = perm[hash.x + offsetSecond.x + perm[hash.y + offsetSecond.y + perm[hash.z + offsetSecond.z]]] % 12;
-    gi.z = perm[hash.x + offsetThird.x + perm[hash.y + offsetThird.y + perm[hash.z + offsetThird.z]]] % 12;
-    gi.w = perm[hash.x + 1 + perm[hash.y + 1 + perm[hash.z + 1]]] % 12;
+    vec4 w, d;
+    w.x = dot(x, x);
+    w.y = dot(x1, x1);
+    w.z = dot(x2, x2);
+    w.w = dot(x3, x3);
 
-    float t0 = 0.5 - dot(origin, origin);
-    if (t0 < 0) n0 = 0.;
-    else
-    {
-        t0 *= t0;
-        n0 = t0 * t0 * dot(grad3[gi.x], origin);
-    }
+    w = max(0.6 - w, 0.);
+    d.x = dot(random3(s), x);
+    d.y = dot(random3(s + i1), x1);
+    d.z = dot(random3(s + i2), x2);
+    d.w = dot(random3(s + 1.), x3);
 
-    float t1 = 0.5 * dot(offsetSecondXYZ, offsetSecondXYZ);
-    if (t1 < 0) n1 = 0.;
-    else
-    {
-        t1 *= t1;
-        n1 = t1 * t1 * dot(grad3[gi.y], offsetSecondXYZ);
-    }
+    w *= w;
+    w *= w;
+    d *= w;
 
-    float t2 = 0.5 * dot(offsetThirdXYZ, offsetThirdXYZ);
-    if (t2 < 0) n2 = 0.;
-    else
-    {
-        t2 *= t2;
-        n2 = t2 * t2 * dot(grad3[gi.z], offsetThirdXYZ);
-    }
+    return dot(d, vec4(52.));
+}
 
-    float t3 = 0.5 * dot(offsetFourthXYZ, offsetFourthXYZ);
-    if (t3 < 0) n3 = 0.;
-    else
-    {
-        t3 *= t3;
-        n3 = t3 * t3 * dot(grad3[gi.w], offsetFourthXYZ);
-    }
+const mat3 rot1 = mat3(-0.37, 0.36, 0.85, -0.14, -0.93, 0.34, 0.92, 0.01, 0.4);
+const mat3 rot2 = mat3(-0.55, -0.39, 0.74, 0.33, -0.91, -0.24, 0.77, 0.12, 0.63);
+const mat3 rot3 = mat3(-0.71, 0.52, -0.47, -0.08, -0.72, -0.68, -0.7, -0.45, 0.56);
 
-    return 32. * (n0 + n1 + n2 + n3);
+float simplex3D_fractal(vec3 m) {
+    return 16 / 30 * simplex3D(m * rot1)
+        + 8 / 30 + simplex3D(2. * m * rot2)
+        + 4 / 30 + simplex3D(4. * m * rot3)
+        + 2 / 30 + simplex3D(8. * m);
 }
 
 void main()
@@ -720,7 +149,7 @@ void main()
 
     vec3 uv = currentIndex / vec3(p_Dimension - 1);
 
-    float noiseValue = noise(uv * 2);
+    float noiseValue = simplex3D_fractal(uv);
     Voxel outputVoxel;
     outputVoxel.type = AIR;
     if (noiseValue >= 0.9)

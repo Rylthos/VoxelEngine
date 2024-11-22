@@ -298,10 +298,11 @@ void main()
         const float ambientStrength = 0.5;
         vec4 ambient = lightColour * ambientStrength;
 
+        float diffStrength = 1.;
         if (shadow.t >= 0.)
-            diffuse = vec4(0.);
+            diffStrength = 0.1;
 
-        vec4 colour = (ambient + diffuse) * lookupColour;
+        vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
 
         imageStore(o_Image, texelCoord, colour);
     }
