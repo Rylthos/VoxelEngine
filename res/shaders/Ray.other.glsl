@@ -88,3 +88,8 @@ vec3 rayPosition(Ray ray, float t)
 {
     return ray.origin + ray.direction * t;
 }
+
+vec3 calculatePosition(vec3 origin, vec3 direction, float t)
+{
+    return origin + t * direction;
+}

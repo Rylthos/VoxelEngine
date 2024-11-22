@@ -9,24 +9,13 @@
 #define MAX_T 10000.
 
 #include "Ray.other.glsl"
+#include "Octree.other.glsl"
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba16f, set = 0, binding = 0) uniform image2D o_Image;
 layout(rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
 layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
-
-struct Node {
-    uint32_t childPtr;
-    uint8_t unused;
-    uint8_t materialIndex;
-    uint8_t validMask;
-    uint8_t leafMask;
-};
-
-layout(buffer_reference, std430) readonly buffer NodeBuffer {
-    Node nodes[];
-};
 
 #define FLAGS_SHOW_HEAT_MAP 1
 
@@ -43,223 +32,8 @@ layout(push_constant) uniform constants {
     uint32_t p_Flags;
     uint32_t p_MaxIterations;
     uint32_t p_InitialParent;
-    NodeBuffer p_Tree;
+    SVONodeBuffer p_Tree;
 };
-
-struct HitRecord {
-    float t;
-    vec3 position;
-    vec3 normal;
-    uint parent;
-    int depth;
-    int deepest;
-    int heatMap;
-    uint8_t materialIndex;
-};
-
-struct StackMember
-{
-    float tMax;
-    uint parent;
-    vec3 minBound;
-};
-
-vec3 calculatePosition(vec3 origin, vec3 direction, float t)
-{
-    return origin + t * direction;
-}
-
-vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
-{
-    bvec3 minBoundHit = lessThanEqual(position - minBound, vec3(0.001));
-    bvec3 maxBoundHit = lessThanEqual(position - maxBound, vec3(0.001));
-
-    if (minBoundHit.x) return vec3(-1, 0, 0);
-    if (minBoundHit.y) return vec3(0, -1, 0);
-    if (minBoundHit.z) return vec3(0, 0, -1);
-
-    if (maxBoundHit.x) return vec3(1, 0, 0);
-    if (maxBoundHit.y) return vec3(0, 1, 0);
-    if (maxBoundHit.z) return vec3(0, 0, 1);
-
-    return vec3(0.);
-}
-
-HitRecord castRay(uint root, Ray ray) {
-    const int sMax = 13;
-    const float epsilon = exp2(-sMax);
-
-    vec3 direction = ray.direction;
-    const vec3 origin = ray.origin + direction * epsilon;
-
-    const vec3 dimensions = vec3(p_Dimension) * p_Size;
-    const vec3 bias = direction * 0.001;
-
-    vec3 position = ray.origin;
-
-    uint parent = p_InitialParent;
-
-    vec3 minBound = vec3(0.);
-    vec3 maxBound = minBound + dimensions;
-
-    int currentStack = -1;
-    StackMember stack[sMax + 1];
-
-    HitRecord hit;
-    hit.t = -2;
-    hit.deepest = -1;
-    hit.heatMap = -1;
-    hit.position = vec3(100);
-
-    // vec3 zeroAxis = vec3(lessThanEqual(abs(direction), vec3(epsilon)));
-    // direction = direction + zeroAxis * epsilon;
-    vec3 invDir = 1. / direction;
-
-    float tMin, tMax;
-    if (!rayBoxIntersect(origin, invDir, minBound, maxBound, 0., MAX_T, tMin, tMax)) return hit;
-
-    float t = tMin;
-
-    float scale = 0.5;
-
-    position = calculatePosition(origin, direction, tMin);
-    hit.position = position;
-
-    Node node = p_Tree.nodes[parent];
-
-    for (int i = 0; i < p_MaxIterations; i++)
-    {
-        hit.heatMap = i;
-        hit.deepest = (currentStack + 1 > hit.deepest) ? currentStack + 1 : hit.deepest;
-
-        if (t >= tMax) // Ascend, Go up stack
-        {
-            if (currentStack == -1) break;
-
-            StackMember member = stack[currentStack];
-            currentStack--;
-
-            tMax = member.tMax;
-            parent = member.parent;
-            minBound = member.minBound;
-
-            node = p_Tree.nodes[parent];
-
-            scale *= 2;
-
-            continue;
-        }
-
-        hit.depth = currentStack + 1;
-
-        vec3 center = minBound + scale * dimensions;
-        vec3 boundOffset = vec3(0);
-        int octantMask = 0;
-
-        if (position.x > center.x || (position.x == center.x && direction.x > 0)) {
-            octantMask ^= 1;
-            boundOffset.x = dimensions.x;
-        }
-        if (position.z > center.z || (position.z == center.z && direction.z > 0)) {
-            octantMask ^= 2;
-            boundOffset.z = dimensions.z;
-        }
-        if (position.y > center.y || (position.y == center.y && direction.y > 0)) {
-            octantMask ^= 4;
-            boundOffset.y = dimensions.y;
-        }
-
-        bool isValid = bool((node.validMask >> octantMask) & 1);
-        bool isLeaf = bool((node.leafMask >> octantMask) & 1);
-
-        if (currentStack + 1 >= p_LOD) // Out of LOD
-        {
-            // uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
-            uint8_t materialIndex = p_Tree.nodes[parent].materialIndex;
-
-            float voxelScale = scale;
-            vec3 voxelMinBound = minBound + boundOffset * voxelScale;
-            vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
-
-            hit.t = t;
-            hit.position = calculatePosition(origin, direction, t);
-            hit.parent = parent;
-            hit.normal = normalFromBounds(position, voxelMinBound, voxelMaxBound);
-            hit.materialIndex = materialIndex;
-            hit.depth = currentStack + 1;
-            hit.deepest += 1;
-
-            return hit;
-        }
-
-        if (isValid)
-        {
-            if (isLeaf) // Solid Voxel
-            {
-                uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
-                uint8_t materialIndex = p_Tree.nodes[nodeIndex].materialIndex;
-
-                float voxelScale = scale;
-                vec3 voxelMinBound = minBound + boundOffset * voxelScale;
-                vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
-
-                hit.t = t;
-                hit.position = calculatePosition(origin, direction, t);
-                hit.parent = parent;
-                hit.normal = normalFromBounds(position, voxelMinBound, voxelMaxBound);
-                hit.materialIndex = materialIndex;
-                hit.depth = currentStack + 1;
-                hit.deepest += 1;
-
-                return hit;
-            }
-            else // Parent Voxel, Save State, Descend
-            {
-                if (node.childPtr == 0) break;
-
-                StackMember stackMember;
-                stackMember.parent = parent;
-                stackMember.tMax = tMax;
-                stackMember.minBound = minBound;
-
-                stack[currentStack + 1] = stackMember;
-                currentStack++;
-
-                uint count = uint(node.validMask) >> (octantMask + 1);
-                parent = parent + node.childPtr + bitCount(count);
-                node = p_Tree.nodes[parent];
-
-                minBound += boundOffset * scale;
-                maxBound = minBound + scale * dimensions;
-
-                if (!rayBoxIntersect(origin, invDir, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
-
-                node = p_Tree.nodes[parent];
-
-                scale *= 0.5;
-
-                continue;
-            }
-        }
-        else // Traversing through air
-        {
-            vec3 octantMinBound = minBound + boundOffset * scale;
-            vec3 octantMaxBound = octantMinBound + scale * dimensions;
-
-            float t0;
-            if (!rayBoxIntersect(origin, invDir, octantMinBound, octantMaxBound, tMin, tMax, t0, t)) break;
-
-            t += epsilon;
-            position = calculatePosition(origin, direction, t);
-
-            continue;
-        }
-    }
-
-    hit.depth = currentStack + 1;
-    hit.t = -1;
-    return hit;
-}
 
 void main()
 {
@@ -276,7 +50,8 @@ void main()
             vec3(p_CameraRight),
             vec3(p_CameraUp));
 
-    HitRecord hit = castRay(0, ray);
+    HitRecord hit = castRay(p_Tree, ray,
+            p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
     if (hit.t >= 0)
     {
@@ -293,7 +68,9 @@ void main()
         Ray shadowRay;
         shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
         shadowRay.direction = lightPosition - shadowRay.origin;
-        HitRecord shadow = castRay(0, shadowRay);
+
+        HitRecord shadow = castRay(p_Tree, shadowRay,
+                p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
         const float ambientStrength = 0.5;
         vec4 ambient = lightColour * ambientStrength;
