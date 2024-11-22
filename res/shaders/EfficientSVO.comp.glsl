@@ -290,8 +290,16 @@ void main()
         float diff = max(dot(hit.normal, lightDir), 0.);
         vec4 diffuse = lightColour * diff;
 
+        Ray shadowRay;
+        shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
+        shadowRay.direction = lightPosition - shadowRay.origin;
+        HitRecord shadow = castRay(0, shadowRay);
+
         const float ambientStrength = 0.5;
         vec4 ambient = lightColour * ambientStrength;
+
+        if (shadow.t >= 0.)
+            diffuse = vec4(0.);
 
         vec4 colour = (ambient + diffuse) * lookupColour;
 

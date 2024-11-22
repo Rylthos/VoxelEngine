@@ -723,9 +723,17 @@ void main()
     float noiseValue = noise(uv * 2);
     Voxel outputVoxel;
     outputVoxel.type = AIR;
-    if (noiseValue >= 0.2)
+    if (noiseValue >= 0.9)
+    {
+        outputVoxel.type = int16_t(3);
+    }
+    else if (noiseValue >= 0.4)
     {
         outputVoxel.type = int16_t(1);
+    }
+    else if (noiseValue >= 0.2)
+    {
+        outputVoxel.type = int16_t(2);
     }
 
     p_TargetBuffer.voxels[flatIndex] = outputVoxel;
