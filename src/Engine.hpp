@@ -119,7 +119,7 @@ class Engine : EventReceiver
     VkQueryPool m_QueryPool;
     uint64_t m_PreviousFrameTime;
 
-    const uint32_t VOXEL_SIZE = 1 << 9;
+    const uint32_t VOXEL_SIZE = 1 << 8;
     const uint32_t MAX_ITERATIONS = VOXEL_SIZE * 2;
 
     Stats m_Stats;
