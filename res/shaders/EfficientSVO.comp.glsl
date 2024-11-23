@@ -20,7 +20,8 @@ layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 #define FLAGS_SHOW_HEAT_MAP 1
 
 layout(push_constant) uniform constants {
-    vec4 p_CameraPosition;
+    vec3 p_CameraPosition;
+    float p_AspectRatio;
     vec4 p_CameraFront;
     vec4 p_CameraRight;
     vec4 p_CameraUp;
@@ -46,9 +47,9 @@ void main()
     imageStore(o_Image, texelCoord, vec4(clearColour, 0.0));
 
     Ray ray = generateRay(uv,
-            vec3(p_CameraPosition), vec3(p_CameraFront),
+            p_CameraPosition, vec3(p_CameraFront),
             vec3(p_CameraRight),
-            vec3(p_CameraUp));
+            vec3(p_CameraUp), p_AspectRatio);
 
     HitRecord hit = castRay(p_Tree, ray,
             p_Dimension, p_Size, p_MaxIterations, p_LOD);

@@ -18,7 +18,7 @@ class Window
     void create(const char* title, int winX, int winY);
 
     GLFWwindow* get() { return m_Window; }
-    glm::uvec2 getSize() { return m_WindowSize; }
+    const glm::uvec2 getSize();
 
     void pollInput();
     void swapBuffes();
@@ -28,7 +28,6 @@ class Window
     VkSurfaceKHR createSurface(VkInstance instance);
 
   private:
-    glm::uvec2 m_WindowSize;
     GLFWwindow* m_Window;
 
     bool m_MouseContained = false;
@@ -37,9 +36,10 @@ class Window
 
   private:
     void initGLFW();
-    void initWindow(const char* title);
+    void initWindow(const char* title, int width, int height);
 
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void mouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
     static void mouseEnterCallback(GLFWwindow* window, int entered);
+    static void resizeCallback(GLFWwindow* window, int width, int height);
 };

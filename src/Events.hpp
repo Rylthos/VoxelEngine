@@ -6,7 +6,15 @@
 
 #include "EventHandler.hpp"
 
-enum class EventType { UNDEFINED, KeyboardInput, MouseMove, GameUpdate, GameRender, ImGuiRender };
+enum class EventType {
+    UNDEFINED,
+    KeyboardInput,
+    MouseMove,
+    GameUpdate,
+    GameRender,
+    ImGuiRender,
+    WindowResize
+};
 
 struct Event {
     virtual ~Event() = default;
@@ -44,6 +52,12 @@ struct GameRender : public Event {
 
 struct ImGuiRender : public Event {
     EventType getType() const override { return EventType::ImGuiRender; }
+};
+
+struct WindowResize : public Event {
+    EventType getType() const override { return EventType::WindowResize; }
+    int newWidth;
+    int newHeight;
 };
 
 class EventReceiver

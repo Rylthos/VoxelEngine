@@ -36,7 +36,6 @@ void Engine::init()
     ImmediateSubmit::init(m_Device, m_GraphicsQueue.queue, m_GraphicsQueue.queueFamily);
     initSyncStructures();
     initImGui();
-    initImages();
     initDescriptorPool();
     initDescriptorLayouts();
     initPipelines();
@@ -48,7 +47,8 @@ void Engine::init()
 
     m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, 2.0f), 0.f, -45.f);
 
-    EventHandler::subscribe({ EventType::KeyboardInput, EventType::ImGuiRender }, this);
+    EventHandler::subscribe(
+        { EventType::KeyboardInput, EventType::ImGuiRender, EventType::WindowResize }, this);
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::MouseMove, EventType::GameUpdate,
                               EventType::ImGuiRender },
@@ -74,6 +74,8 @@ void Engine::start()
     // return;
     while (!m_Window.shouldClose())
     {
+        if (m_ShouldResize) resizeWindow();
+
         currentTime = glfwGetTime();
         float frameDelta = currentTime - previousTime;
         previousTime = currentTime;
@@ -127,9 +129,6 @@ void Engine::cleanup()
         vkDestroyCommandPool(m_Device, m_Frames[i].commandPool, nullptr);
     }
 
-    m_DrawImage.free();
-    m_AltImage.free();
-
     m_SceneManager.freeResources();
     m_PaletteManager.freeResources();
 
@@ -160,6 +159,11 @@ void Engine::receive(const Event* event)
     case EventType::ImGuiRender:
         {
             updateImGui();
+            break;
+        }
+    case EventType::WindowResize:
+        {
+            m_ShouldResize = true;
             break;
         }
     default:
@@ -289,11 +293,22 @@ void Engine::initSwapchain()
 
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
+    m_AltImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, m_DrawImage.getExtent(),
+                      VK_IMAGE_TYPE_2D,
+                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                      VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+
     spdlog::info("Createed Swapchain ImageView");
 }
 
 void Engine::destroySwapchain()
 {
+    m_AltImage.free();
+    m_DrawImage.free();
+
     vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
 
     for (size_t i = 0; i < m_SwapchainImageViews.size(); i++)
@@ -409,17 +424,6 @@ void Engine::initImGui()
     spdlog::info("Initialized ImGui");
 }
 
-void Engine::initImages()
-{
-    m_AltImage.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, m_DrawImage.getExtent(),
-                      VK_IMAGE_TYPE_2D,
-                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                      VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
-}
-
 void Engine::updateScene()
 {
     vkDeviceWaitIdle(m_Device);
@@ -456,6 +460,7 @@ void Engine::initDescriptorPool()
     descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     descriptorPoolCI.pPoolSizes = poolSizes.data();
     descriptorPoolCI.maxSets = FRAMES_IN_FLIGHT + 1;
+    descriptorPoolCI.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     VK_CHECK(vkCreateDescriptorPool(m_Device, &descriptorPoolCI, nullptr, &m_DescriptorPool));
     spdlog::info("Created descriptor pool");
@@ -568,6 +573,13 @@ void Engine::initDescriptorSets()
     spdlog::info("Created descriptors");
 }
 
+void Engine::recreateDescriptorSets()
+{
+    spdlog::info("Recreating Descriptor Sets");
+    vkFreeDescriptorSets(m_Device, m_DescriptorPool, 1, &m_VoxelDescriptorSet);
+    initDescriptorSets();
+}
+
 void Engine::initQueryPool()
 {
     VkQueryPoolCreateInfo queryPoolCI{};
@@ -585,6 +597,18 @@ void Engine::initQueryPool()
     spdlog::info("Created Query Pool");
 
     vkResetQueryPool(m_Device, m_QueryPool, 0, m_Frames.size() * 2);
+}
+
+void Engine::resizeWindow()
+{
+    spdlog::info("Resizing | W: {} H: {}", m_Window.getSize().x, m_Window.getSize().y);
+    vkDeviceWaitIdle(m_Device);
+
+    destroySwapchain();
+    initSwapchain();
+    recreateDescriptorSets();
+
+    m_ShouldResize = false;
 }
 
 void Engine::updateImGui()
@@ -784,8 +808,11 @@ void Engine::render(float frameDelta)
 
     uint32_t swapchainImageIndex;
     {
-        vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000, currentFrame.swapchainSemaphore,
-                              nullptr, &swapchainImageIndex);
+        VkResult result =
+            vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000,
+                                  currentFrame.swapchainSemaphore, nullptr, &swapchainImageIndex);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) m_ShouldResize = true;
     }
 
     VkCommandBuffer commandBuffer = currentFrame.commandBuffer;
@@ -824,9 +851,11 @@ void Engine::render(float frameDelta)
                             1, &m_VoxelDescriptorSet, 0, nullptr);
 
     m_VoxelPushConstants.cameraPosition = m_Camera.getPosition();
-    m_VoxelPushConstants.cameraForward = m_Camera.getForward();
-    m_VoxelPushConstants.cameraRight = m_Camera.getRight();
-    m_VoxelPushConstants.cameraUp = m_Camera.getUp();
+    glm::uvec2 windowSize = m_Window.getSize();
+    m_VoxelPushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
+    m_VoxelPushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
+    m_VoxelPushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
+    m_VoxelPushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
 
     m_VoxelPushConstants.size = 1.0f;
 
@@ -907,13 +936,17 @@ void Engine::render(float frameDelta)
     presentInfo.pImageIndices = &swapchainImageIndex;
 
     {
-        vkQueuePresentKHR(m_GraphicsQueue.queue, &presentInfo);
+        VkResult result = vkQueuePresentKHR(m_GraphicsQueue.queue, &presentInfo);
+
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+            m_ShouldResize = true;
     }
 
     static uint64_t timeQueryBuffer[2];
     VkResult result =
         vkGetQueryPoolResults(m_Device, m_QueryPool, frameIndex * 2, 2, sizeof(uint64_t) * 2,
                               timeQueryBuffer, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+
     if (result == VK_NOT_READY)
     {
     }

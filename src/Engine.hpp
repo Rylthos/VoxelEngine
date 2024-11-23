@@ -32,7 +32,8 @@ struct FrameData {
 enum PushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct VoxelPushConstants {
-    glm::vec4 cameraPosition;
+    glm::vec3 cameraPosition;
+    float aspectRatio;
     glm::vec4 cameraForward;
     glm::vec4 cameraRight;
     glm::vec4 cameraUp;
@@ -106,6 +107,7 @@ class Engine : EventReceiver
 
     VkPipeline m_VoxelGenerationPipeline;
     VkPipelineLayout m_VoxelGenerationPipelineLayout;
+
     Buffer m_GeneratedVoxels;
 
     std::vector<FrameData> m_Frames;
@@ -129,6 +131,8 @@ class Engine : EventReceiver
 
     VoxelPushConstants m_VoxelPushConstants;
 
+    bool m_ShouldResize = true;
+
   private:
     void initVulkan();
 
@@ -141,8 +145,6 @@ class Engine : EventReceiver
 
     void initImGui();
 
-    void initImages();
-
     void updateScene();
 
     void initDescriptorPool();
@@ -151,8 +153,11 @@ class Engine : EventReceiver
     void initPipelines();
 
     void initDescriptorSets();
+    void recreateDescriptorSets();
 
     void initQueryPool();
+
+    void resizeWindow();
 
     void updateImGui();
 

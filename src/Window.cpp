@@ -17,11 +17,18 @@ Window::~Window()
 
 void Window::create(const char* title, int winX, int winY)
 {
-    m_WindowSize = { winX, winY };
     initGLFW();
-    initWindow(title);
+    initWindow(title, winX, winY);
 
     spdlog::info("Created GLFW instance and Window");
+}
+
+const glm::uvec2 Window::getSize()
+{
+    int w, h;
+    glfwGetWindowSize(m_Window, &w, &h);
+
+    return { w, h };
 }
 
 void Window::pollInput() { glfwPollEvents(); }
@@ -43,13 +50,13 @@ void Window::initGLFW()
     }
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, GLFW_FALSE);
 }
 
-void Window::initWindow(const char* title)
+void Window::initWindow(const char* title, int width, int height)
 {
-    m_Window = glfwCreateWindow(m_WindowSize.x, m_WindowSize.y, title, nullptr, nullptr);
+    m_Window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!m_Window)
     {
         spdlog::error("Failed to create window");
@@ -65,6 +72,7 @@ void Window::initWindow(const char* title)
     glfwSetKeyCallback(m_Window, Window::keyCallback);
     glfwSetCursorEnterCallback(m_Window, Window::mouseEnterCallback);
     glfwSetCursorPosCallback(m_Window, Window::mouseMoveCallback);
+    glfwSetWindowSizeCallback(m_Window, Window::resizeCallback);
 }
 
 void Window::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -134,4 +142,13 @@ void Window::mouseEnterCallback(GLFWwindow* window, int entered)
     self->m_MouseContained = entered;
 
     if (!entered) self->m_FirstMouse = true;
+}
+
+void Window::resizeCallback(GLFWwindow* window, int width, int height)
+{
+    WindowResize wrEvent;
+    wrEvent.newWidth = width;
+    wrEvent.newHeight = height;
+
+    EventHandler::dispatchEvent(&wrEvent);
 }

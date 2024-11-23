@@ -5,10 +5,10 @@ struct Ray
     vec3 invDir;
 };
 
-Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
+Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up, float aspectRatio)
 {
     const float viewportWidth = 2.0;
-    const float viewportHeight = 2.0;
+    const float viewportHeight = viewportWidth / aspectRatio;
     const float viewportDepth = 1.0;
 
     const float viewportHalfWidth = viewportWidth / 2.0;

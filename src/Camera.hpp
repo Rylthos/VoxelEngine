@@ -15,10 +15,10 @@ class Camera : public EventReceiver
 
     void receive(const Event* event) override;
 
-    glm::vec4 getPosition() { return glm::vec4(m_Position, 0.f); }
-    glm::vec4 getForward() { return glm::vec4(m_Forward, 0.f); }
-    glm::vec4 getRight() { return glm::vec4(m_Right, 0.f); }
-    glm::vec4 getUp() { return glm::vec4(m_Up, 0.f); }
+    glm::vec3 getPosition() { return m_Position; }
+    glm::vec3 getForward() { return m_Forward; }
+    glm::vec3 getRight() { return m_Right; }
+    glm::vec3 getUp() { return m_Up; }
 
   private:
     glm::vec3 m_Position;
