@@ -48,13 +48,6 @@ struct VoxelPushConstants {
     VkDeviceAddress voxelAddress;
 };
 
-struct VoxelGenerationPushConstants {
-    uint32_t dimension;
-    float size;
-    glm::ivec2 _;
-    VkDeviceAddress targetBuffer;
-};
-
 struct Stats {
     float frameDelta;
 };
@@ -104,11 +97,6 @@ class Engine : EventReceiver
 
     VkPipeline m_VoxelPipeline;
     VkPipelineLayout m_VoxelPipelineLayout;
-
-    VkPipeline m_VoxelGenerationPipeline;
-    VkPipelineLayout m_VoxelGenerationPipelineLayout;
-
-    Buffer m_GeneratedVoxels;
 
     std::vector<FrameData> m_Frames;
 

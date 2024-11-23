@@ -1,9 +1,12 @@
 #version 460
 
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
+#extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : enable
 
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+#include "Hash.other.glsl"
 
 #define AIR int16_t(-1)
 
@@ -19,7 +22,8 @@ layout(buffer_reference, std430) writeonly buffer VoxelBuffer {
 layout(push_constant) uniform constants {
     uint32_t p_Dimension;
     float p_Size;
-    ivec2 _;
+    uint32_t p_Seed;
+    uint32_t _;
     VoxelBuffer p_TargetBuffer;
 };
 
@@ -66,34 +70,17 @@ uint convertFlatIndexToMorten(uvec3 position)
     return uint(morten);
 }
 
-void sphereScene(uvec3 position, uint flatIndex)
-{
-    const float R = p_Dimension / 2.;
-
-    vec3 center = vec3(p_Dimension / 2.);
-
-    vec3 modifiedPosition = position - center;
-
-    Voxel outputVoxel;
-    outputVoxel.type = AIR;
-    if (dot(modifiedPosition, modifiedPosition) < R * R)
-    {
-        outputVoxel.type = int16_t(1);
-    }
-
-    p_TargetBuffer.voxels[flatIndex] = outputVoxel;
-}
-
 vec3 random3(vec3 c)
 {
     float j = 4096. * sin(dot(c, vec3(17., 59.4, 15.)));
     vec3 r;
-    r.z = fract(512. * j);
+    r.z = random(vec2(fract(512. * j), p_Seed));
     j *= .125;
-    r.x = fract(512. * j);
+    r.x = random(vec2(fract(512. * j), p_Seed));
     j *= .125;
-    r.y = fract(512. * j);
-    return r - 0.5;
+    r.y = random(vec2(fract(512. * j), p_Seed));
+
+    return r - 0.5; // [-0.5, 0.5]
 }
 
 float simplex3D(vec3 pos)

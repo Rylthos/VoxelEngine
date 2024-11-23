@@ -29,7 +29,6 @@ void Engine::init()
 
     initVulkan();
     m_PaletteManager.initResources(m_Device, m_Allocator);
-    m_SceneManager.initResources(m_Allocator);
 
     initSwapchain();
     initCommandPool();
@@ -42,7 +41,7 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    m_SceneManager.loadScene(Scene::SPHERE);
+    m_SceneManager.initResources(m_Device, m_Allocator);
     updateScene();
 
     m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, 2.0f), 0.f, -45.f);
@@ -103,10 +102,6 @@ void Engine::cleanup()
     vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_VoxelPipelineLayout, nullptr);
 
-    vkDestroyPipeline(m_Device, m_VoxelGenerationPipeline, nullptr);
-    vkDestroyPipelineLayout(m_Device, m_VoxelGenerationPipelineLayout, nullptr);
-    m_GeneratedVoxels.free();
-
     vkDestroyDescriptorSetLayout(m_Device, m_VoxelDescriptorSetLayout, nullptr);
 
     vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
@@ -150,9 +145,6 @@ void Engine::receive(const Event* event)
             const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
 
             if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS) m_RenderImGui = !m_RenderImGui;
-
-            // if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
-            //     m_RenderAlt = !m_RenderAlt;
 
             break;
         }
@@ -428,20 +420,7 @@ void Engine::updateScene()
 {
     vkDeviceWaitIdle(m_Device);
 
-    ImmediateSubmit::submit([&](VkCommandBuffer buffer) {
-        vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelGenerationPipeline);
-
-        VoxelGenerationPushConstants pushConstant;
-        pushConstant.size = 1.0f;
-        pushConstant.dimension = VOXEL_SIZE;
-        pushConstant.targetBuffer = m_GeneratedVoxels.getDeviceAddress(m_Device);
-        vkCmdPushConstants(buffer, m_VoxelGenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                           sizeof(VoxelGenerationPushConstants), &pushConstant);
-
-        vkCmdDispatch(buffer, VOXEL_SIZE / 4, VOXEL_SIZE / 4, VOXEL_SIZE / 4);
-    });
-
-    m_GeneratedVoxels.copyToVector<Voxel>(m_SceneManager.getVoxels());
+    m_SceneManager.generateWorld();
 
     m_VoxelPushConstants.initialParent = m_SceneManager.updateBuffers();
     m_PaletteManager.updateImage();
@@ -512,50 +491,6 @@ void Engine::initPipelines()
 
         VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
                                           &m_VoxelPipeline));
-        spdlog::info("Created Background Pipeline and Pipeline Layout");
-    }
-
-    {
-        m_GeneratedVoxels.create(m_Allocator, VOXEL_SIZE * VOXEL_SIZE * VOXEL_SIZE * sizeof(Voxel),
-                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                     VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                 VMA_MEMORY_USAGE_GPU_TO_CPU);
-
-        VkPushConstantRange pushConstant{};
-        pushConstant.offset = 0;
-        pushConstant.size = sizeof(VoxelGenerationPushConstants);
-        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-        VkPipelineLayoutCreateInfo computeLayoutCI{};
-        computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        computeLayoutCI.pNext = nullptr;
-        computeLayoutCI.setLayoutCount = 0;
-        computeLayoutCI.pSetLayouts = nullptr;
-        computeLayoutCI.pushConstantRangeCount = 1;
-        computeLayoutCI.pPushConstantRanges = &pushConstant;
-
-        VK_CHECK(vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr,
-                                        &m_VoxelGenerationPipelineLayout));
-
-        ShaderModule voxelShader;
-        voxelShader.create("res/shaders/Generation.comp.spv", m_Device);
-
-        VkPipelineShaderStageCreateInfo shaderStageCI{};
-        shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStageCI.pNext = nullptr;
-        shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-        shaderStageCI.module = voxelShader.getShaderModule();
-        shaderStageCI.pName = "main";
-
-        VkComputePipelineCreateInfo computePipelineCI{};
-        computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-        computePipelineCI.pNext = nullptr;
-        computePipelineCI.layout = m_VoxelGenerationPipelineLayout;
-        computePipelineCI.stage = shaderStageCI;
-
-        VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
-                                          &m_VoxelGenerationPipeline));
         spdlog::info("Created Background Pipeline and Pipeline Layout");
     }
 }
@@ -667,33 +602,33 @@ void Engine::updateImGui()
 
     if (ImGui::Begin("Scene"))
     {
-        static size_t selectedIndex = static_cast<size_t>(m_SceneManager.currentScene());
-        size_t startIndex = static_cast<size_t>(Scene::START) + 1;
-        size_t endIndex = static_cast<size_t>(Scene::END);
-        std::string preview = stringOfScene(m_SceneManager.currentScene());
-
-        ImGui::Text("Current Scene");
-
-        if (ImGui::BeginCombo("##Scene", preview.c_str(), 0))
-        {
-            bool hasChanged = false;
-            for (size_t i = startIndex; i < endIndex; i++)
-            {
-                Scene scene = static_cast<Scene>(i);
-                const bool isSelected = (selectedIndex == i);
-                if (ImGui::Selectable(stringOfScene(scene).c_str(), isSelected))
-                {
-                    selectedIndex = i;
-                    m_SceneManager.loadScene(static_cast<Scene>(i));
-                    hasChanged = true;
-                }
-
-                if (isSelected) ImGui::SetItemDefaultFocus();
-            }
-            if (hasChanged) updateScene();
-
-            ImGui::EndCombo();
-        }
+        // static size_t selectedIndex = static_cast<size_t>(m_SceneManager.currentScene());
+        // size_t startIndex = static_cast<size_t>(Scene::START) + 1;
+        // size_t endIndex = static_cast<size_t>(Scene::END);
+        // std::string preview = stringOfScene(m_SceneManager.currentScene());
+        //
+        // ImGui::Text("Current Scene");
+        //
+        // if (ImGui::BeginCombo("##Scene", preview.c_str(), 0))
+        // {
+        //     bool hasChanged = false;
+        //     for (size_t i = startIndex; i < endIndex; i++)
+        //     {
+        //         Scene scene = static_cast<Scene>(i);
+        //         const bool isSelected = (selectedIndex == i);
+        //         if (ImGui::Selectable(stringOfScene(scene).c_str(), isSelected))
+        //         {
+        //             selectedIndex = i;
+        //             m_SceneManager.loadScene(static_cast<Scene>(i));
+        //             hasChanged = true;
+        //         }
+        //
+        //         if (isSelected) ImGui::SetItemDefaultFocus();
+        //     }
+        //     if (hasChanged) updateScene();
+        //
+        //     ImGui::EndCombo();
+        // }
 
         ImGui::Text("Max Iterations");
         int maxIterations = m_VoxelPushConstants.maxIterations;
@@ -730,6 +665,16 @@ void Engine::updateImGui()
         int LOD = m_VoxelPushConstants.lod;
         if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(VOXEL_SIZE)))
             m_VoxelPushConstants.lod = LOD;
+
+        ImGui::Text("Seed");
+
+        int seed = m_SceneManager.getSeed();
+        if (ImGui::SliderInt("##Seed", &seed, 0, 1000000)) m_SceneManager.setSeed(seed);
+
+        if (ImGui::Button("Regenerate World"))
+        {
+            updateScene();
+        }
     }
     ImGui::End();
 

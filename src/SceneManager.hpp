@@ -9,18 +9,6 @@
 #include "PaletteManager.hpp"
 #include "Voxel.hpp"
 
-enum class Scene {
-    START = 0,
-
-    SQUARE,
-    HOLED_SQUARE,
-    RANDOM_OBJECTS,
-    SPHERE,
-    TORUS,
-
-    END
-};
-
 enum SVONodeFlags {
     SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
     SVONODE_IS_PARENT = 1 << 1, // Has Smaller Nodes
@@ -35,13 +23,13 @@ struct SVONode {
     uint8_t leafMask;
 } __attribute__((packed));
 
-// Remove morten code
-// colour 16 bit
-// children indices 1 32 bit
-// leaf mask
-// valid mask
-
-extern std::string stringOfScene(const Scene& scene);
+struct VoxelGenerationPushConstants {
+    uint32_t dimension;
+    float size;
+    uint32_t seed;
+    int _;
+    VkDeviceAddress targetBuffer;
+};
 
 class SceneManager
 {
@@ -53,42 +41,40 @@ class SceneManager
 
     SceneManager operator=(const SceneManager& other);
 
-    void initResources(VmaAllocator allocator);
+    void initResources(VkDevice device, VmaAllocator allocator);
     void freeResources();
 
-    void loadScene(Scene newScene);
-    Scene currentScene() { return m_CurrentScene; }
+    int getSeed() { return m_GenerationPushConstants.seed; }
+    void setSeed(int seed) { m_GenerationPushConstants.seed = seed; }
+
+    void generateWorld();
 
     VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
     uint32_t updateBuffers();
 
-    std::vector<Voxel>& getVoxels() { return m_Voxels; }
-
-    Voxel getVoxel(glm::uvec3 position);
-    void setVoxel(glm::uvec3 position, bool solid, uint8_t materialIndex = 0);
-    void setVoxel(glm::uvec3 position, Voxel voxel);
-
     std::vector<SVONode> serializeScene();
 
   private:
-    Scene m_CurrentScene = Scene::END;
+    bool m_Initialized = false;
+
     uint32_t m_Dimension;
     std::vector<Voxel> m_Voxels;
     PaletteManager* m_PaletteManager;
 
+    VkDevice m_Device;
     VmaAllocator m_Allocator;
     Buffer m_SVO;
     Buffer m_Staging;
 
+    VoxelGenerationPushConstants m_GenerationPushConstants;
+
+    VkPipelineLayout m_GenerationPipelineLayout;
+    VkPipeline m_GenerationPipeline;
+    Buffer m_GeneratedVoxels;
+
   private:
     void createBuffers(size_t size);
     void freeBuffers();
-
-    void squareScene();
-    void holedSquareScene();
-    void randomObjectsScene();
-    void sphereScene();
-    void torusScene();
 
     int64_t splitBy3(uint32_t a);
     int64_t mortenEncode(glm::uvec3 position);
