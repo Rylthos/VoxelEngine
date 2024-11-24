@@ -8,3 +8,5 @@ res/shaders/*.spv
 imgui.ini
 *.xopp
 callgrind.out.*
+
+*.vox

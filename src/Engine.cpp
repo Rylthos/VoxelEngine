@@ -11,6 +11,7 @@
 #include "PipelineBuilder.hpp"
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
+#include "VoxLoader.hpp"
 
 #include "Events.hpp"
 
@@ -42,6 +43,10 @@ void Engine::init()
     initQueryPool();
 
     m_SceneManager.initResources(m_Device, m_Allocator);
+
+    VoxLoader loader(&m_SceneManager, &m_PaletteManager);
+    loader.loadModel("res/models/Earth.vox");
+
     updateScene();
 
     m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, 2.0f), 0.f, -45.f);
@@ -420,7 +425,7 @@ void Engine::updateScene()
 {
     vkDeviceWaitIdle(m_Device);
 
-    m_SceneManager.generateWorld();
+    // m_SceneManager.generateWorld();
 
     m_VoxelPushConstants.initialParent = m_SceneManager.updateBuffers();
     m_PaletteManager.updateImage();

@@ -93,6 +93,14 @@ void SceneManager::freeResources()
     m_Initialized = false;
 }
 
+void SceneManager::setDimensions(uint32_t dimension)
+{
+    m_Dimension = dimension;
+
+    spdlog::info("Resized to {}x{}x{}", dimension, dimension, dimension);
+    m_Voxels.assign(dimension * dimension * dimension, { .colourIndex = -1 });
+}
+
 void SceneManager::generateWorld()
 {
     m_GenerationPushConstants.dimension = m_Dimension;

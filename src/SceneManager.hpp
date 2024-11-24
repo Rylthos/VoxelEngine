@@ -47,6 +47,12 @@ class SceneManager
     int getSeed() { return m_GenerationPushConstants.seed; }
     void setSeed(int seed) { m_GenerationPushConstants.seed = seed; }
 
+    void setDimensions(uint32_t dimension);
+    uint32_t getDimension() { return m_Dimension; }
+
+    void setVoxel(glm::uvec3 position, Voxel data) { m_Voxels.at(mortenEncode(position)) = data; }
+    Voxel getVoxel(glm::uvec3 position) { return m_Voxels.at(mortenEncode(position)); }
+
     void generateWorld();
 
     VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }

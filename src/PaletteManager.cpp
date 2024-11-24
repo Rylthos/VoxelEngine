@@ -49,7 +49,11 @@ uint8_t PaletteManager::getColourIndex(glm::vec4 colour)
 void PaletteManager::setColourIndex(uint8_t index, glm::vec4 colour)
 {
     glm::vec4 previousColour = m_Colours[index];
-    m_Mapping.erase(m_Mapping.find(previousColour));
+    if (m_Mapping.find(previousColour) != m_Mapping.end())
+    {
+        m_Mapping.erase(m_Mapping.find(previousColour));
+    }
+
     m_Mapping[colour] = index;
     m_Colours[index] = colour;
     m_HasChanged = true;
