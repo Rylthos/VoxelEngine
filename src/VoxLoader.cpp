@@ -13,7 +13,7 @@ VoxLoader::VoxLoader(SceneManager* sceneManager, PaletteManager* paletteManager)
 {
 }
 
-void VoxLoader::loadModel(const char* name)
+bool VoxLoader::loadModel(const char* name)
 {
     spdlog::info("Loading Model: {}", name);
 
@@ -21,23 +21,22 @@ void VoxLoader::loadModel(const char* name)
     if (!inputFile.is_open())
     {
         spdlog::error("Failed to open {}", name);
-        // TODO: Deal with gracefully
-        exit(-1);
+        return false;
     }
 
     VoxID mainID = readID(inputFile);
     if (strcmp(mainID.data(), "VOX ") != 0)
     {
         spdlog::error("Unexpected File Format: EXPECTED \"VOX \" GOT {}", mainID.data());
-        exit(-1);
+        return false;
     }
 
     uint32_t version = readU32(inputFile);
 
-    readChunk(inputFile);
+    return readChunk(inputFile);
 }
 
-void VoxLoader::readChunk(std::ifstream& file)
+bool VoxLoader::readChunk(std::ifstream& file)
 {
     VoxID chunkID = readID(file);
     uint32_t numBytesChunk = readU32(file);
@@ -47,10 +46,11 @@ void VoxLoader::readChunk(std::ifstream& file)
     {
         spdlog::info("Main | Chunk {} | Children {}", numBytesChunk, numBytesChildren);
 
-        readChunk(file); // Size
-        readChunk(file); // XYZI
+        if (!readChunk(file)) return false; // Size
+        if (!readChunk(file)) return false; // XYZI
 
-        if (!file.eof()) readChunk(file);
+        if (!file.eof()) return readChunk(file);
+        return true;
     }
     else if (strcmp(chunkID.data(), "SIZE") == 0)
     {
@@ -69,6 +69,7 @@ void VoxLoader::readChunk(std::ifstream& file)
         m_SceneManager->setDimensions(size);
 
         spdlog::info("SIZE | X: {} | Y: {} | Z: {}", x, y, z);
+        return true;
     }
     else if (strcmp(chunkID.data(), "XYZI") == 0)
     {
@@ -88,6 +89,7 @@ void VoxLoader::readChunk(std::ifstream& file)
             else
                 m_SceneManager->setVoxel({ x, y, z }, { .colourIndex = (int16_t)(c + 1) });
         }
+        return true;
     }
     else if (strcmp(chunkID.data(), "RGBA") == 0)
     {
@@ -105,16 +107,18 @@ void VoxLoader::readChunk(std::ifstream& file)
 
             m_PaletteManager->setColourIndex(i, { r, g, b, a });
         }
+        return true;
     }
     else if (strcmp(chunkID.data(), "PACK") == 0)
     {
         spdlog::error("Vox models with PAX not supported");
-        exit(-1);
+        return false;
     }
     else
     {
         spdlog::error("Unexpected ID : GOT {}", chunkID.data());
     }
+    return false;
 }
 
 std::array<char, 5> VoxLoader::readID(std::ifstream& file)

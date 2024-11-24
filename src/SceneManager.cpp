@@ -103,6 +103,8 @@ void SceneManager::setDimensions(uint32_t dimension)
 
 void SceneManager::generateWorld()
 {
+    m_PaletteManager->defaultPalette();
+
     m_GenerationPushConstants.dimension = m_Dimension;
     m_GenerationPushConstants.size = 1.0f;
     m_GenerationPushConstants.targetBuffer = m_GeneratedVoxels.getDeviceAddress(m_Device);

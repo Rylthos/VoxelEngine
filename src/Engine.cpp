@@ -43,9 +43,10 @@ void Engine::init()
     initQueryPool();
 
     m_SceneManager.initResources(m_Device, m_Allocator);
+    m_SceneManager.generateWorld();
 
-    VoxLoader loader(&m_SceneManager, &m_PaletteManager);
-    loader.loadModel("res/models/Earth.vox");
+    // VoxLoader loader(&m_SceneManager, &m_PaletteManager);
+    // loader.loadModel("res/models/Earth.vox");
 
     updateScene();
 
@@ -607,33 +608,50 @@ void Engine::updateImGui()
 
     if (ImGui::Begin("Scene"))
     {
-        // static size_t selectedIndex = static_cast<size_t>(m_SceneManager.currentScene());
-        // size_t startIndex = static_cast<size_t>(Scene::START) + 1;
-        // size_t endIndex = static_cast<size_t>(Scene::END);
-        // std::string preview = stringOfScene(m_SceneManager.currentScene());
-        //
-        // ImGui::Text("Current Scene");
-        //
-        // if (ImGui::BeginCombo("##Scene", preview.c_str(), 0))
-        // {
-        //     bool hasChanged = false;
-        //     for (size_t i = startIndex; i < endIndex; i++)
-        //     {
-        //         Scene scene = static_cast<Scene>(i);
-        //         const bool isSelected = (selectedIndex == i);
-        //         if (ImGui::Selectable(stringOfScene(scene).c_str(), isSelected))
-        //         {
-        //             selectedIndex = i;
-        //             m_SceneManager.loadScene(static_cast<Scene>(i));
-        //             hasChanged = true;
-        //         }
-        //
-        //         if (isSelected) ImGui::SetItemDefaultFocus();
-        //     }
-        //     if (hasChanged) updateScene();
-        //
-        //     ImGui::EndCombo();
-        // }
+        enum SceneType { WorldGeneration = 0, ModelLoading = 1 };
+        const char* names[] = { "World Generation", "Load Model" };
+
+        const int modelInputSize = 100;
+        static char currentModel[modelInputSize] = "res/models/doom.vox";
+
+        static SceneType currentGeneration = WorldGeneration;
+
+        ImGui::Text("Current Scene");
+
+        if (ImGui::BeginCombo("##CurrentScene", names[currentGeneration], 0))
+        {
+            bool hasChanged = false;
+            for (size_t i = 0; i < 2; i++)
+            {
+                bool isSelected = (i == currentGeneration);
+                if (ImGui::Selectable(names[i], isSelected))
+                {
+                    currentGeneration = (SceneType)i;
+                    hasChanged = true;
+                }
+            }
+
+            if (hasChanged)
+            {
+                switch (currentGeneration)
+                {
+                case WorldGeneration:
+                    m_SceneManager.setDimensions(VOXEL_SIZE);
+                    m_SceneManager.generateWorld();
+                    break;
+                case ModelLoading:
+                    {
+                        VoxLoader loader(&m_SceneManager, &m_PaletteManager);
+                        loader.loadModel(currentModel);
+                        break;
+                    }
+                }
+
+                updateScene();
+            }
+
+            ImGui::EndCombo();
+        }
 
         ImGui::Text("Max Iterations");
         int maxIterations = m_VoxelPushConstants.maxIterations;
@@ -662,23 +680,45 @@ void Engine::updateImGui()
         {
             ImGui::Text("Max Depth Shown");
             int maxDepth = m_VoxelPushConstants.maxDepthShown;
-            if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(VOXEL_SIZE)))
+            if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1,
+                                 std::log2(m_SceneManager.getDimension())))
                 m_VoxelPushConstants.maxDepthShown = maxDepth;
         }
 
         ImGui::Text("Max LOD");
         int LOD = m_VoxelPushConstants.lod;
-        if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(VOXEL_SIZE)))
+        if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_SceneManager.getDimension())))
             m_VoxelPushConstants.lod = LOD;
 
-        ImGui::Text("Seed");
-
-        int seed = m_SceneManager.getSeed();
-        if (ImGui::SliderInt("##Seed", &seed, 0, 1000000)) m_SceneManager.setSeed(seed);
-
-        if (ImGui::Button("Regenerate World"))
+        switch (currentGeneration)
         {
-            updateScene();
+        case WorldGeneration:
+            {
+                ImGui::Text("Seed");
+                int seed = m_SceneManager.getSeed();
+                if (ImGui::SliderInt("##Seed", &seed, 0, 1000000)) m_SceneManager.setSeed(seed);
+
+                if (ImGui::Button("Regenerate World"))
+                {
+                    m_SceneManager.generateWorld();
+                    updateScene();
+                }
+                break;
+            }
+        case ModelLoading:
+            {
+                ImGui::Text("Mode to load");
+                ImGui::InputText("##Model", currentModel, modelInputSize);
+
+                if (ImGui::Button("Load Model"))
+                {
+                    VoxLoader loader(&m_SceneManager, &m_PaletteManager);
+                    if (loader.loadModel(currentModel))
+                    {
+                        updateScene();
+                    }
+                }
+            }
         }
     }
     ImGui::End();
@@ -809,7 +849,7 @@ void Engine::render(float frameDelta)
 
     m_VoxelPushConstants.size = 1.0f;
 
-    m_VoxelPushConstants.dimension = VOXEL_SIZE;
+    m_VoxelPushConstants.dimension = m_SceneManager.getDimension();
     m_VoxelPushConstants.voxelAddress = m_SceneManager.getBufferAddress(m_Device);
 
     vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,

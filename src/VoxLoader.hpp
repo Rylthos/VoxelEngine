@@ -11,14 +11,14 @@ class VoxLoader
   public:
     VoxLoader(SceneManager* sceneManager, PaletteManager* paletteManager);
 
-    void loadModel(const char* name);
+    bool loadModel(const char* name);
 
   private:
     SceneManager* m_SceneManager;
     PaletteManager* m_PaletteManager;
 
   private:
-    void readChunk(std::ifstream& file);
+    bool readChunk(std::ifstream& file);
 
     template<int N>
     std::array<uint8_t, N> readBytes(std::ifstream& file)

@@ -7,6 +7,8 @@
 #include "EventHandler.hpp"
 #include "Events.hpp"
 
+#include <imgui.h>
+
 Window::Window() {}
 Window::~Window()
 {
@@ -77,6 +79,8 @@ void Window::initWindow(const char* title, int width, int height)
 
 void Window::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
+    if (ImGui::GetIO().WantCaptureKeyboard) return;
+
     Window* self = (Window*)glfwGetWindowUserPointer(window);
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
     {
