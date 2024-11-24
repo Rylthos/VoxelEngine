@@ -26,7 +26,7 @@ void Engine::init()
     m_Window.create("Voxel Engine", 960, 960);
 
     m_PaletteManager.defaultPalette();
-    m_SceneManager = SceneManager(VOXEL_SIZE, &m_PaletteManager);
+    m_SceneManager = SceneManager(&m_PaletteManager);
 
     initVulkan();
     m_PaletteManager.initResources(m_Device, m_Allocator);
@@ -45,12 +45,9 @@ void Engine::init()
     m_SceneManager.initResources(m_Device, m_Allocator);
     m_SceneManager.generateWorld();
 
-    // VoxLoader loader(&m_SceneManager, &m_PaletteManager);
-    // loader.loadModel("res/models/Earth.vox");
-
     updateScene();
 
-    m_Camera = Camera(glm::vec3(VOXEL_SIZE / 2.0f, 0.0f, 2.0f), 0.f, -45.f);
+    m_Camera = Camera(glm::vec3(0.0f, 0.0f, 2.0f), -45.0f, -45.f);
 
     EventHandler::subscribe(
         { EventType::KeyboardInput, EventType::ImGuiRender, EventType::WindowResize }, this);
@@ -62,9 +59,9 @@ void Engine::init()
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_VoxelPushConstants.maxIterations = MAX_ITERATIONS;
-    m_VoxelPushConstants.maxDepthShown = std::log2(VOXEL_SIZE);
+    m_VoxelPushConstants.maxDepthShown = std::log2(m_SceneManager.getDimension());
     m_VoxelPushConstants.maxHeatShown = m_VoxelPushConstants.maxIterations;
-    m_VoxelPushConstants.lod = std::log2(VOXEL_SIZE);
+    m_VoxelPushConstants.lod = std::log2(m_SceneManager.getDimension());
 
     m_VoxelPushConstants.flags = 0;
     m_VoxelPushConstants.flags ^= PCF_SHOW_HEAT_MAP;
@@ -616,6 +613,8 @@ void Engine::updateImGui()
 
         static SceneType currentGeneration = WorldGeneration;
 
+        static int powerOf2 = std::log2(m_SceneManager.getDimension());
+
         ImGui::Text("Current Scene");
 
         if (ImGui::BeginCombo("##CurrentScene", names[currentGeneration], 0))
@@ -636,7 +635,7 @@ void Engine::updateImGui()
                 switch (currentGeneration)
                 {
                 case WorldGeneration:
-                    m_SceneManager.setDimensions(VOXEL_SIZE);
+                    m_SceneManager.setDimensions(1 << powerOf2);
                     m_SceneManager.generateWorld();
                     break;
                 case ModelLoading:
@@ -698,8 +697,12 @@ void Engine::updateImGui()
                 int seed = m_SceneManager.getSeed();
                 if (ImGui::SliderInt("##Seed", &seed, 0, 1000000)) m_SceneManager.setSeed(seed);
 
+                ImGui::SliderInt("##Size", &powerOf2, 1, 8);
+
+                ImGui::Text("Chunk Size");
                 if (ImGui::Button("Regenerate World"))
                 {
+                    m_SceneManager.setDimensions(1 << powerOf2);
                     m_SceneManager.generateWorld();
                     updateScene();
                 }
@@ -731,18 +734,6 @@ void Engine::update(float frameDelta)
     GameUpdate update;
     update.frameDelta = frameDelta;
     EventHandler::dispatchEvent(&update);
-
-    static float t = 0.0f;
-    t += frameDelta;
-
-    glm::vec4 colour1 = { 1.0f, 1.0f, 0.0f, 1.0f };
-    glm::vec4 colour2 = { 1.0f, 0.0f, 1.0f, 1.0f };
-    glm::vec4 colour3 = { 0.0f, 1.0f, 0.0f, 1.0f };
-    glm::vec4 colour4 = { 0.0f, 0.0f, 1.0f, 1.0f };
-
-    float tValue = sin(0.1 * t) * sin(0.1 * t);
-    m_PaletteManager.setColourIndex(0, glm::mix(colour1, colour2, tValue));
-    m_PaletteManager.setColourIndex(1, glm::mix(colour3, colour4, tValue));
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();

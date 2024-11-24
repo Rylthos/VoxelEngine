@@ -103,29 +103,36 @@ void PaletteManager::receive(const Event* event)
                 ImGuiStyle& style = ImGui::GetStyle();
                 float buttonWidth = 20.0f;
 
-                for (int i = 0; i < 256; i++)
+                const int rows = 256 / 8;
+                const int cols = 8;
+
+                for (int r = rows - 1; r >= 0; --r)
                 {
-                    ImGui::PushID(i);
-
-                    std::array<float, 4> floatColour = vec4ToArray(m_Colours[i]);
-
-                    if (ImGui::ColorEdit4("##Temp", floatColour.data(),
-                                          ImGuiColorEditFlags_NoInputs |
-                                              ImGuiColorEditFlags_NoLabel))
+                    for (int c = 0; c < cols; ++c)
                     {
-                        arrayToVec4(floatColour, m_Colours[i]);
-                        m_HasChanged = true;
+                        int i = r * cols + c;
+                        ImGui::PushID(i);
+
+                        std::array<float, 4> floatColour = vec4ToArray(m_Colours[i]);
+
+                        if (ImGui::ColorEdit4("##Temp", floatColour.data(),
+                                              ImGuiColorEditFlags_NoInputs |
+                                                  ImGuiColorEditFlags_NoLabel))
+                        {
+                            arrayToVec4(floatColour, m_Colours[i]);
+                            m_HasChanged = true;
+                        }
+
+                        float lastButtonX2 = ImGui::GetItemRectMax().x;
+                        float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + buttonWidth;
+
+                        if (c < cols - 1)
+                        {
+                            ImGui::SameLine();
+                        }
+
+                        ImGui::PopID();
                     }
-
-                    float lastButtonX2 = ImGui::GetItemRectMax().x;
-                    float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + buttonWidth;
-
-                    if (nextButtonX2 < windowVisible && (i + 1) % 8 != 0 && i + 1 < 256)
-                    {
-                        ImGui::SameLine();
-                    }
-
-                    ImGui::PopID();
                 }
             }
             ImGui::End();

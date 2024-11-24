@@ -8,8 +8,8 @@
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
 
-SceneManager::SceneManager(uint32_t voxelDimension, PaletteManager* paletteManager)
-    : m_Dimension(voxelDimension), m_PaletteManager(paletteManager)
+SceneManager::SceneManager(PaletteManager* paletteManager)
+    : m_Dimension(1 << 8), m_PaletteManager(paletteManager)
 {
 }
 

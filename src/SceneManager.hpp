@@ -36,7 +36,7 @@ class SceneManager
   public:
     SceneManager() {}
     ~SceneManager() { freeBuffers(); }
-    SceneManager(uint32_t voxelDimension, PaletteManager* paletteManager);
+    SceneManager(PaletteManager* paletteManager);
     SceneManager(SceneManager& other);
 
     SceneManager operator=(const SceneManager& other);
