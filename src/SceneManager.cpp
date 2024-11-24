@@ -9,7 +9,7 @@
 #include "VkCheck.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager)
-    : m_Dimension(1 << 8), m_PaletteManager(paletteManager)
+    : m_Dimension(1 << 7), m_PaletteManager(paletteManager)
 {
 }
 
