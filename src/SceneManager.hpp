@@ -30,11 +30,12 @@ struct VoxelGenerationPushConstants {
     float size;
     uint32_t seed;
     int _;
-    VkDeviceAddress targetBuffer;
     float cutoff;
     int32_t p10;
     int32_t p50;
     int32_t p100;
+    glm::ivec4 origin;
+    VkDeviceAddress targetBuffer;
 };
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
@@ -42,9 +43,12 @@ enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 struct VoxelPushConstants {
     glm::vec3 cameraPosition;
     float aspectRatio;
-    glm::vec4 cameraForward;
-    glm::vec4 cameraRight;
-    glm::vec4 cameraUp;
+    glm::vec3 cameraForward;
+    uint32_t originX;
+    glm::vec3 cameraRight;
+    uint32_t originY;
+    glm::vec3 cameraUp;
+    uint32_t originZ;
     uint32_t dimension;
     float size;
     uint32_t maxDepthShown = 5;

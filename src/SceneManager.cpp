@@ -188,13 +188,6 @@ void SceneManager::receive(const Event* event)
                             generateWorld();
                         }
 
-                        // ImGui::Text("Size");
-                        // if (ImGui::SliderInt("##Size", &powerOf2, 1, 8))
-                        // {
-                        //     // setDimensions(1 << powerOf2);
-                        //     generateWorld();
-                        // }
-
                         ImGui::Text("Cutoff");
                         if (ImGui::SliderFloat("##Cutoff", &m_GenerationPushConstants.cutoff, -1.0,
                                                1.0))
@@ -324,6 +317,10 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
     m_VoxelPushConstants.size = 1.0f;
     m_VoxelPushConstants.voxelAddress = m_Chunk.getBufferAddress(m_Device);
 
+    m_VoxelPushConstants.originX = m_Chunk.getPosition().x;
+    m_VoxelPushConstants.originY = m_Chunk.getPosition().y;
+    m_VoxelPushConstants.originZ = m_Chunk.getPosition().z;
+
     return m_VoxelPushConstants;
 }
 
@@ -333,6 +330,7 @@ void SceneManager::generateWorld()
 
     m_GenerationPushConstants.dimension = m_Dimension;
     m_GenerationPushConstants.size = 1.0f;
+    m_GenerationPushConstants.origin = glm::ivec4(m_Chunk.getPosition(), 0);
     m_GenerationPushConstants.targetBuffer = m_GeneratedVoxels.getDeviceAddress(m_Device);
 
     ImmediateSubmit::submit([&](VkCommandBuffer buffer) {

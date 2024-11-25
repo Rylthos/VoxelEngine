@@ -43,7 +43,7 @@ vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
     return vec3(0.);
 }
 
-HitRecord castRay(SVONodeBuffer nodes, Ray ray, uint voxelDimensions, float voxelSize,
+HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxelDimensions, float voxelSize,
     uint maxIterations, uint maxLOD) {
     const int sMax = 13;
     const float epsilon = exp2(-sMax);
@@ -58,7 +58,7 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uint voxelDimensions, float voxe
 
     uint parent = 0;
 
-    vec3 minBound = vec3(0.);
+    vec3 minBound = boundaryOrigin * voxelDimensions * voxelSize;
     vec3 maxBound = minBound + voxelDimensions;
 
     int currentStack = -1;

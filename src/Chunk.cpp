@@ -4,7 +4,7 @@
 
 Chunk::Chunk() {}
 
-Chunk::Chunk(glm::vec3 chunkPosition, uint32_t dimension)
+Chunk::Chunk(glm::ivec3 chunkPosition, uint32_t dimension)
     : m_ChunkPosition(chunkPosition), m_Dimension(dimension)
 {
     m_Voxels.assign(m_Dimension * m_Dimension * m_Dimension, { .colourIndex = 1 });

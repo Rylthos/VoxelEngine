@@ -22,9 +22,12 @@ layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 layout(push_constant) uniform constants {
     vec3 p_CameraPosition;
     float p_AspectRatio;
-    vec4 p_CameraFront;
-    vec4 p_CameraRight;
-    vec4 p_CameraUp;
+    vec3 p_CameraFront;
+    int p_OriginX;
+    vec3 p_CameraRight;
+    int p_OriginY;
+    vec3 p_CameraUp;
+    int p_OriginZ;
     uint32_t p_Dimension;
     float p_Size;
     uint32_t p_MaxDepthShown;
@@ -51,7 +54,8 @@ void main()
             vec3(p_CameraRight),
             vec3(p_CameraUp), p_AspectRatio);
 
-    HitRecord hit = castRay(p_Tree, ray,
+    ivec3 boundaryOrigin = ivec3(p_OriginX, p_OriginY, p_OriginZ);
+    HitRecord hit = castRay(p_Tree, ray, boundaryOrigin,
             p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
     if (hit.t >= 0)
@@ -70,7 +74,7 @@ void main()
         shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
         shadowRay.direction = lightPosition - shadowRay.origin;
 
-        HitRecord shadow = castRay(p_Tree, shadowRay,
+        HitRecord shadow = castRay(p_Tree, shadowRay, boundaryOrigin,
                 p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
         const float ambientStrength = 0.5;

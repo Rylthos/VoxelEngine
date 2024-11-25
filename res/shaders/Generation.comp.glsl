@@ -24,11 +24,12 @@ layout(push_constant) uniform constants {
     float p_Size;
     uint32_t p_Seed;
     uint32_t _;
-    VoxelBuffer p_TargetBuffer;
     float p_Cutoff;
     int p_P10;
     int p_P50;
     int p_P100;
+    ivec4 p_Origin;
+    VoxelBuffer p_TargetBuffer;
 };
 
 int64_t splitBy3(uint32_t a)
@@ -139,6 +140,8 @@ void main()
     uint flatIndex = convertFlatIndexToMorten(currentIndex);
 
     vec3 uv = currentIndex / vec3(p_Dimension - 1);
+
+    uv += p_Origin.xyz * p_Dimension * p_Size;
 
     float noiseValue = simplex3D_fractal(uv); // [-1, 1]
     Voxel outputVoxel;

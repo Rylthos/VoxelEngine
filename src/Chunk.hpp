@@ -10,7 +10,7 @@ class Chunk
 {
   public:
     Chunk();
-    Chunk(glm::vec3 chunkPosition, uint32_t dimension);
+    Chunk(glm::ivec3 chunkPosition, uint32_t dimension);
     Chunk(Chunk& chunk);
 
     Chunk& operator=(const Chunk& other);
@@ -25,12 +25,14 @@ class Chunk
     void setVoxel(glm::uvec3 position, Voxel data);
     Voxel getVoxel(glm::uvec3 position);
 
+    glm::ivec3& getPosition() { return m_ChunkPosition; }
+
   private:
     bool m_Initialized = false;
 
     VmaAllocator m_Allocator;
 
-    glm::vec3 m_ChunkPosition;
+    glm::ivec3 m_ChunkPosition;
     uint32_t m_Dimension;
 
     std::vector<Voxel> m_Voxels;
