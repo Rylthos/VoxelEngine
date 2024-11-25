@@ -3,14 +3,28 @@
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
+#include "imgui.h"
 #include <GLFW/glfw3.h>
 
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
+#include "VoxLoader.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager)
     : m_Dimension(1 << 7), m_PaletteManager(paletteManager)
 {
+    m_VoxelPushConstants.maxIterations = 1024;
+    m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
+    m_VoxelPushConstants.maxHeatShown = m_VoxelPushConstants.maxIterations;
+    m_VoxelPushConstants.lod = m_VoxelPushConstants.maxDepthShown;
+
+    m_VoxelPushConstants.flags = 0;
+    m_VoxelPushConstants.flags |= PCF_SHOW_HEAT_MAP;
+
+    m_GenerationPushConstants.cutoff = 0.0;
+    m_GenerationPushConstants.p10 = 10;
+    m_GenerationPushConstants.p50 = 50;
+    m_GenerationPushConstants.p100 = 100;
 }
 
 SceneManager::SceneManager(SceneManager& other)
@@ -19,15 +33,187 @@ SceneManager::SceneManager(SceneManager& other)
     m_Allocator = other.m_Allocator;
     m_Dimension = other.m_Dimension;
     m_PaletteManager = other.m_PaletteManager;
+    m_VoxelPushConstants = other.m_VoxelPushConstants;
+    m_GenerationPushConstants = other.m_GenerationPushConstants;
 }
 
 SceneManager SceneManager::operator=(const SceneManager& other)
 {
+    m_Device = other.m_Device;
     m_Allocator = other.m_Allocator;
     m_Dimension = other.m_Dimension;
     m_PaletteManager = other.m_PaletteManager;
+    m_VoxelPushConstants = other.m_VoxelPushConstants;
+    m_GenerationPushConstants = other.m_GenerationPushConstants;
 
     return *this;
+}
+
+void SceneManager::receive(const Event* event)
+{
+    switch (event->getType())
+    {
+    case EventType::ImGuiRender:
+        {
+            if (ImGui::Begin("Scene"))
+            {
+                enum SceneType { WorldGeneration = 0, ModelLoading = 1 };
+                const char* names[] = { "World Generation", "Load Model" };
+
+                const int modelInputSize = 100;
+                static char currentModel[modelInputSize] = "res/models/doom.vox";
+
+                static SceneType currentGeneration = WorldGeneration;
+
+                static int powerOf2 = std::log2(m_Dimension);
+
+                ImGui::Text("Current Scene");
+
+                if (ImGui::BeginCombo("##CurrentScene", names[currentGeneration], 0))
+                {
+                    bool hasChanged = false;
+                    for (size_t i = 0; i < 2; i++)
+                    {
+                        bool isSelected = (i == currentGeneration);
+                        if (ImGui::Selectable(names[i], isSelected))
+                        {
+                            currentGeneration = (SceneType)i;
+                            hasChanged = true;
+                        }
+                    }
+
+                    if (hasChanged)
+                    {
+                        switch (currentGeneration)
+                        {
+                        case WorldGeneration:
+                            setDimensions(1 << powerOf2);
+                            generateWorld();
+                            break;
+                        case ModelLoading:
+                            {
+                                VoxLoader loader(this, m_PaletteManager);
+                                loader.loadModel(currentModel);
+                                break;
+                            }
+                        }
+
+                        m_HasUpdated = true;
+                    }
+
+                    ImGui::EndCombo();
+                }
+
+                ImGui::Text("Max Iterations");
+                int maxIterations = m_VoxelPushConstants.maxIterations;
+                if (ImGui::SliderInt("##MaxIterations", &maxIterations, 1, 2048))
+                {
+                    m_VoxelPushConstants.maxIterations = maxIterations;
+                }
+
+                ImGui::Text("Max Iterations");
+
+                bool showHeatMap = (m_VoxelPushConstants.flags & PCF_SHOW_HEAT_MAP) != 0;
+                if (ImGui::Checkbox("Show Heat Map", &showHeatMap))
+                {
+                    m_VoxelPushConstants.flags &= ~(PCF_SHOW_HEAT_MAP); // Unset flag
+                    m_VoxelPushConstants.flags |=
+                        (showHeatMap * PCF_SHOW_HEAT_MAP); // Set with correct value
+                }
+
+                if (showHeatMap)
+                {
+                    ImGui::Text("Max Heat Shown");
+                    int maxHeat = m_VoxelPushConstants.maxHeatShown;
+                    if (ImGui::SliderInt("##MaxHeat", &maxHeat, 1, 2048))
+                        m_VoxelPushConstants.maxHeatShown = maxHeat;
+                }
+                else
+                {
+                    ImGui::Text("Max Depth Shown");
+                    int maxDepth = m_VoxelPushConstants.maxDepthShown;
+                    if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(getDimension())))
+                        m_VoxelPushConstants.maxDepthShown = maxDepth;
+                }
+
+                ImGui::Text("Max LOD");
+                int LOD = m_VoxelPushConstants.lod;
+                if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(getDimension())))
+                    m_VoxelPushConstants.lod = LOD;
+
+                switch (currentGeneration)
+                {
+                case WorldGeneration:
+                    {
+                        ImGui::Text("Seed");
+                        int seed = getSeed();
+                        if (ImGui::SliderInt("##Seed", &seed, 0, 1000000))
+                        {
+                            setSeed(seed);
+                            generateWorld();
+                        }
+
+                        ImGui::Text("Size");
+                        if (ImGui::SliderInt("##Size", &powerOf2, 1, 8))
+                        {
+                            setDimensions(1 << powerOf2);
+                            generateWorld();
+                        }
+
+                        ImGui::Text("Cutoff");
+                        if (ImGui::SliderFloat("##Cutoff", &m_GenerationPushConstants.cutoff, -1.0,
+                                               1.0))
+                        {
+                            generateWorld();
+                        }
+
+                        ImGui::Text("10th percentile");
+                        if (ImGui::SliderInt("##p10", &m_GenerationPushConstants.p10, 0, 255))
+                        {
+                            generateWorld();
+                        }
+
+                        ImGui::Text("50th percentile");
+                        if (ImGui::SliderInt("##p50", &m_GenerationPushConstants.p50, 0, 255))
+                        {
+                            generateWorld();
+                        }
+
+                        ImGui::Text("100th percentile");
+                        if (ImGui::SliderInt("##p100", &m_GenerationPushConstants.p100, 0, 255))
+                        {
+                            generateWorld();
+                        }
+
+                        ImGui::Text("Chunk Size");
+                        if (ImGui::Button("Regenerate World"))
+                        {
+                            generateWorld();
+                        }
+                        break;
+                    }
+                case ModelLoading:
+                    {
+                        ImGui::Text("Mode to load");
+                        ImGui::InputText("##Model", currentModel, modelInputSize);
+
+                        if (ImGui::Button("Load Model"))
+                        {
+                            VoxLoader loader(this, m_PaletteManager);
+                            if (loader.loadModel(currentModel))
+                            {
+                                m_HasUpdated = true;
+                            }
+                        }
+                    }
+                }
+            }
+            ImGui::End();
+            break;
+        }
+    default:
+        break;
+    }
 }
 
 void SceneManager::initResources(VkDevice device, VmaAllocator allocator)
@@ -101,6 +287,15 @@ void SceneManager::setDimensions(uint32_t dimension)
     m_Voxels.assign(dimension * dimension * dimension, { .colourIndex = -1 });
 }
 
+VoxelPushConstants& SceneManager::getVoxelPushConstants()
+{
+    m_VoxelPushConstants.dimension = m_Dimension;
+    m_VoxelPushConstants.size = 1.0f;
+    m_VoxelPushConstants.voxelAddress = m_SVO.getDeviceAddress(m_Device);
+
+    return m_VoxelPushConstants;
+}
+
 void SceneManager::generateWorld()
 {
     m_PaletteManager->defaultPalette();
@@ -119,9 +314,10 @@ void SceneManager::generateWorld()
     });
 
     m_GeneratedVoxels.copyToVector<Voxel>(m_Voxels);
+    m_HasUpdated = true;
 }
 
-uint32_t SceneManager::updateBuffers()
+void SceneManager::updateBuffers()
 {
     freeBuffers();
     std::vector<SVONode> svo = serializeScene();
@@ -129,7 +325,8 @@ uint32_t SceneManager::updateBuffers()
     createBuffers(size);
     m_Staging.copyFromData_CPUOnly<SVONode>(svo);
     m_SVO.copyFromBuffer(m_Staging, size);
-    return 0;
+
+    m_VoxelPushConstants.initialParent = 0;
 }
 
 std::string toBits(uint8_t x)

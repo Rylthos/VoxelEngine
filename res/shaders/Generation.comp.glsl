@@ -25,6 +25,10 @@ layout(push_constant) uniform constants {
     uint32_t p_Seed;
     uint32_t _;
     VoxelBuffer p_TargetBuffer;
+    float p_Cutoff;
+    int p_P10;
+    int p_P50;
+    int p_P100;
 };
 
 int64_t splitBy3(uint32_t a)
@@ -136,44 +140,28 @@ void main()
 
     vec3 uv = currentIndex / vec3(p_Dimension - 1);
 
-    float noiseValue = simplex3D_fractal(uv);
+    float noiseValue = simplex3D_fractal(uv); // [-1, 1]
     Voxel outputVoxel;
-    outputVoxel.type = AIR;
-    if (noiseValue >= 0.9)
+
+    float cutoff = p_Cutoff;
+    float remaining = 1 - p_Cutoff;
+    float p10 = cutoff + remaining * 0.1;
+    float p50 = cutoff + remaining * 0.5;
+    float p100 = cutoff + remaining;
+
+    outputVoxel.type = int16_t(p_P100);
+    if (noiseValue <= cutoff)
     {
-        outputVoxel.type = int16_t(3);
+        outputVoxel.type = AIR;
     }
-    else if (noiseValue >= 0.4)
+    else if (noiseValue <= p10)
     {
-        outputVoxel.type = int16_t(1);
+        outputVoxel.type = int16_t(p_P10);
     }
-    else if (noiseValue >= 0.2)
+    else if (noiseValue <= p50)
     {
-        outputVoxel.type = int16_t(2);
+        outputVoxel.type = int16_t(p_P50);
     }
 
     p_TargetBuffer.voxels[flatIndex] = outputVoxel;
-
-    // uint writeIndex = uint(dot(currentIndex * uvec3(1, p_Dimension * p_Dimension, p_Dimension), vec3(1.)));
-
-    // uint sum = currentIndex.x + currentIndex.y + currentIndex.z;
-    // sphereScene(currentIndex, flatIndex);
-    // Voxel temp;
-    // temp.type = int16_t(writeIndex);
-    // if (currentIndex.y % 2 == 0)
-    // {
-    //     if (sum % 2 == 0)
-    //         temp.type = int16_t(0);
-    //     else
-    //         temp.type = AIR;
-    // }
-    // else
-    // {
-    //     if (sum % 2 == 0)
-    //         temp.type = int16_t(1);
-    //     else
-    //         temp.type = AIR;
-    // }
-
-    // p_TargetBuffer.voxels[flatIndex] = temp;
 }

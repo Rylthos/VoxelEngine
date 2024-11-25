@@ -29,25 +29,6 @@ struct FrameData {
     VkFence renderFence;
 };
 
-enum PushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
-
-struct VoxelPushConstants {
-    glm::vec3 cameraPosition;
-    float aspectRatio;
-    glm::vec4 cameraForward;
-    glm::vec4 cameraRight;
-    glm::vec4 cameraUp;
-    uint32_t dimension;
-    float size;
-    uint32_t maxDepthShown = 5;
-    uint32_t lod;
-    uint32_t maxHeatShown;
-    uint32_t flags;
-    uint32_t maxIterations;
-    uint32_t initialParent;
-    VkDeviceAddress voxelAddress;
-};
-
 struct Stats {
     float frameDelta;
 };
@@ -115,8 +96,6 @@ class Engine : EventReceiver
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;
-
-    VoxelPushConstants m_VoxelPushConstants;
 
     bool m_ShouldResize = true;
 

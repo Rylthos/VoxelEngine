@@ -56,15 +56,8 @@ void Engine::init()
                               EventType::ImGuiRender },
                             &m_Camera);
 
+    EventHandler::subscribe(EventType::ImGuiRender, &m_SceneManager);
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
-
-    m_VoxelPushConstants.maxIterations = MAX_ITERATIONS;
-    m_VoxelPushConstants.maxDepthShown = std::log2(m_SceneManager.getDimension());
-    m_VoxelPushConstants.maxHeatShown = m_VoxelPushConstants.maxIterations;
-    m_VoxelPushConstants.lod = std::log2(m_SceneManager.getDimension());
-
-    m_VoxelPushConstants.flags = 0;
-    m_VoxelPushConstants.flags ^= PCF_SHOW_HEAT_MAP;
 
     m_RenderAlt = false;
 }
@@ -148,6 +141,9 @@ void Engine::receive(const Event* event)
             const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
 
             if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS) m_RenderImGui = !m_RenderImGui;
+
+            if (ki->key == GLFW_KEY_RIGHT_ALT && ki->action == GLFW_PRESS)
+                m_RenderAlt = !m_RenderAlt;
 
             break;
         }
@@ -423,9 +419,7 @@ void Engine::updateScene()
 {
     vkDeviceWaitIdle(m_Device);
 
-    // m_SceneManager.generateWorld();
-
-    m_VoxelPushConstants.initialParent = m_SceneManager.updateBuffers();
+    m_SceneManager.updateBuffers();
     m_PaletteManager.updateImage();
 }
 
@@ -603,129 +597,6 @@ void Engine::updateImGui()
     }
     ImGui::End();
 
-    if (ImGui::Begin("Scene"))
-    {
-        enum SceneType { WorldGeneration = 0, ModelLoading = 1 };
-        const char* names[] = { "World Generation", "Load Model" };
-
-        const int modelInputSize = 100;
-        static char currentModel[modelInputSize] = "res/models/doom.vox";
-
-        static SceneType currentGeneration = WorldGeneration;
-
-        static int powerOf2 = std::log2(m_SceneManager.getDimension());
-
-        ImGui::Text("Current Scene");
-
-        if (ImGui::BeginCombo("##CurrentScene", names[currentGeneration], 0))
-        {
-            bool hasChanged = false;
-            for (size_t i = 0; i < 2; i++)
-            {
-                bool isSelected = (i == currentGeneration);
-                if (ImGui::Selectable(names[i], isSelected))
-                {
-                    currentGeneration = (SceneType)i;
-                    hasChanged = true;
-                }
-            }
-
-            if (hasChanged)
-            {
-                switch (currentGeneration)
-                {
-                case WorldGeneration:
-                    m_SceneManager.setDimensions(1 << powerOf2);
-                    m_SceneManager.generateWorld();
-                    break;
-                case ModelLoading:
-                    {
-                        VoxLoader loader(&m_SceneManager, &m_PaletteManager);
-                        loader.loadModel(currentModel);
-                        break;
-                    }
-                }
-
-                updateScene();
-            }
-
-            ImGui::EndCombo();
-        }
-
-        ImGui::Text("Max Iterations");
-        int maxIterations = m_VoxelPushConstants.maxIterations;
-        if (ImGui::SliderInt("##MaxIterations", &maxIterations, 1, MAX_ITERATIONS))
-        {
-            m_VoxelPushConstants.maxIterations = maxIterations;
-        }
-
-        if (ImGui::Checkbox("Show Alternative View", &m_RenderAlt)) ImGui::Text("Max Iterations");
-
-        bool showHeatMap = (m_VoxelPushConstants.flags & PCF_SHOW_HEAT_MAP) != 0;
-        if (ImGui::Checkbox("Show Heat Map", &showHeatMap))
-        {
-            m_VoxelPushConstants.flags &= ~(PCF_SHOW_HEAT_MAP);
-            m_VoxelPushConstants.flags |= (showHeatMap * PCF_SHOW_HEAT_MAP);
-        }
-
-        if (showHeatMap)
-        {
-            ImGui::Text("Max Heat Shown");
-            int maxHeat = m_VoxelPushConstants.maxHeatShown;
-            if (ImGui::SliderInt("##MaxHeat", &maxHeat, 1, MAX_ITERATIONS))
-                m_VoxelPushConstants.maxHeatShown = maxHeat;
-        }
-        else
-        {
-            ImGui::Text("Max Depth Shown");
-            int maxDepth = m_VoxelPushConstants.maxDepthShown;
-            if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1,
-                                 std::log2(m_SceneManager.getDimension())))
-                m_VoxelPushConstants.maxDepthShown = maxDepth;
-        }
-
-        ImGui::Text("Max LOD");
-        int LOD = m_VoxelPushConstants.lod;
-        if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_SceneManager.getDimension())))
-            m_VoxelPushConstants.lod = LOD;
-
-        switch (currentGeneration)
-        {
-        case WorldGeneration:
-            {
-                ImGui::Text("Seed");
-                int seed = m_SceneManager.getSeed();
-                if (ImGui::SliderInt("##Seed", &seed, 0, 1000000)) m_SceneManager.setSeed(seed);
-
-                ImGui::SliderInt("##Size", &powerOf2, 1, 8);
-
-                ImGui::Text("Chunk Size");
-                if (ImGui::Button("Regenerate World"))
-                {
-                    m_SceneManager.setDimensions(1 << powerOf2);
-                    m_SceneManager.generateWorld();
-                    updateScene();
-                }
-                break;
-            }
-        case ModelLoading:
-            {
-                ImGui::Text("Mode to load");
-                ImGui::InputText("##Model", currentModel, modelInputSize);
-
-                if (ImGui::Button("Load Model"))
-                {
-                    VoxLoader loader(&m_SceneManager, &m_PaletteManager);
-                    if (loader.loadModel(currentModel))
-                    {
-                        updateScene();
-                    }
-                }
-            }
-        }
-    }
-    ImGui::End();
-
     ImGui::ShowDemoWindow();
 }
 
@@ -742,6 +613,8 @@ void Engine::update(float frameDelta)
 
     ImGuiRender imGuiRender;
     EventHandler::dispatchEvent(&imGuiRender);
+
+    if (m_SceneManager.hasUpdated()) updateScene();
 
     ImGui::Render();
 }
@@ -831,20 +704,16 @@ void Engine::render(float frameDelta)
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipelineLayout, 0,
                             1, &m_VoxelDescriptorSet, 0, nullptr);
 
-    m_VoxelPushConstants.cameraPosition = m_Camera.getPosition();
+    VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants();
+    pushConstants.cameraPosition = m_Camera.getPosition();
     glm::uvec2 windowSize = m_Window.getSize();
-    m_VoxelPushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
-    m_VoxelPushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
-    m_VoxelPushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
-    m_VoxelPushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
-
-    m_VoxelPushConstants.size = 1.0f;
-
-    m_VoxelPushConstants.dimension = m_SceneManager.getDimension();
-    m_VoxelPushConstants.voxelAddress = m_SceneManager.getBufferAddress(m_Device);
+    pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
+    pushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
+    pushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
+    pushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
 
     vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(m_VoxelPushConstants), &m_VoxelPushConstants);
+                       sizeof(pushConstants), &pushConstants);
 
     vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
                   std::ceil(drawExtent.height / 16.0), 1);

@@ -29,9 +29,32 @@ struct VoxelGenerationPushConstants {
     uint32_t seed;
     int _;
     VkDeviceAddress targetBuffer;
+    float cutoff;
+    int32_t p10;
+    int32_t p50;
+    int32_t p100;
 };
 
-class SceneManager
+enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
+
+struct VoxelPushConstants {
+    glm::vec3 cameraPosition;
+    float aspectRatio;
+    glm::vec4 cameraForward;
+    glm::vec4 cameraRight;
+    glm::vec4 cameraUp;
+    uint32_t dimension;
+    float size;
+    uint32_t maxDepthShown = 5;
+    uint32_t lod;
+    uint32_t maxHeatShown;
+    uint32_t flags;
+    uint32_t maxIterations;
+    uint32_t initialParent;
+    VkDeviceAddress voxelAddress;
+};
+
+class SceneManager : public EventReceiver
 {
   public:
     SceneManager() {}
@@ -40,6 +63,8 @@ class SceneManager
     SceneManager(SceneManager& other);
 
     SceneManager operator=(const SceneManager& other);
+
+    void receive(const Event* event);
 
     void initResources(VkDevice device, VmaAllocator allocator);
     void freeResources();
@@ -53,15 +78,28 @@ class SceneManager
     void setVoxel(glm::uvec3 position, Voxel data) { m_Voxels.at(mortenEncode(position)) = data; }
     Voxel getVoxel(glm::uvec3 position) { return m_Voxels.at(mortenEncode(position)); }
 
+    VoxelPushConstants& getVoxelPushConstants();
+
     void generateWorld();
 
+    bool hasUpdated()
+    {
+        if (m_HasUpdated)
+        {
+            m_HasUpdated = false;
+            return true;
+        }
+        return false;
+    }
+
     VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
-    uint32_t updateBuffers();
+    void updateBuffers();
 
     std::vector<SVONode> serializeScene();
 
   private:
     bool m_Initialized = false;
+    bool m_HasUpdated = false;
 
     uint32_t m_Dimension;
     std::vector<Voxel> m_Voxels;
@@ -72,6 +110,7 @@ class SceneManager
     Buffer m_SVO;
     Buffer m_Staging;
 
+    VoxelPushConstants m_VoxelPushConstants;
     VoxelGenerationPushConstants m_GenerationPushConstants;
 
     VkPipelineLayout m_GenerationPipelineLayout;
