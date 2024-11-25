@@ -56,7 +56,7 @@ void Engine::init()
                               EventType::ImGuiRender },
                             &m_Camera);
 
-    EventHandler::subscribe(EventType::ImGuiRender, &m_SceneManager);
+    EventHandler::subscribe({ EventType::GameUpdate, EventType::ImGuiRender }, &m_SceneManager);
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_RenderAlt = false;

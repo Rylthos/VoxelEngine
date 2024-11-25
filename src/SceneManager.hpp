@@ -100,6 +100,7 @@ class SceneManager : public EventReceiver
   private:
     bool m_Initialized = false;
     bool m_HasUpdated = false;
+    bool m_AnimateCutoff = false;
 
     uint32_t m_Dimension;
     std::vector<Voxel> m_Voxels;

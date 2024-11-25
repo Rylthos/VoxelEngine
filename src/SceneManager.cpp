@@ -51,8 +51,42 @@ SceneManager SceneManager::operator=(const SceneManager& other)
 
 void SceneManager::receive(const Event* event)
 {
+    static float currentT = 0.0;
+
+    static float previousState = m_AnimateCutoff;
+    static float previousCutoff = m_GenerationPushConstants.cutoff;
+
     switch (event->getType())
     {
+    case EventType::GameUpdate:
+        {
+            const GameUpdate* gu = static_cast<const GameUpdate*>(event);
+
+            if (!previousState && m_AnimateCutoff) // Started
+            {
+                previousCutoff = m_GenerationPushConstants.cutoff;
+            }
+            else if (previousState && !m_AnimateCutoff) // Ended
+            {
+                m_GenerationPushConstants.cutoff = previousCutoff;
+                generateWorld();
+            }
+
+            if (m_AnimateCutoff)
+            {
+                currentT += gu->frameDelta / 10.0f;
+                m_GenerationPushConstants.cutoff = -1.0f + (2.f * currentT);
+                generateWorld();
+            }
+            else
+                currentT = 0.f;
+
+            previousState = m_AnimateCutoff;
+
+            if (currentT >= 1.0f) m_AnimateCutoff = false;
+
+            break;
+        }
     case EventType::ImGuiRender:
         {
             if (ImGui::Begin("Scene"))
@@ -166,6 +200,8 @@ void SceneManager::receive(const Event* event)
                         {
                             generateWorld();
                         }
+
+                        ImGui::Checkbox("Animate Cutoff", &m_AnimateCutoff);
 
                         ImGui::Text("10th percentile");
                         if (ImGui::SliderInt("##p10", &m_GenerationPushConstants.p10, 0, 255))
