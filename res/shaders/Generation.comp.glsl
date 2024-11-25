@@ -141,7 +141,7 @@ void main()
 
     vec3 uv = currentIndex / vec3(p_Dimension - 1);
 
-    uv += p_Origin.xyz * p_Dimension * p_Size;
+    uv += p_Origin.xyz;
 
     float noiseValue = simplex3D_fractal(uv); // [-1, 1]
     Voxel outputVoxel;

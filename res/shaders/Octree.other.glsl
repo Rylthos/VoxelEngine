@@ -10,6 +10,17 @@ layout(buffer_reference, std430) readonly buffer SVONodeBuffer {
     SVONode nodes[];
 };
 
+struct Chunk
+{
+    vec4 chunkPosition;
+    vec2 _;
+    SVONodeBuffer nodes;
+};
+
+layout(buffer_reference, std430) readonly buffer ChunkBuffer {
+    Chunk chunks[];
+};
+
 struct HitRecord {
     float t;
     vec3 position;
@@ -43,7 +54,7 @@ vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
     return vec3(0.);
 }
 
-HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxelDimensions, float voxelSize,
+HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSize,
     uint maxIterations, uint maxLOD) {
     const int sMax = 13;
     const float epsilon = exp2(-sMax);
@@ -58,7 +69,7 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
 
     uint parent = 0;
 
-    vec3 minBound = boundaryOrigin * voxelDimensions * voxelSize;
+    vec3 minBound = chunk.chunkPosition.xyz * voxelDimensions * voxelSize;
     vec3 maxBound = minBound + voxelDimensions;
 
     int currentStack = -1;
@@ -82,7 +93,7 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
     position = calculatePosition(origin, direction, tMin);
     hit.position = position;
 
-    SVONode node = nodes.nodes[parent];
+    SVONode node = chunk.nodes.nodes[parent];
 
     for (int i = 0; i < maxIterations; i++)
     {
@@ -100,7 +111,7 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
             parent = member.parent;
             minBound = member.minBound;
 
-            node = nodes.nodes[parent];
+            node = chunk.nodes.nodes[parent];
 
             scale *= 2;
 
@@ -129,7 +140,7 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
 
         if (currentStack + 1 >= maxLOD) // Out of LOD
         {
-            uint8_t materialIndex = nodes.nodes[parent].materialIndex;
+            uint8_t materialIndex = chunk.nodes.nodes[parent].materialIndex;
 
             float voxelScale = scale;
             vec3 voxelMinBound = minBound + boundOffset * voxelScale;
@@ -150,7 +161,7 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
             if (isLeaf) // Solid Voxel
             {
                 uint nodeIndex = parent + node.childPtr + bitCount(uint(node.validMask) >> (octantMask + 1));
-                uint8_t materialIndex = nodes.nodes[nodeIndex].materialIndex;
+                uint8_t materialIndex = chunk.nodes.nodes[nodeIndex].materialIndex;
 
                 float voxelScale = scale;
                 vec3 voxelMinBound = minBound + boundOffset * voxelScale;
@@ -179,14 +190,14 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
 
                 uint count = uint(node.validMask) >> (octantMask + 1);
                 parent = parent + node.childPtr + bitCount(count);
-                node = nodes.nodes[parent];
+                node = chunk.nodes.nodes[parent];
 
                 minBound += boundOffset * scale;
                 maxBound = minBound + scale * dimensions;
 
                 if (!rayBoxIntersect(origin, invDir, minBound, maxBound, tMin, tMax, tMin, tMax)) break;
 
-                node = nodes.nodes[parent];
+                node = chunk.nodes.nodes[parent];
 
                 scale *= 0.5;
 
@@ -210,4 +221,27 @@ HitRecord castRay(SVONodeBuffer nodes, Ray ray, uvec3 boundaryOrigin, uint voxel
 
     hit.t = -1;
     return hit;
+}
+
+HitRecord castRay(int chunkCount, ChunkBuffer chunks, Ray ray, uint voxelDimension, float voxelSize,
+    uint maxIterations, uint maxLOD)
+{
+    float closestT = 100000.;
+    HitRecord closestHit;
+    closestHit.t = -1;
+    for (int i = 0; i < chunkCount; i++)
+    {
+        HitRecord hit = castRayChunk(chunks.chunks[i], ray, voxelDimension, voxelSize,
+                maxIterations, maxLOD);
+
+        if (hit.t < 0)
+            continue;
+        else if (hit.t < closestT)
+        {
+            closestT = hit.t;
+            closestHit = hit;
+        }
+    }
+
+    return closestHit;
 }

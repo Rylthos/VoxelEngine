@@ -11,14 +11,6 @@
 
 class Buffer
 {
-  private:
-    VkBuffer m_Buffer = 0;
-    VmaAllocation m_Allocation = 0;
-    VmaAllocationInfo m_AllocationInfo;
-
-    VmaAllocator m_Allocator;
-
-    size_t m_Size = 0;
 
   public:
     Buffer();
@@ -76,4 +68,13 @@ class Buffer
 
         std::memcpy(getAllocationInfo().pMappedData, data.data(), size);
     }
+
+  private:
+    VkBuffer m_Buffer = 0;
+    VmaAllocation m_Allocation = 0;
+    VmaAllocationInfo m_AllocationInfo;
+
+    VmaAllocator m_Allocator;
+
+    size_t m_Size = 0;
 };

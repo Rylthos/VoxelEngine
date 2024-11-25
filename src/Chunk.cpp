@@ -17,6 +17,13 @@ Chunk::Chunk(Chunk& other)
     m_Dimension = other.m_Dimension;
 }
 
+Chunk::Chunk(Chunk&& other)
+{
+    m_Allocator = std::move(other.m_Allocator);
+    m_ChunkPosition = std::move(other.m_ChunkPosition);
+    m_Dimension = std::move(other.m_Dimension);
+}
+
 Chunk& Chunk::operator=(const Chunk& other)
 {
     m_Allocator = other.m_Allocator;

@@ -29,6 +29,7 @@ void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlag
     // VK_CHECK(vkCreateBuffer(m_Device, &bufferCI, nullptr, &m_Buffer));
     VK_CHECK(vmaCreateBuffer(m_Allocator, &bufferCI, &vmaACI, &m_Buffer, &m_Allocation,
                              &m_AllocationInfo));
+
     spdlog::info("Created buffer with size: {}", m_Size);
 }
 
@@ -41,6 +42,7 @@ void Buffer::free()
 
     m_Allocator = 0;
     m_Buffer = 0;
+    m_Size = 0;
     m_Allocation = 0;
     m_AllocationInfo = {};
 }

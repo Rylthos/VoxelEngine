@@ -12,6 +12,7 @@ class Chunk
     Chunk();
     Chunk(glm::ivec3 chunkPosition, uint32_t dimension);
     Chunk(Chunk& chunk);
+    Chunk(Chunk&& chunk);
 
     Chunk& operator=(const Chunk& other);
 

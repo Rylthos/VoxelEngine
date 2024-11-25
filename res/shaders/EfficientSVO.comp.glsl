@@ -23,11 +23,11 @@ layout(push_constant) uniform constants {
     vec3 p_CameraPosition;
     float p_AspectRatio;
     vec3 p_CameraFront;
-    int p_OriginX;
+    int p_ChunkCount;
     vec3 p_CameraRight;
-    int p_OriginY;
+    int _2;
     vec3 p_CameraUp;
-    int p_OriginZ;
+    int _3;
     uint32_t p_Dimension;
     float p_Size;
     uint32_t p_MaxDepthShown;
@@ -36,7 +36,7 @@ layout(push_constant) uniform constants {
     uint32_t p_Flags;
     uint32_t p_MaxIterations;
     uint32_t p_InitialParent;
-    SVONodeBuffer p_Tree;
+    ChunkBuffer p_Tree;
 };
 
 void main()
@@ -54,8 +54,7 @@ void main()
             vec3(p_CameraRight),
             vec3(p_CameraUp), p_AspectRatio);
 
-    ivec3 boundaryOrigin = ivec3(p_OriginX, p_OriginY, p_OriginZ);
-    HitRecord hit = castRay(p_Tree, ray, boundaryOrigin,
+    HitRecord hit = castRay(p_ChunkCount, p_Tree, ray,
             p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
     if (hit.t >= 0)
@@ -74,7 +73,7 @@ void main()
         shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
         shadowRay.direction = lightPosition - shadowRay.origin;
 
-        HitRecord shadow = castRay(p_Tree, shadowRay, boundaryOrigin,
+        HitRecord shadow = castRay(p_ChunkCount, p_Tree, shadowRay,
                 p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
         const float ambientStrength = 0.5;

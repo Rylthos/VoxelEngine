@@ -1,8 +1,9 @@
 #pragma once
 
-#include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
+#include <glm/glm.hpp>
 #include <spdlog/fmt/bin_to_hex.h>
 
 #include "Buffer.hpp"
@@ -40,24 +41,36 @@ struct VoxelGenerationPushConstants {
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
+struct ChunkData {
+    glm::vec4 chunkPosition;
+    glm::vec2 _;
+    VkDeviceAddress chunkData; // ChunkSVOData[]
+};
+
 struct VoxelPushConstants {
     glm::vec3 cameraPosition;
     float aspectRatio;
+
     glm::vec3 cameraForward;
-    uint32_t originX;
+    uint32_t chunkCount;
+
     glm::vec3 cameraRight;
-    uint32_t originY;
+    uint32_t _1;
+
     glm::vec3 cameraUp;
-    uint32_t originZ;
+    uint32_t _2;
+
     uint32_t dimension;
     float size;
     uint32_t maxDepthShown = 5;
     uint32_t lod;
+
     uint32_t maxHeatShown;
     uint32_t flags;
     uint32_t maxIterations;
     uint32_t initialParent;
-    VkDeviceAddress voxelAddress;
+
+    VkDeviceAddress chunks; // ChunkData[]
 };
 
 class SceneManager : public EventReceiver
@@ -92,17 +105,18 @@ class SceneManager : public EventReceiver
         return false;
     }
 
-    VkDeviceAddress getBufferAddress(VkDevice device) { return m_Chunk.getBufferAddress(device); }
+    // VkDeviceAddress getBufferAddress(VkDevice device) { return m_Chunk.getBufferAddress(device);
+    // }
     void updateBuffers();
 
-    std::vector<SVONode> serializeScene();
+    std::vector<SVONode> serializeChunk(Chunk& chunk);
 
   private:
     bool m_Initialized = false;
     bool m_HasUpdated = false;
     bool m_AnimateCutoff = false;
 
-    Chunk m_Chunk;
+    std::vector<Chunk> m_Chunks;
 
     uint32_t m_Dimension = 1 << 7;
     PaletteManager* m_PaletteManager;
@@ -118,7 +132,10 @@ class SceneManager : public EventReceiver
     VkPipeline m_GenerationPipeline;
     Buffer m_GeneratedVoxels;
 
+    Buffer m_ChunkDataAddress;
+
   private:
-    void createBuffers(size_t size);
+    void createBuffer(Chunk& chunk, size_t count);
+    void createBufferChunks();
     void freeBuffers();
 };

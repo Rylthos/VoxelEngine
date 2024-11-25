@@ -126,8 +126,8 @@ void SceneManager::receive(const Event* event)
                             break;
                         case ModelLoading:
                             {
-                                VoxLoader loader(&m_Chunk, m_PaletteManager);
-                                loader.loadModel(currentModel);
+                                // VoxLoader loader(&m_Chunk, m_PaletteManager);
+                                // loader.loadModel(currentModel);
                                 break;
                             }
                         }
@@ -166,14 +166,13 @@ void SceneManager::receive(const Event* event)
                 {
                     ImGui::Text("Max Depth Shown");
                     int maxDepth = m_VoxelPushConstants.maxDepthShown;
-                    if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1,
-                                         std::log2(m_Chunk.getDimensions())))
+                    if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(m_Dimension)))
                         m_VoxelPushConstants.maxDepthShown = maxDepth;
                 }
 
                 ImGui::Text("Max LOD");
                 int LOD = m_VoxelPushConstants.lod;
-                if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_Chunk.getDimensions())))
+                if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_Dimension)))
                     m_VoxelPushConstants.lod = LOD;
 
                 switch (currentGeneration)
@@ -229,11 +228,11 @@ void SceneManager::receive(const Event* event)
 
                         if (ImGui::Button("Load Model"))
                         {
-                            VoxLoader loader(&m_Chunk, m_PaletteManager);
-                            if (loader.loadModel(currentModel))
-                            {
-                                m_HasUpdated = true;
-                            }
+                            // VoxLoader loader(&m_Chunk, m_PaletteManager);
+                            // if (loader.loadModel(currentModel))
+                            // {
+                            //     m_HasUpdated = true;
+                            // }
                         }
                     }
                 }
@@ -297,7 +296,12 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator)
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
 
-    m_Chunk = Chunk({ 0, 0, 0 }, m_Dimension);
+    // m_Chunks.reserve(m_ChunkCount);
+
+    m_Chunks.emplace_back(glm::ivec3{ 0, 0, 0 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 1, 0, 0 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 0, 0, 1 }, m_Dimension);
+    // m_Chunks.emplace_back(glm::ivec3{ 1, 0, 1 }, m_Dimension);
 }
 
 void SceneManager::freeResources()
@@ -315,11 +319,22 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
 {
     m_VoxelPushConstants.dimension = m_Dimension;
     m_VoxelPushConstants.size = 1.0f;
-    m_VoxelPushConstants.voxelAddress = m_Chunk.getBufferAddress(m_Device);
 
-    m_VoxelPushConstants.originX = m_Chunk.getPosition().x;
-    m_VoxelPushConstants.originY = m_Chunk.getPosition().y;
-    m_VoxelPushConstants.originZ = m_Chunk.getPosition().z;
+    m_VoxelPushConstants.chunkCount = m_Chunks.size();
+
+    createBufferChunks();
+
+    std::vector<ChunkData> chunkData;
+    for (Chunk& chunk : m_Chunks)
+    {
+        chunkData.push_back({ .chunkPosition = glm::vec4(chunk.getPosition(), 0),
+                              .chunkData = chunk.getBufferAddress(m_Device) });
+    }
+
+    m_Staging.copyFromData_CPUOnly<ChunkData>(chunkData);
+    m_ChunkDataAddress.copyFromBuffer(m_Staging, chunkData.size() * sizeof(ChunkData));
+
+    m_VoxelPushConstants.chunks = m_ChunkDataAddress.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
 }
@@ -330,30 +345,37 @@ void SceneManager::generateWorld()
 
     m_GenerationPushConstants.dimension = m_Dimension;
     m_GenerationPushConstants.size = 1.0f;
-    m_GenerationPushConstants.origin = glm::ivec4(m_Chunk.getPosition(), 0);
     m_GenerationPushConstants.targetBuffer = m_GeneratedVoxels.getDeviceAddress(m_Device);
 
-    ImmediateSubmit::submit([&](VkCommandBuffer buffer) {
-        vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_GenerationPipeline);
+    for (Chunk& chunk : m_Chunks)
+    {
+        m_GenerationPushConstants.origin = glm::ivec4(chunk.getPosition(), 0);
+        ImmediateSubmit::submit([&](VkCommandBuffer buffer) {
+            vkCmdBindPipeline(buffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_GenerationPipeline);
 
-        vkCmdPushConstants(buffer, m_GenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                           sizeof(VoxelGenerationPushConstants), &m_GenerationPushConstants);
+            vkCmdPushConstants(buffer, m_GenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                               sizeof(VoxelGenerationPushConstants), &m_GenerationPushConstants);
 
-        vkCmdDispatch(buffer, m_Dimension / 4, m_Dimension / 4, m_Dimension / 4);
-    });
+            vkCmdDispatch(buffer, m_Dimension / 4, m_Dimension / 4, m_Dimension / 4);
+        });
+        m_GeneratedVoxels.copyToVector<Voxel>(chunk.getVoxels());
+    }
 
-    m_GeneratedVoxels.copyToVector<Voxel>(m_Chunk.getVoxels());
     m_HasUpdated = true;
 }
 
 void SceneManager::updateBuffers()
 {
     freeBuffers();
-    std::vector<SVONode> svo = serializeScene();
-    size_t size = sizeof(SVONode) * svo.size();
-    createBuffers(size);
-    m_Staging.copyFromData_CPUOnly<SVONode>(svo);
-    m_Chunk.getSVOBuffer()->copyFromBuffer(m_Staging, size);
+
+    for (Chunk& chunk : m_Chunks)
+    {
+        std::vector<SVONode> svo = serializeChunk(chunk);
+        size_t size = sizeof(SVONode) * svo.size();
+        createBuffer(chunk, size);
+        m_Staging.copyFromData_CPUOnly<SVONode>(svo);
+        chunk.getSVOBuffer()->copyFromBuffer(m_Staging, size);
+    }
 
     m_VoxelPushConstants.initialParent = 0;
 }
@@ -366,7 +388,7 @@ std::string toBits(uint8_t x)
     return returnStr;
 }
 
-std::vector<SVONode> SceneManager::serializeScene()
+std::vector<SVONode> SceneManager::serializeChunk(Chunk& chunk)
 {
     size_t maxDepth = std::log2(m_Dimension);
 
@@ -383,7 +405,7 @@ std::vector<SVONode> SceneManager::serializeScene()
     }
 
     int depth = maxDepth;
-    std::vector<Voxel>& voxels = m_Chunk.getVoxels();
+    std::vector<Voxel>& voxels = chunk.getVoxels();
     size_t voxelSize = voxels.size();
     for (size_t i = 0; i < voxelSize; ++i)
     {
@@ -497,27 +519,60 @@ std::vector<SVONode> SceneManager::serializeScene()
 
     size_t bytes = reversed.size() * sizeof(SVONode);
     spdlog::info("Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB). Took {}s",
-                 reversed.size(), m_Chunk.getVoxels().size(), bytes, bytes / 1024,
+                 reversed.size(), chunk.getVoxels().size(), bytes, bytes / 1024,
                  bytes / (1024 * 1024), after - before);
-    spdlog::info("~{} bytes per voxel", (float)bytes / (float)m_Chunk.getVoxels().size());
+    spdlog::info("~{} bytes per voxel", (float)bytes / (float)chunk.getVoxels().size());
 
     return reversed;
 }
 
-void SceneManager::createBuffers(size_t size)
+void SceneManager::createBuffer(Chunk& chunk, size_t count)
 {
-    m_Staging.create(m_Allocator, size * sizeof(SVONode), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     VMA_MEMORY_USAGE_CPU_TO_GPU);
+    size_t size = count * sizeof(SVONode);
+    if (m_Staging.getSize() < size)
+    {
+        m_Staging.free();
 
-    m_Chunk.getSVOBuffer()->create(m_Allocator, size * sizeof(SVONode),
-                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                       VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                   VMA_MEMORY_USAGE_GPU_ONLY);
+        m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VMA_MEMORY_USAGE_CPU_TO_GPU);
+    }
+
+    chunk.getSVOBuffer()->create(m_Allocator, size,
+                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                 VMA_MEMORY_USAGE_GPU_ONLY);
+}
+
+void SceneManager::createBufferChunks()
+{
+    if (m_ChunkDataAddress.getSize() != 0) return;
+
+    size_t size = m_Chunks.size() * sizeof(ChunkData);
+
+    if (m_Staging.getSize() < size)
+    {
+        m_Staging.free();
+
+        m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VMA_MEMORY_USAGE_CPU_TO_GPU);
+    }
+
+    m_ChunkDataAddress.create(m_Allocator, size,
+                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                  VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                              VMA_MEMORY_USAGE_GPU_ONLY); //
 }
 
 void SceneManager::freeBuffers()
 {
     m_Staging.free();
-    m_Chunk.getSVOBuffer()->free();
+
+    for (Chunk& chunk : m_Chunks)
+    {
+        chunk.getSVOBuffer()->free();
+    }
+
+    m_ChunkDataAddress.free();
 }
