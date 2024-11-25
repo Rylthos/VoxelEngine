@@ -9,6 +9,8 @@
 #include "PaletteManager.hpp"
 #include "Voxel.hpp"
 
+#include "Chunk.hpp"
+
 enum SVONodeFlags {
     SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
     SVONODE_IS_PARENT = 1 << 1, // Has Smaller Nodes
@@ -72,12 +74,6 @@ class SceneManager : public EventReceiver
     int getSeed() { return m_GenerationPushConstants.seed; }
     void setSeed(int seed) { m_GenerationPushConstants.seed = seed; }
 
-    void setDimensions(uint32_t dimension);
-    uint32_t getDimension() { return m_Dimension; }
-
-    void setVoxel(glm::uvec3 position, Voxel data) { m_Voxels.at(mortenEncode(position)) = data; }
-    Voxel getVoxel(glm::uvec3 position) { return m_Voxels.at(mortenEncode(position)); }
-
     VoxelPushConstants& getVoxelPushConstants();
 
     void generateWorld();
@@ -92,7 +88,7 @@ class SceneManager : public EventReceiver
         return false;
     }
 
-    VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
+    VkDeviceAddress getBufferAddress(VkDevice device) { return m_Chunk.getBufferAddress(device); }
     void updateBuffers();
 
     std::vector<SVONode> serializeScene();
@@ -102,13 +98,13 @@ class SceneManager : public EventReceiver
     bool m_HasUpdated = false;
     bool m_AnimateCutoff = false;
 
-    uint32_t m_Dimension;
-    std::vector<Voxel> m_Voxels;
+    Chunk m_Chunk;
+
+    uint32_t m_Dimension = 1 << 7;
     PaletteManager* m_PaletteManager;
 
     VkDevice m_Device;
     VmaAllocator m_Allocator;
-    Buffer m_SVO;
     Buffer m_Staging;
 
     VoxelPushConstants m_VoxelPushConstants;
@@ -121,10 +117,4 @@ class SceneManager : public EventReceiver
   private:
     void createBuffers(size_t size);
     void freeBuffers();
-
-    int64_t splitBy3(uint32_t a);
-    int64_t mortenEncode(glm::uvec3 position);
-
-    uint32_t compactBy3(int64_t a);
-    glm::uvec3 mortenDecode(int64_t code);
 };

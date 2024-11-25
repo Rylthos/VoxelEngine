@@ -8,8 +8,8 @@
 
 typedef std::array<char, 5> VoxID;
 
-VoxLoader::VoxLoader(SceneManager* sceneManager, PaletteManager* paletteManager)
-    : m_SceneManager{ sceneManager }, m_PaletteManager{ paletteManager }
+VoxLoader::VoxLoader(Chunk* chunk, PaletteManager* paletteManager)
+    : m_Chunk{ chunk }, m_PaletteManager{ paletteManager }
 {
 }
 
@@ -63,10 +63,15 @@ bool VoxLoader::readChunk(std::ifstream& file)
         if (closestLog > MAX_LOG)
         {
             spdlog::error("Model Too large");
+            return false;
         }
         size = 1 << closestLog;
 
-        m_SceneManager->setDimensions(size);
+        if (m_Chunk->getDimensions() < size)
+        {
+            spdlog::error("Chunk size too small for model");
+            return false;
+        }
 
         spdlog::info("SIZE | X: {} | Y: {} | Z: {}", x, y, z);
         return true;
@@ -81,13 +86,13 @@ bool VoxLoader::readChunk(std::ifstream& file)
         {
             uint8_t x = readU8(file);
             uint8_t z = readU8(file);
-            uint8_t y = m_SceneManager->getDimension() - readU8(file) - 1;
+            uint8_t y = m_Chunk->getDimensions() - readU8(file) - 1;
             uint8_t c = readU8(file);
 
             if (c == 255)
-                m_SceneManager->setVoxel({ x, y, z }, { .colourIndex = -1 });
+                m_Chunk->setVoxel({ x, y, z }, { .colourIndex = -1 });
             else
-                m_SceneManager->setVoxel({ x, y, z }, { .colourIndex = (int16_t)(c + 1) });
+                m_Chunk->setVoxel({ x, y, z }, { .colourIndex = (int16_t)(c + 1) });
         }
         return true;
     }

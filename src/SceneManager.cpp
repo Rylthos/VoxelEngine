@@ -121,12 +121,12 @@ void SceneManager::receive(const Event* event)
                         switch (currentGeneration)
                         {
                         case WorldGeneration:
-                            setDimensions(1 << powerOf2);
+                            // setDimensions(1 << powerOf2);
                             generateWorld();
                             break;
                         case ModelLoading:
                             {
-                                VoxLoader loader(this, m_PaletteManager);
+                                VoxLoader loader(&m_Chunk, m_PaletteManager);
                                 loader.loadModel(currentModel);
                                 break;
                             }
@@ -166,13 +166,14 @@ void SceneManager::receive(const Event* event)
                 {
                     ImGui::Text("Max Depth Shown");
                     int maxDepth = m_VoxelPushConstants.maxDepthShown;
-                    if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1, std::log2(getDimension())))
+                    if (ImGui::SliderInt("##MaxDepth", &maxDepth, 1,
+                                         std::log2(m_Chunk.getDimensions())))
                         m_VoxelPushConstants.maxDepthShown = maxDepth;
                 }
 
                 ImGui::Text("Max LOD");
                 int LOD = m_VoxelPushConstants.lod;
-                if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(getDimension())))
+                if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_Chunk.getDimensions())))
                     m_VoxelPushConstants.lod = LOD;
 
                 switch (currentGeneration)
@@ -187,12 +188,12 @@ void SceneManager::receive(const Event* event)
                             generateWorld();
                         }
 
-                        ImGui::Text("Size");
-                        if (ImGui::SliderInt("##Size", &powerOf2, 1, 8))
-                        {
-                            setDimensions(1 << powerOf2);
-                            generateWorld();
-                        }
+                        // ImGui::Text("Size");
+                        // if (ImGui::SliderInt("##Size", &powerOf2, 1, 8))
+                        // {
+                        //     // setDimensions(1 << powerOf2);
+                        //     generateWorld();
+                        // }
 
                         ImGui::Text("Cutoff");
                         if (ImGui::SliderFloat("##Cutoff", &m_GenerationPushConstants.cutoff, -1.0,
@@ -235,7 +236,7 @@ void SceneManager::receive(const Event* event)
 
                         if (ImGui::Button("Load Model"))
                         {
-                            VoxLoader loader(this, m_PaletteManager);
+                            VoxLoader loader(&m_Chunk, m_PaletteManager);
                             if (loader.loadModel(currentModel))
                             {
                                 m_HasUpdated = true;
@@ -302,6 +303,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator)
 
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
+
+    m_Chunk = Chunk({ 0, 0, 0 }, m_Dimension);
 }
 
 void SceneManager::freeResources()
@@ -315,19 +318,11 @@ void SceneManager::freeResources()
     m_Initialized = false;
 }
 
-void SceneManager::setDimensions(uint32_t dimension)
-{
-    m_Dimension = dimension;
-
-    spdlog::info("Resized to {}x{}x{}", dimension, dimension, dimension);
-    m_Voxels.assign(dimension * dimension * dimension, { .colourIndex = -1 });
-}
-
 VoxelPushConstants& SceneManager::getVoxelPushConstants()
 {
     m_VoxelPushConstants.dimension = m_Dimension;
     m_VoxelPushConstants.size = 1.0f;
-    m_VoxelPushConstants.voxelAddress = m_SVO.getDeviceAddress(m_Device);
+    m_VoxelPushConstants.voxelAddress = m_Chunk.getBufferAddress(m_Device);
 
     return m_VoxelPushConstants;
 }
@@ -349,7 +344,7 @@ void SceneManager::generateWorld()
         vkCmdDispatch(buffer, m_Dimension / 4, m_Dimension / 4, m_Dimension / 4);
     });
 
-    m_GeneratedVoxels.copyToVector<Voxel>(m_Voxels);
+    m_GeneratedVoxels.copyToVector<Voxel>(m_Chunk.getVoxels());
     m_HasUpdated = true;
 }
 
@@ -360,7 +355,7 @@ void SceneManager::updateBuffers()
     size_t size = sizeof(SVONode) * svo.size();
     createBuffers(size);
     m_Staging.copyFromData_CPUOnly<SVONode>(svo);
-    m_SVO.copyFromBuffer(m_Staging, size);
+    m_Chunk.getSVOBuffer()->copyFromBuffer(m_Staging, size);
 
     m_VoxelPushConstants.initialParent = 0;
 }
@@ -390,10 +385,11 @@ std::vector<SVONode> SceneManager::serializeScene()
     }
 
     int depth = maxDepth;
-    size_t voxelSize = m_Voxels.size();
+    std::vector<Voxel>& voxels = m_Chunk.getVoxels();
+    size_t voxelSize = voxels.size();
     for (size_t i = 0; i < voxelSize; ++i)
     {
-        const Voxel& v = m_Voxels.at(i);
+        const Voxel& v = voxels.at(i);
         SVONode node;
         node.childPointer = 0;
         node.validMask = 0;
@@ -503,9 +499,9 @@ std::vector<SVONode> SceneManager::serializeScene()
 
     size_t bytes = reversed.size() * sizeof(SVONode);
     spdlog::info("Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB). Took {}s",
-                 reversed.size(), m_Voxels.size(), bytes, bytes / 1024, bytes / (1024 * 1024),
-                 after - before);
-    spdlog::info("~{} bytes per voxel", (float)bytes / (float)m_Voxels.size());
+                 reversed.size(), m_Chunk.getVoxels().size(), bytes, bytes / 1024,
+                 bytes / (1024 * 1024), after - before);
+    spdlog::info("~{} bytes per voxel", (float)bytes / (float)m_Chunk.getVoxels().size());
 
     return reversed;
 }
@@ -515,53 +511,15 @@ void SceneManager::createBuffers(size_t size)
     m_Staging.create(m_Allocator, size * sizeof(SVONode), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                      VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-    m_SVO.create(m_Allocator, size * sizeof(SVONode),
-                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                 VMA_MEMORY_USAGE_GPU_ONLY);
+    m_Chunk.getSVOBuffer()->create(m_Allocator, size * sizeof(SVONode),
+                                   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                       VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                       VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                   VMA_MEMORY_USAGE_GPU_ONLY);
 }
 
 void SceneManager::freeBuffers()
 {
     m_Staging.free();
-    m_SVO.free();
-}
-
-// https://www.forceflow.be/2013/10/07/morton-encodingdecoding-through-bit-interleaving-implementations/
-int64_t SceneManager::splitBy3(uint32_t a)
-{
-    int64_t x = a;
-    x &= 0x000003ff;                  // x = ---- ---- ---- ---- ---- --98 7654 3210
-    x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
-    x = (x ^ (x << 8)) & 0x0300f00f;  // x = ---- --98 ---- ---- 7654 ---- ---- 3210
-    x = (x ^ (x << 4)) & 0x030c30c3;  // x = ---- --98 ---- 76-- --54 ---- 32-- --10
-    x = (x ^ (x << 2)) & 0x09249249;  // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
-    return x;
-}
-
-int64_t SceneManager::mortenEncode(glm::uvec3 position)
-{
-    return (splitBy3(position.x) | (splitBy3(position.y) << 2) | splitBy3(position.z) << 1);
-}
-
-// https://fgiesen.wordpress.com/2009/12/13/decoding-morton-codes/
-uint32_t SceneManager::compactBy3(int64_t a)
-{
-    size_t x = a;
-    x &= 0x09249249;                  // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
-    x = (x ^ (x >> 2)) & 0x030c30c3;  // x = ---- --98 ---- 76-- --54 ---- 32-- --10
-    x = (x ^ (x >> 4)) & 0x0300f00f;  // x = ---- --98 ---- ---- 7654 ---- ---- 3210
-    x = (x ^ (x >> 8)) & 0xff0000ff;  // x = ---- --98 ---- ---- ---- ---- 7654 3210
-    x = (x ^ (x >> 16)) & 0x000003ff; // x = ---- ---- ---- ---- ---- --98 7654 3210
-    return x;
-}
-
-glm::uvec3 SceneManager::mortenDecode(int64_t code)
-{
-    glm::uvec3 position;
-    position.x = compactBy3(code >> 0);
-    position.y = compactBy3(code >> 2);
-    position.z = compactBy3(code >> 1);
-
-    return position;
+    m_Chunk.getSVOBuffer()->free();
 }

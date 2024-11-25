@@ -3,18 +3,18 @@
 #include <array>
 #include <fstream>
 
+#include "Chunk.hpp"
 #include "PaletteManager.hpp"
-#include "SceneManager.hpp"
 
 class VoxLoader
 {
   public:
-    VoxLoader(SceneManager* sceneManager, PaletteManager* paletteManager);
+    VoxLoader(Chunk* chunk, PaletteManager* paletteManager);
 
     bool loadModel(const char* name);
 
   private:
-    SceneManager* m_SceneManager;
+    Chunk* m_Chunk;
     PaletteManager* m_PaletteManager;
 
   private:
