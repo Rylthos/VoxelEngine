@@ -145,8 +145,6 @@ void SceneManager::receive(const Event* event)
                     m_VoxelPushConstants.maxIterations = maxIterations;
                 }
 
-                ImGui::Text("Max Iterations");
-
                 bool showHeatMap = (m_VoxelPushConstants.flags & PCF_SHOW_HEAT_MAP) != 0;
                 if (ImGui::Checkbox("Show Heat Map", &showHeatMap))
                 {
@@ -299,8 +297,13 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator)
     // m_Chunks.reserve(m_ChunkCount);
 
     m_Chunks.emplace_back(glm::ivec3{ 0, 0, 0 }, m_Dimension);
-    m_Chunks.emplace_back(glm::ivec3{ 1, 0, 0 }, m_Dimension);
-    m_Chunks.emplace_back(glm::ivec3{ 0, 0, 1 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 2, 0, 0 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 0, 0, 2 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 2, 0, 2 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 0, 2, 0 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 2, 2, 0 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 0, 2, 2 }, m_Dimension);
+    m_Chunks.emplace_back(glm::ivec3{ 2, 2, 2 }, m_Dimension);
     // m_Chunks.emplace_back(glm::ivec3{ 1, 0, 1 }, m_Dimension);
 }
 

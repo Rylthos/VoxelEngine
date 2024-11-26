@@ -142,7 +142,7 @@ void Engine::receive(const Event* event)
 
             if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS) m_RenderImGui = !m_RenderImGui;
 
-            if (ki->key == GLFW_KEY_RIGHT_ALT && ki->action == GLFW_PRESS)
+            if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
                 m_RenderAlt = !m_RenderAlt;
 
             break;

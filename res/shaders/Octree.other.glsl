@@ -54,6 +54,16 @@ vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
     return vec3(0.);
 }
 
+HitRecord emptyHit()
+{
+    HitRecord hit;
+    hit.t = -1;
+    hit.deepest = -1;
+    hit.heatMap = -1;
+
+    return hit;
+}
+
 HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSize,
     uint maxIterations, uint maxLOD) {
     const int sMax = 13;
@@ -75,11 +85,7 @@ HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSi
     int currentStack = -1;
     StackMember stack[sMax + 1];
 
-    HitRecord hit;
-    hit.t = -2;
-    hit.deepest = -1;
-    hit.heatMap = -1;
-    hit.position = vec3(100);
+    HitRecord hit = emptyHit();
 
     vec3 invDir = 1. / direction;
 
@@ -227,8 +233,7 @@ HitRecord castRay(int chunkCount, ChunkBuffer chunks, Ray ray, uint voxelDimensi
     uint maxIterations, uint maxLOD)
 {
     float closestT = 100000.;
-    HitRecord closestHit;
-    closestHit.t = -1;
+    HitRecord closestHit = emptyHit();
     for (int i = 0; i < chunkCount; i++)
     {
         HitRecord hit = castRayChunk(chunks.chunks[i], ray, voxelDimension, voxelSize,
