@@ -26,10 +26,14 @@ class Chunk
     void setVoxel(glm::uvec3 position, Voxel data);
     Voxel getVoxel(glm::uvec3 position);
 
+    void setIsGenerated(bool generated) { m_Generated = generated; }
+    bool isGenerated() { return m_Generated; }
+
     glm::ivec3& getPosition() { return m_ChunkPosition; }
 
   private:
     bool m_Initialized = false;
+    bool m_Generated = false;
 
     VmaAllocator m_Allocator;
 

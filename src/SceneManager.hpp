@@ -12,33 +12,6 @@
 
 #include "Chunk.hpp"
 
-enum SVONodeFlags {
-    SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
-    SVONODE_IS_PARENT = 1 << 1, // Has Smaller Nodes
-    SVONODE_IS_AIR = 1 << 2     // Is air
-};
-
-struct SVONode {
-    uint32_t childPointer;
-    uint8_t flags;
-    uint8_t materialIndex;
-    uint8_t validMask;
-    uint8_t leafMask;
-} __attribute__((packed));
-
-struct VoxelGenerationPushConstants {
-    uint32_t dimension;
-    float size;
-    uint32_t seed;
-    int _;
-    float cutoff;
-    int32_t p10;
-    int32_t p50;
-    int32_t p100;
-    glm::ivec4 origin;
-    VkDeviceAddress targetBuffer;
-};
-
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct ChunkData {
@@ -88,12 +61,7 @@ class SceneManager : public EventReceiver
     void initResources(VkDevice device, VmaAllocator allocator);
     void freeResources();
 
-    int getSeed() { return m_GenerationPushConstants.seed; }
-    void setSeed(int seed) { m_GenerationPushConstants.seed = seed; }
-
     VoxelPushConstants& getVoxelPushConstants();
-
-    void generateWorld();
 
     bool hasUpdated()
     {
@@ -105,11 +73,7 @@ class SceneManager : public EventReceiver
         return false;
     }
 
-    // VkDeviceAddress getBufferAddress(VkDevice device) { return m_Chunk.getBufferAddress(device);
-    // }
     void updateBuffers();
-
-    std::vector<SVONode> serializeChunk(Chunk& chunk);
 
   private:
     bool m_Initialized = false;
@@ -126,16 +90,10 @@ class SceneManager : public EventReceiver
     Buffer m_Staging;
 
     VoxelPushConstants m_VoxelPushConstants;
-    VoxelGenerationPushConstants m_GenerationPushConstants;
-
-    VkPipelineLayout m_GenerationPipelineLayout;
-    VkPipeline m_GenerationPipeline;
-    Buffer m_GeneratedVoxels;
 
     Buffer m_ChunkDataAddress;
 
   private:
-    void createBuffer(Chunk& chunk, size_t count);
     void createBufferChunks();
     void freeBuffers();
 };

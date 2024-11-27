@@ -6,7 +6,7 @@
 
 Buffer::Buffer() {}
 
-Buffer::~Buffer() { free(); }
+Buffer::~Buffer() {}
 
 void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage,
                     VmaMemoryUsage memoryUsage)
@@ -59,14 +59,19 @@ VkDeviceAddress Buffer::getDeviceAddress(VkDevice device) const
     return address;
 }
 
+void Buffer::copyFromBuffer(VkCommandBuffer cmd, const Buffer& buffer, size_t size,
+                            size_t srcOffset, size_t dstOffset)
+{
+    VkBufferCopy copy{};
+    copy.srcOffset = srcOffset;
+    copy.dstOffset = dstOffset;
+    copy.size = size;
+
+    vkCmdCopyBuffer(cmd, buffer.getBuffer(), getBuffer(), 1, &copy);
+}
+
 void Buffer::copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
 {
-    ImmediateSubmit::submit([&](VkCommandBuffer cmd) {
-        VkBufferCopy copy{};
-        copy.srcOffset = srcOffset;
-        copy.dstOffset = dstOffset;
-        copy.size = size;
-
-        vkCmdCopyBuffer(cmd, buffer.getBuffer(), getBuffer(), 1, &copy);
-    });
+    ImmediateSubmit::submit(
+        [&](VkCommandBuffer cmd) { copyFromBuffer(cmd, buffer, size, srcOffset, dstOffset); });
 }

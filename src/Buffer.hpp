@@ -33,6 +33,9 @@ class Buffer
     void copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset = 0,
                         size_t dstOffset = 0);
 
+    void copyFromBuffer(VkCommandBuffer cmd, const Buffer& buffer, size_t size,
+                        size_t srcOffset = 0, size_t dstOffset = 0);
+
     template<typename T>
     void copyFromData(const std::span<T>& data)
     {
@@ -44,6 +47,8 @@ class Buffer
         std::memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
 
         copyFromBuffer(stagingBuffer, size);
+
+        stagingBuffer.free();
     }
 
     template<typename T>

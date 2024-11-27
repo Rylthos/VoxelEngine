@@ -7,6 +7,7 @@
 
 #include <spdlog/fmt/ranges.h>
 
+#include "ChunkGenerator.hpp"
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
 #include "ShaderModule.hpp"
@@ -42,8 +43,10 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
+    ChunkGenerator::initResources(1 << 7, m_Allocator, m_Device, m_ComputeQueue.queue,
+                                  m_ComputeQueue.queueFamily);
+
     m_SceneManager.initResources(m_Device, m_Allocator);
-    m_SceneManager.generateWorld();
 
     updateScene();
 
@@ -60,6 +63,8 @@ void Engine::init()
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_RenderAlt = false;
+
+    m_ChunkGeneration = std::thread{ [&]() { ChunkGenerator::generateChunkLoop(); } };
 }
 
 void Engine::start()
@@ -89,9 +94,14 @@ void Engine::start()
 
 void Engine::cleanup()
 {
+    ChunkGenerator::stopRunning();
+    m_ChunkGeneration.join();
+
     vkDeviceWaitIdle(m_Device);
 
     ImmediateSubmit::free();
+
+    ChunkGenerator::freeResources();
 
     vkDestroyQueryPool(m_Device, m_QueryPool, nullptr);
 
@@ -237,7 +247,11 @@ void Engine::initVulkan()
 
     m_GraphicsQueue.queue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
     m_GraphicsQueue.queueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
-    spdlog::info("Created Queues");
+    spdlog::info("Created Graphics Queue: {}", m_GraphicsQueue.queueFamily);
+
+    m_ComputeQueue.queue = vkbDevice.get_queue(vkb::QueueType::compute).value();
+    m_ComputeQueue.queueFamily = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
+    spdlog::info("Created Compute Queue: {}", m_ComputeQueue.queueFamily);
 
     VmaAllocatorCreateInfo allocatorCI{};
     allocatorCI.physicalDevice = m_PhysicalDevice;
@@ -349,6 +363,7 @@ void Engine::initSyncStructures()
     for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
     {
         VK_CHECK(vkCreateFence(m_Device, &fenceCI, nullptr, &m_Frames[i].renderFence));
+        spdlog::info("T0: {} | {}", i, std::format("{:x}", (uint64_t)m_Frames[i].renderFence));
 
         VK_CHECK(
             vkCreateSemaphore(m_Device, &semaphoreCI, nullptr, &m_Frames[i].swapchainSemaphore));

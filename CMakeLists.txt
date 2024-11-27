@@ -37,7 +37,7 @@ add_compile_definitions(GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${outputDirectory})
 
 # Setup build flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++2a -Wall -Wextra -Wpedantic \
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++2a -Wall -Wextra -Wpedantic \
 -Wno-unused-parameter -Wno-unknown-pragmas -Wno-unused-variable")
 
 add_subdirectory(vendor)
@@ -107,8 +107,8 @@ foreach(file ${RESOURCES_COMPUTE})
   add_custom_command(
     TARGET Resources
     PRE_BUILD
-    COMMAND glslangValidator -e main --target-env vulkan1.3 -V -o ${InputRes}/shaders/${name}.spv
-            ${InputRes}/shaders/${name}.glsl
+    COMMAND glslangValidator -e main --target-env vulkan1.3 -V -o
+            ${InputRes}/shaders/${name}.spv ${InputRes}/shaders/${name}.glsl
     COMMENT "Compiled ${name}")
 endforeach()
 
