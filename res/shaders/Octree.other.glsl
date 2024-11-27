@@ -65,7 +65,7 @@ HitRecord emptyHit()
 }
 
 HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSize,
-    uint maxIterations, uint maxLOD) {
+    uint maxIterations, uint maxLOD, float prevMaxT) {
     const int sMax = 13;
     const float epsilon = exp2(-sMax);
 
@@ -93,6 +93,9 @@ HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSi
     if (!rayBoxIntersect(origin, invDir, minBound, maxBound, 0., MAX_T, tMin, tMax)) return hit;
 
     float t = tMin;
+
+    if (tMin > prevMaxT)
+        return hit;
 
     float scale = 0.5;
 
@@ -237,7 +240,7 @@ HitRecord castRay(int chunkCount, ChunkBuffer chunks, Ray ray, uint voxelDimensi
     for (int i = 0; i < chunkCount; i++)
     {
         HitRecord hit = castRayChunk(chunks.chunks[i], ray, voxelDimension, voxelSize,
-                maxIterations, maxLOD);
+                maxIterations, maxLOD, closestT);
 
         if (hit.t < 0)
             continue;
