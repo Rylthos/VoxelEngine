@@ -186,7 +186,7 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 
     size_t dimension = s_ActiveChunks->at(chunkPosition).getDimensions();
     s_GenerationPushConstants.dimension = dimension;
-    s_GenerationPushConstants.size = 1.0f;
+    s_GenerationPushConstants.size = Voxel::VOXEL_SIZE;
     s_GenerationPushConstants.targetBuffer = s_GeneratedVoxels.getDeviceAddress(s_Device);
     s_GenerationPushConstants.origin = glm::vec4(chunkPosition, 0.);
 

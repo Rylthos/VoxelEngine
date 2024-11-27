@@ -9,7 +9,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager)
-    : m_Dimension(1 << 7), m_PaletteManager(paletteManager)
+    : m_Dimension(1 << 8), m_PaletteManager(paletteManager)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -54,11 +54,12 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, VkQueu
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
 
-    for (int x = 0; x < 5; x++)
+    const int size = 2;
+    for (int x = 0; x < size; x++)
     {
-        for (int y = 0; y < 5; y++)
+        for (int y = 0; y < size; y++)
         {
-            for (int z = 0; z < 5; z++)
+            for (int z = 0; z < size; z++)
             {
                 glm::ivec3 position = { x, y, z };
                 m_Chunks.emplace(position, Chunk{ position, m_Dimension });
@@ -280,7 +281,7 @@ void SceneManager::receive(const Event* event)
 VoxelPushConstants& SceneManager::getVoxelPushConstants()
 {
     m_VoxelPushConstants.dimension = m_Dimension;
-    m_VoxelPushConstants.size = 1.0f;
+    m_VoxelPushConstants.size = Voxel::VOXEL_SIZE;
 
     createBufferChunks();
 

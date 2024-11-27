@@ -80,7 +80,7 @@ HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSi
     uint parent = 0;
 
     vec3 minBound = chunk.chunkPosition.xyz * voxelDimensions * voxelSize;
-    vec3 maxBound = minBound + voxelDimensions;
+    vec3 maxBound = minBound + dimensions;
 
     int currentStack = -1;
     StackMember stack[sMax + 1];
@@ -151,9 +151,8 @@ HitRecord castRayChunk(Chunk chunk, Ray ray, uint voxelDimensions, float voxelSi
         {
             uint8_t materialIndex = chunk.nodes.nodes[parent].materialIndex;
 
-            float voxelScale = scale;
-            vec3 voxelMinBound = minBound + boundOffset * voxelScale;
-            vec3 voxelMaxBound = voxelMinBound + dimensions * voxelScale;
+            vec3 voxelMinBound = minBound + boundOffset * scale;
+            vec3 voxelMaxBound = voxelMinBound + dimensions * scale;
 
             hit.t = t;
             hit.position = calculatePosition(origin, direction, t);
