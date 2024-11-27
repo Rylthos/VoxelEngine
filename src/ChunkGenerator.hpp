@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <mutex>
 #include <queue>
+#include <unordered_map>
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
@@ -42,7 +43,8 @@ class ChunkGenerator
 {
   public:
     static void initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                              VkQueue computeQueue, uint32_t computeQueueFamily);
+                              VkQueue computeQueue, uint32_t computeQueueFamily,
+                              std::unordered_map<glm::ivec3, Chunk>* chunks);
     static void freeResources();
 
     static int getWorldSeed() { return s_Seed; }
@@ -54,7 +56,7 @@ class ChunkGenerator
         s_Condition.notify_all();
     }
 
-    static void addChunkToQueue(Chunk* chunk);
+    static void addChunkToQueue(glm::ivec3 chunk);
 
     static void generateChunkLoop();
 
@@ -62,7 +64,9 @@ class ChunkGenerator
     static std::mutex s_QueueMutex;
     static std::mutex s_QueueSubmitMutex;
     static std::condition_variable s_Condition;
-    static std::queue<Chunk*> s_ToBeGenerated;
+    static std::queue<glm::ivec3> s_ToBeGenerated;
+
+    static std::unordered_map<glm::ivec3, Chunk>* s_ActiveChunks;
 
     static bool s_Running;
 
@@ -87,10 +91,10 @@ class ChunkGenerator
 
   private:
     static void generateNextChunk();
-    static void generateChunk(Chunk* chunk);
-    static void serializeChunk(Chunk* chunk);
+    static void generateChunk(glm::ivec3 chunkPosition);
+    static void serializeChunk(glm::ivec3 chunkPosition);
 
-    static void copyStagingToChunk(Chunk* chunk, size_t size);
+    static void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
 
     static void createSVO(Buffer* buffer, size_t count);
     static void createStaging(size_t count);

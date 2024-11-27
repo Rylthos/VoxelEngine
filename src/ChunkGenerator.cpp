@@ -1,5 +1,8 @@
 #include "ChunkGenerator.hpp"
 
+#include <glm/gtx/hash.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 #include <format>
 
 #include "ShaderModule.hpp"
@@ -8,7 +11,9 @@
 std::mutex ChunkGenerator::s_QueueMutex;
 std::mutex ChunkGenerator::s_QueueSubmitMutex;
 std::condition_variable ChunkGenerator::s_Condition;
-std::queue<Chunk*> ChunkGenerator::s_ToBeGenerated;
+std::queue<glm::ivec3> ChunkGenerator::s_ToBeGenerated;
+
+std::unordered_map<glm::ivec3, Chunk>* ChunkGenerator::s_ActiveChunks;
 
 int ChunkGenerator::s_Seed = 0;
 VoxelGenerationPushConstants ChunkGenerator::s_GenerationPushConstants;
@@ -31,11 +36,13 @@ VkFence ChunkGenerator::s_GeneratedFence;
 VkFence ChunkGenerator::s_CopyFence;
 
 void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                                   VkQueue computeQueue, uint32_t computeQueueFamily)
+                                   VkQueue computeQueue, uint32_t computeQueueFamily,
+                                   std::unordered_map<glm::ivec3, Chunk>* chunks)
 {
     s_Allocator = allocator;
     s_Device = device;
     s_ComputeQueue = computeQueue;
+    s_ActiveChunks = chunks;
 
     VkCommandPoolCreateInfo commandPoolCI{};
     commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -125,17 +132,17 @@ void ChunkGenerator::freeResources()
     vkDestroyCommandPool(s_Device, s_CommandPool, nullptr);
 }
 
-void ChunkGenerator::addChunkToQueue(Chunk* chunk)
+void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 {
     std::unique_lock<std::mutex> lk(s_QueueMutex);
-    s_ToBeGenerated.push(chunk);
+    s_ToBeGenerated.push(chunkPosition);
     s_Condition.notify_one();
 }
 
 void ChunkGenerator::generateChunkLoop()
 {
     s_Running = true;
-    spdlog::trace("Started Chunk Generation");
+    spdlog::info("Started Chunk Generation");
     while (s_Running)
     {
         generateNextChunk();
@@ -155,9 +162,9 @@ void ChunkGenerator::generateNextChunk()
     }
     if (!s_Running) return;
 
-    Chunk* topChunk = s_ToBeGenerated.front();
+    glm::ivec3 chunkPosition = s_ToBeGenerated.front();
 
-    generateChunk(topChunk);
+    generateChunk(chunkPosition);
 
     {
         std::unique_lock<std::mutex> lk(s_QueueMutex);
@@ -165,7 +172,7 @@ void ChunkGenerator::generateNextChunk()
     }
 }
 
-void ChunkGenerator::generateChunk(Chunk* chunk)
+void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 {
     VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
 
@@ -177,11 +184,11 @@ void ChunkGenerator::generateChunk(Chunk* chunk)
 
     VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
 
-    size_t dimension = chunk->getDimensions();
+    size_t dimension = s_ActiveChunks->at(chunkPosition).getDimensions();
     s_GenerationPushConstants.dimension = dimension;
     s_GenerationPushConstants.size = 1.0f;
     s_GenerationPushConstants.targetBuffer = s_GeneratedVoxels.getDeviceAddress(s_Device);
-    s_GenerationPushConstants.origin = glm::vec4(chunk->getPosition(), 0.);
+    s_GenerationPushConstants.origin = glm::vec4(chunkPosition, 0.);
 
     vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_GenerationPipeline);
 
@@ -205,22 +212,19 @@ void ChunkGenerator::generateChunk(Chunk* chunk)
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
     VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
-    spdlog::debug("Submit");
     VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
-    spdlog::debug("Wait");
     VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
-    spdlog::debug("Reset");
 
-    s_GeneratedVoxels.copyToVector<Voxel>(chunk->getVoxels());
+    s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->at(chunkPosition).getVoxels());
 
-    serializeChunk(chunk);
+    serializeChunk(chunkPosition);
 
-    chunk->setIsGenerated(true);
+    s_ActiveChunks->at(chunkPosition).setIsGenerated(true);
 }
 
-void ChunkGenerator::serializeChunk(Chunk* chunk)
+void ChunkGenerator::serializeChunk(glm::ivec3 chunkPosition)
 {
-    size_t maxDepth = std::log2(chunk->getDimensions());
+    size_t maxDepth = std::log2(s_ActiveChunks->at(chunkPosition).getDimensions());
 
     std::vector<std::vector<SVONode>> queues;
 
@@ -233,7 +237,7 @@ void ChunkGenerator::serializeChunk(Chunk* chunk)
     }
 
     int depth = maxDepth;
-    std::vector<Voxel>& voxels = chunk->getVoxels();
+    std::vector<Voxel>& voxels = s_ActiveChunks->at(chunkPosition).getVoxels();
     size_t voxelSize = voxels.size();
     for (size_t i = 0; i < voxelSize; ++i)
     {
@@ -333,7 +337,6 @@ void ChunkGenerator::serializeChunk(Chunk* chunk)
 
     queues[0][0].childPointer = finalNodes.size() - queues[0][0].childPointer;
     finalNodes.push_back(queues[0][0]);
-    spdlog::trace("T1: Finished Parsing Nodes");
 
     std::vector<SVONode> reversed;
     reversed.reserve(finalNodes.size());
@@ -341,23 +344,24 @@ void ChunkGenerator::serializeChunk(Chunk* chunk)
     {
         reversed.push_back(*itr);
     }
-    spdlog::trace("T1: Finished Reversing Nodes");
 
     size_t bytes = reversed.size() * sizeof(SVONode);
-    spdlog::info("T1: Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB).", reversed.size(),
-                 chunk->getVoxels().size(), bytes, bytes / 1024, bytes / (1024 * 1024));
+    spdlog::info("{} Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB).",
+                 glm::to_string(chunkPosition), reversed.size(),
+                 s_ActiveChunks->at(chunkPosition).getVoxels().size(), bytes, bytes / 1024,
+                 bytes / (1024 * 1024));
 
-    spdlog::info("T1: ~{} bytes per voxel", (float)bytes / (float)chunk->getVoxels().size());
+    spdlog::info("~{} bytes per voxel",
+                 (float)bytes / (float)s_ActiveChunks->at(chunkPosition).getVoxels().size());
 
     createStaging(reversed.size());
-    createSVO(chunk->getSVOBuffer(), reversed.size());
+    createSVO(s_ActiveChunks->at(chunkPosition).getSVOBuffer(), reversed.size());
     s_StagingBuffer.copyFromData_CPUOnly<SVONode>(reversed);
 
-    copyStagingToChunk(chunk, reversed.size() * sizeof(SVONode));
-    // chunk->getSVOBuffer()->copyFromBuffer(s_StagingBuffer, reversed.size() * sizeof(SVONode));
+    copyStagingToChunk(chunkPosition, reversed.size() * sizeof(SVONode));
 }
 
-void ChunkGenerator::copyStagingToChunk(Chunk* chunk, size_t size)
+void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
 {
     VK_CHECK(vkResetFences(s_Device, 1, &s_CopyFence));
     VK_CHECK(vkResetCommandBuffer(s_CopyCommandBuffer, 0));
@@ -370,7 +374,9 @@ void ChunkGenerator::copyStagingToChunk(Chunk* chunk, size_t size)
 
     VK_CHECK(vkBeginCommandBuffer(s_CopyCommandBuffer, &commandBufferBI));
 
-    chunk->getSVOBuffer()->copyFromBuffer(s_CopyCommandBuffer, s_StagingBuffer, size);
+    s_ActiveChunks->at(chunkPosition)
+        .getSVOBuffer()
+        ->copyFromBuffer(s_CopyCommandBuffer, s_StagingBuffer, size);
 
     VK_CHECK(vkEndCommandBuffer(s_CopyCommandBuffer));
 
@@ -392,7 +398,6 @@ void ChunkGenerator::copyStagingToChunk(Chunk* chunk, size_t size)
 
 void ChunkGenerator::createSVO(Buffer* buffer, size_t count)
 {
-    spdlog::info("T1: Creating Chunk SVO");
     buffer->create(s_Allocator, count * sizeof(SVONode),
                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
@@ -404,7 +409,6 @@ void ChunkGenerator::createStaging(size_t count)
     size_t size = count * sizeof(SVONode);
     if (s_StagingBuffer.getSize() < size)
     {
-        spdlog::info("T1: Resizing Staging Buffer: {}", size);
         s_StagingBuffer.free();
 
         s_StagingBuffer.create(s_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,

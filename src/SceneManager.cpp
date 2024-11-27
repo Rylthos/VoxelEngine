@@ -40,6 +40,47 @@ SceneManager SceneManager::operator=(const SceneManager& other)
     return *this;
 }
 
+void SceneManager::initResources(VkDevice device, VmaAllocator allocator, VkQueue computeQueue,
+                                 uint32_t computeQueueFamily)
+{
+    if (m_Initialized) return;
+
+    m_Device = device;
+    m_Allocator = allocator;
+
+    ChunkGenerator::initResources(m_Dimension, m_Allocator, m_Device, computeQueue,
+                                  computeQueueFamily, &m_Chunks);
+
+    m_Initialized = true;
+    spdlog::info("Created Background Pipeline and Pipeline Layout");
+
+    for (int x = 0; x < 5; x++)
+    {
+        for (int y = 0; y < 5; y++)
+        {
+            for (int z = 0; z < 5; z++)
+            {
+                glm::ivec3 position = { x, y, z };
+                m_Chunks.emplace(position, Chunk{ position, m_Dimension });
+                ChunkGenerator::addChunkToQueue(position);
+            }
+        }
+    }
+
+    m_ChunkGeneration = std::thread([&]() { ChunkGenerator::generateChunkLoop(); });
+}
+
+void SceneManager::freeResources()
+{
+    if (!m_Initialized) return;
+    ChunkGenerator::stopRunning();
+    m_ChunkGeneration.join();
+
+    ChunkGenerator::freeResources();
+    freeBuffers();
+    m_Initialized = false;
+}
+
 void SceneManager::receive(const Event* event)
 {
     static float currentT = 0.0;
@@ -236,39 +277,6 @@ void SceneManager::receive(const Event* event)
     }
 }
 
-void SceneManager::initResources(VkDevice device, VmaAllocator allocator)
-{
-    if (m_Initialized) return;
-
-    m_Device = device;
-    m_Allocator = allocator;
-
-    m_Initialized = true;
-    spdlog::info("Created Background Pipeline and Pipeline Layout");
-
-    for (int x = 0; x < 5; x++)
-    {
-        for (int y = 0; y < 5; y++)
-        {
-            for (int z = 0; z < 5; z++)
-            {
-                m_Chunks.emplace_back(glm::ivec3{ x, y, z }, m_Dimension);
-            }
-        }
-    }
-
-    for (Chunk& chunk : m_Chunks)
-        ChunkGenerator::addChunkToQueue(&chunk);
-}
-
-void SceneManager::freeResources()
-{
-    if (!m_Initialized) return;
-
-    freeBuffers();
-    m_Initialized = false;
-}
-
 VoxelPushConstants& SceneManager::getVoxelPushConstants()
 {
     m_VoxelPushConstants.dimension = m_Dimension;
@@ -277,12 +285,12 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
     createBufferChunks();
 
     std::vector<ChunkData> chunkData;
-    for (Chunk& chunk : m_Chunks)
+    for (auto& chunkPair : m_Chunks)
     {
-        if (!chunk.isGenerated()) continue;
+        if (!chunkPair.second.isGenerated()) continue;
 
-        chunkData.push_back({ .chunkPosition = glm::vec4(chunk.getPosition(), 0),
-                              .chunkData = chunk.getBufferAddress(m_Device) });
+        chunkData.push_back({ .chunkPosition = glm::vec4(chunkPair.second.getPosition(), 0),
+                              .chunkData = chunkPair.second.getBufferAddress(m_Device) });
     }
     m_VoxelPushConstants.chunkCount = chunkData.size();
 
@@ -311,8 +319,8 @@ void SceneManager::updateBuffers()
 void SceneManager::createBufferChunks()
 {
     size_t count = 0;
-    for (Chunk& chunk : m_Chunks)
-        count += chunk.isGenerated();
+    for (auto& chunkPair : m_Chunks)
+        count += chunkPair.second.isGenerated();
 
     if (count == 0) return;
 
@@ -340,9 +348,9 @@ void SceneManager::freeBuffers()
 {
     m_Staging.free();
 
-    for (Chunk& chunk : m_Chunks)
+    for (auto& chunkPair : m_Chunks)
     {
-        chunk.getSVOBuffer()->free();
+        chunkPair.second.getSVOBuffer()->free();
     }
 
     m_ChunkDataAddress.free();

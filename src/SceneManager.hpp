@@ -1,6 +1,10 @@
 #pragma once
 
+#include <glm/gtx/hash.hpp>
+
 #include <string>
+#include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -56,10 +60,11 @@ class SceneManager : public EventReceiver
 
     SceneManager operator=(const SceneManager& other);
 
-    void receive(const Event* event);
-
-    void initResources(VkDevice device, VmaAllocator allocator);
+    void initResources(VkDevice device, VmaAllocator allocator, VkQueue computeQueue,
+                       uint32_t computeQueueFamily);
     void freeResources();
+
+    void receive(const Event* event);
 
     VoxelPushConstants& getVoxelPushConstants();
 
@@ -80,7 +85,9 @@ class SceneManager : public EventReceiver
     bool m_HasUpdated = false;
     bool m_AnimateCutoff = false;
 
-    std::vector<Chunk> m_Chunks;
+    std::thread m_ChunkGeneration;
+
+    std::unordered_map<glm::ivec3, Chunk> m_Chunks;
 
     uint32_t m_Dimension = 1 << 7;
     PaletteManager* m_PaletteManager;

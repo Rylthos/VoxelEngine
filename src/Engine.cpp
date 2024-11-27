@@ -43,10 +43,8 @@ void Engine::init()
     initDescriptorSets();
     initQueryPool();
 
-    ChunkGenerator::initResources(1 << 7, m_Allocator, m_Device, m_ComputeQueue.queue,
-                                  m_ComputeQueue.queueFamily);
-
-    m_SceneManager.initResources(m_Device, m_Allocator);
+    m_SceneManager.initResources(m_Device, m_Allocator, m_ComputeQueue.queue,
+                                 m_ComputeQueue.queueFamily);
 
     updateScene();
 
@@ -63,15 +61,13 @@ void Engine::init()
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_RenderAlt = false;
-
-    m_ChunkGeneration = std::thread{ [&]() { ChunkGenerator::generateChunkLoop(); } };
 }
 
 void Engine::start()
 {
     float currentTime;
     float previousTime = glfwGetTime();
-    // return;
+
     while (!m_Window.shouldClose())
     {
         if (m_ShouldResize) resizeWindow();
@@ -94,14 +90,9 @@ void Engine::start()
 
 void Engine::cleanup()
 {
-    ChunkGenerator::stopRunning();
-    m_ChunkGeneration.join();
-
     vkDeviceWaitIdle(m_Device);
 
     ImmediateSubmit::free();
-
-    ChunkGenerator::freeResources();
 
     vkDestroyQueryPool(m_Device, m_QueryPool, nullptr);
 

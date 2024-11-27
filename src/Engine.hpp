@@ -5,7 +5,6 @@
 #include "vulkan/vulkan.h"
 #include <spdlog/spdlog.h>
 
-#include <thread>
 #include <vector>
 
 #include "Camera.hpp"
@@ -98,8 +97,6 @@ class Engine : EventReceiver
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;
-
-    std::thread m_ChunkGeneration;
 
     bool m_ShouldResize = true;
 
