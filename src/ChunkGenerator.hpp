@@ -3,14 +3,13 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
-#include <queue>
-#include <unordered_map>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
+#include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan.h>
 
 #include "Chunk.hpp"
-#include "Voxel.hpp"
 
 enum SVONodeFlags {
     SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
@@ -59,6 +58,7 @@ class ChunkGenerator
     static void addChunkToQueue(glm::ivec3 chunk);
 
     static void flushChunks();
+    static void removeChunk(glm::ivec3 pos);
 
     static void generateChunkLoop();
 
@@ -66,7 +66,7 @@ class ChunkGenerator
     static std::mutex s_QueueMutex;
     static std::mutex s_QueueSubmitMutex;
     static std::condition_variable s_Condition;
-    static std::queue<glm::ivec3> s_ToBeGenerated;
+    static std::unordered_set<glm::ivec3> s_ToBeGenerated;
 
     static std::unordered_map<glm::ivec3, Chunk>* s_ActiveChunks;
 

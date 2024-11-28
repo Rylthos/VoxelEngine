@@ -12,7 +12,7 @@
 std::mutex ChunkGenerator::s_QueueMutex;
 std::mutex ChunkGenerator::s_QueueSubmitMutex;
 std::condition_variable ChunkGenerator::s_Condition;
-std::queue<glm::ivec3> ChunkGenerator::s_ToBeGenerated;
+std::unordered_set<glm::ivec3> ChunkGenerator::s_ToBeGenerated;
 
 std::unordered_map<glm::ivec3, Chunk>* ChunkGenerator::s_ActiveChunks;
 
@@ -136,7 +136,7 @@ void ChunkGenerator::freeResources()
 void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 {
     std::unique_lock<std::mutex> lk(s_QueueMutex);
-    s_ToBeGenerated.push(chunkPosition);
+    s_ToBeGenerated.insert(chunkPosition);
     s_Condition.notify_one();
 }
 
@@ -144,7 +144,18 @@ void ChunkGenerator::flushChunks()
 {
     std::unique_lock<std::mutex> lk2(s_QueueSubmitMutex);
     std::unique_lock<std::mutex> lk1(s_QueueMutex);
-    s_ToBeGenerated = std::queue<glm::ivec3>();
+    s_ToBeGenerated = std::unordered_set<glm::ivec3>();
+}
+
+void ChunkGenerator::removeChunk(glm::ivec3 pos)
+{
+    std::unique_lock<std::mutex> lk2(s_QueueSubmitMutex);
+    std::unique_lock<std::mutex> lk1(s_QueueMutex);
+
+    auto itr = s_ToBeGenerated.find(pos);
+    if (itr == s_ToBeGenerated.end()) return;
+
+    s_ToBeGenerated.erase(itr);
 }
 
 void ChunkGenerator::generateChunkLoop()
@@ -170,7 +181,8 @@ void ChunkGenerator::generateNextChunk()
 
     if (!s_Running) return;
 
-    glm::ivec3 chunkPosition = s_ToBeGenerated.front();
+    auto itr = s_ToBeGenerated.begin();
+    glm::ivec3 chunkPosition = *itr;
 
     Timer::startTimer("Chunk Generation");
 
@@ -180,7 +192,7 @@ void ChunkGenerator::generateNextChunk()
 
     {
         std::unique_lock<std::mutex> lk(s_QueueMutex);
-        s_ToBeGenerated.pop();
+        s_ToBeGenerated.erase(itr);
     }
 }
 
