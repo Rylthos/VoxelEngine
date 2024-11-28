@@ -10,7 +10,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
-    : m_Dimension(1 << 6), m_PaletteManager(paletteManager), m_Camera(camera)
+    : m_Dimension(1 << 7), m_PaletteManager(paletteManager), m_Camera(camera)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -327,22 +327,48 @@ void SceneManager::checkChunks()
     if (newPos == oldPos) return;
     spdlog::info("Chunk position: {}", glm::to_string(chunkPosition));
 
+    glm::ivec3 previousChunk = m_CurrentChunk;
     m_CurrentChunk = chunkPosition;
-    ChunkGenerator::flushChunks();
+
+    std::unordered_set<glm::ivec3> toRemove;
+    std::unordered_set<glm::ivec3> kept;
     for (auto& pair : m_Chunks)
     {
-        pair.second.getSVOBuffer()->free();
+        glm::ivec3 currentPos = pair.first;
+        glm::ivec3 diff = glm::abs(currentPos - m_CurrentChunk);
+
+        if (diff.x > m_ChunkRange || diff.z > m_ChunkRange)
+        {
+            toRemove.emplace(pair.first);
+        }
+        else
+        {
+            kept.emplace(pair.first);
+        }
     }
 
-    m_Chunks.clear();
+    // ChunkGenerator::flushChunks();
+    for (const glm::ivec3& pos : toRemove)
+    {
+        ChunkGenerator::removeChunk(pos);
+        m_Chunks.at(pos).getSVOBuffer()->free();
+        m_Chunks.erase(pos);
+    }
 
     for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
     {
-        for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
+        for (int y = 0; y <= 1; y++)
         {
-            glm::ivec3 pos = { newPos.x + x, 0, newPos.y + z };
-            m_Chunks.emplace(pos, Chunk{ pos, m_Dimension });
-            ChunkGenerator::addChunkToQueue(pos);
+            for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
+            {
+                glm::ivec3 pos = { newPos.x + x, y, newPos.y + z };
+
+                if (!kept.contains(pos))
+                {
+                    m_Chunks.emplace(pos, Chunk{ pos, m_Dimension });
+                    ChunkGenerator::addChunkToQueue(pos);
+                }
+            }
         }
     }
 }
