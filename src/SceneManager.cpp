@@ -9,7 +9,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager)
-    : m_Dimension(1 << 8), m_PaletteManager(paletteManager)
+    : m_Dimension(1 << 6), m_PaletteManager(paletteManager)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -319,13 +319,7 @@ void SceneManager::updateBuffers()
 
 void SceneManager::createBufferChunks()
 {
-    size_t count = 0;
-    for (auto& chunkPair : m_Chunks)
-        count += chunkPair.second.isGenerated();
-
-    if (count == 0) return;
-
-    size_t size = count * sizeof(ChunkData);
+    size_t size = m_Chunks.size() * sizeof(ChunkData);
 
     if (m_Staging.getSize() < size)
     {

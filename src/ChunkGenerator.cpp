@@ -6,6 +6,7 @@
 #include <format>
 
 #include "ShaderModule.hpp"
+#include "Timer.hpp"
 #include "VkCheck.hpp"
 
 std::mutex ChunkGenerator::s_QueueMutex;
@@ -164,7 +165,11 @@ void ChunkGenerator::generateNextChunk()
 
     glm::ivec3 chunkPosition = s_ToBeGenerated.front();
 
+    Timer::startTimer("Chunk Generation");
+
     generateChunk(chunkPosition);
+
+    Timer::stopTimer("Chunk Generation");
 
     {
         std::unique_lock<std::mutex> lk(s_QueueMutex);
@@ -182,6 +187,7 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
     commandBufferBI.pInheritanceInfo = nullptr;
     commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
+    Timer::startTimer("Chunk Compute");
     VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
 
     size_t dimension = s_ActiveChunks->at(chunkPosition).getDimensions();
@@ -214,10 +220,17 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
     VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
     VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
     VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
+    Timer::stopTimer("Chunk Compute");
 
+    Timer::startTimer("Chunk Copy");
     s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->at(chunkPosition).getVoxels());
+    Timer::stopTimer("Chunk Copy");
+
+    Timer::startTimer("Chunk Serialize");
 
     serializeChunk(chunkPosition);
+
+    Timer::stopTimer("Chunk Serialize");
 
     s_ActiveChunks->at(chunkPosition).setIsGenerated(true);
 }

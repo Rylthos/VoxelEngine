@@ -11,6 +11,7 @@
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
 #include "ShaderModule.hpp"
+#include "Timer.hpp"
 #include "VkCheck.hpp"
 #include "VoxLoader.hpp"
 
@@ -603,6 +604,8 @@ void Engine::updateImGui()
     }
     ImGui::End();
 
+    Timer::ImGuiRender();
+
     ImGui::ShowDemoWindow();
 }
 
@@ -690,6 +693,7 @@ void Engine::render(float frameDelta)
 
     Image& renderImage = m_RenderAlt ? m_AltImage : m_DrawImage;
 
+    Timer::startTimer("Render");
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
 
     vkCmdResetQueryPool(commandBuffer, m_QueryPool, frameIndex * 2, 2);
@@ -781,6 +785,7 @@ void Engine::render(float frameDelta)
     submit.pCommandBufferInfos = &commandBufferSI;
 
     VK_CHECK(vkQueueSubmit2(m_GraphicsQueue.queue, 1, &submit, currentFrame.renderFence));
+    Timer::stopTimer("Render");
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
