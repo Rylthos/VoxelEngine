@@ -11,6 +11,7 @@
 #include <spdlog/fmt/bin_to_hex.h>
 
 #include "Buffer.hpp"
+#include "Camera.hpp"
 #include "PaletteManager.hpp"
 #include "Voxel.hpp"
 
@@ -55,7 +56,7 @@ class SceneManager : public EventReceiver
   public:
     SceneManager() {}
     ~SceneManager() { freeBuffers(); }
-    SceneManager(PaletteManager* paletteManager);
+    SceneManager(PaletteManager* paletteManager, Camera* camera);
     SceneManager(SceneManager& other);
 
     SceneManager operator=(const SceneManager& other);
@@ -85,12 +86,12 @@ class SceneManager : public EventReceiver
     bool m_HasUpdated = false;
     bool m_AnimateCutoff = false;
 
-    std::thread m_ChunkGeneration;
-
-    std::unordered_map<glm::ivec3, Chunk> m_Chunks;
-
     uint32_t m_Dimension = 1 << 7;
     PaletteManager* m_PaletteManager;
+    Camera* m_Camera;
+
+    std::thread m_ChunkGeneration;
+    std::unordered_map<glm::ivec3, Chunk> m_Chunks;
 
     VkDevice m_Device;
     VmaAllocator m_Allocator;
@@ -100,7 +101,12 @@ class SceneManager : public EventReceiver
 
     Buffer m_ChunkDataAddress;
 
+    glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
+    int m_ChunkRange = 2;
+
   private:
+    glm::ivec3 worldToChunkPos(glm::vec3 position);
+    void checkChunks();
     void createBufferChunks();
     void freeBuffers();
 };

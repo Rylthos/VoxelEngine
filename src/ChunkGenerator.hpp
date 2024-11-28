@@ -58,6 +58,8 @@ class ChunkGenerator
 
     static void addChunkToQueue(glm::ivec3 chunk);
 
+    static void flushChunks();
+
     static void generateChunkLoop();
 
   private:

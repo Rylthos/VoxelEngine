@@ -140,6 +140,13 @@ void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
     s_Condition.notify_one();
 }
 
+void ChunkGenerator::flushChunks()
+{
+    std::unique_lock<std::mutex> lk2(s_QueueSubmitMutex);
+    std::unique_lock<std::mutex> lk1(s_QueueMutex);
+    s_ToBeGenerated = std::queue<glm::ivec3>();
+}
+
 void ChunkGenerator::generateChunkLoop()
 {
     s_Running = true;
@@ -152,8 +159,6 @@ void ChunkGenerator::generateChunkLoop()
 
 void ChunkGenerator::generateNextChunk()
 {
-    std::unique_lock<std::mutex> lk(s_QueueSubmitMutex);
-
     {
         std::unique_lock<std::mutex> lk(s_QueueMutex);
         if (s_ToBeGenerated.empty())
@@ -161,6 +166,8 @@ void ChunkGenerator::generateNextChunk()
             s_Condition.wait(lk, [] { return !s_ToBeGenerated.empty() || !s_Running; });
         }
     }
+    std::unique_lock<std::mutex> lk(s_QueueSubmitMutex);
+
     if (!s_Running) return;
 
     glm::ivec3 chunkPosition = s_ToBeGenerated.front();

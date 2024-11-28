@@ -1,5 +1,6 @@
 #include "SceneManager.hpp"
 
+#include <glm/gtx/string_cast.hpp>
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
@@ -8,8 +9,8 @@
 
 #include "ChunkGenerator.hpp"
 
-SceneManager::SceneManager(PaletteManager* paletteManager)
-    : m_Dimension(1 << 6), m_PaletteManager(paletteManager)
+SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
+    : m_Dimension(1 << 6), m_PaletteManager(paletteManager), m_Camera(camera)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -25,6 +26,7 @@ SceneManager::SceneManager(SceneManager& other)
     m_Device = other.m_Device;
     m_Allocator = other.m_Allocator;
     m_Dimension = other.m_Dimension;
+    m_Camera = other.m_Camera;
     m_PaletteManager = other.m_PaletteManager;
     m_VoxelPushConstants = other.m_VoxelPushConstants;
 }
@@ -34,6 +36,7 @@ SceneManager SceneManager::operator=(const SceneManager& other)
     m_Device = other.m_Device;
     m_Allocator = other.m_Allocator;
     m_Dimension = other.m_Dimension;
+    m_Camera = other.m_Camera;
     m_PaletteManager = other.m_PaletteManager;
     m_VoxelPushConstants = other.m_VoxelPushConstants;
 
@@ -54,19 +57,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, VkQueu
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
 
-    const int size = 2;
-    for (int x = 0; x < size; x++)
-    {
-        for (int y = 0; y < size; y++)
-        {
-            for (int z = 0; z < size; z++)
-            {
-                glm::ivec3 position = { x, y, z };
-                m_Chunks.emplace(position, Chunk{ position, m_Dimension });
-                ChunkGenerator::addChunkToQueue(position);
-            }
-        }
-    }
+    checkChunks();
 
     m_ChunkGeneration = std::thread([&]() { ChunkGenerator::generateChunkLoop(); });
 }
@@ -94,6 +85,8 @@ void SceneManager::receive(const Event* event)
     case EventType::GameUpdate:
         {
             const GameUpdate* gu = static_cast<const GameUpdate*>(event);
+
+            checkChunks();
 
             if (!previousState && m_AnimateCutoff) // Started
             {
@@ -315,6 +308,43 @@ void SceneManager::updateBuffers()
     freeBuffers();
 
     m_VoxelPushConstants.initialParent = 0;
+}
+
+glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
+{
+    float chunkSize = m_Dimension * Voxel::VOXEL_SIZE;
+
+    glm::ivec3 chunkIndex = glm::floor(position / chunkSize);
+
+    return chunkIndex;
+}
+
+void SceneManager::checkChunks()
+{
+    glm::ivec3 chunkPosition = worldToChunkPos(m_Camera->getPosition());
+    glm::vec2 newPos = { chunkPosition.x, chunkPosition.z };
+    glm::vec2 oldPos = { m_CurrentChunk.x, m_CurrentChunk.z };
+    if (newPos == oldPos) return;
+    spdlog::info("Chunk position: {}", glm::to_string(chunkPosition));
+
+    m_CurrentChunk = chunkPosition;
+    ChunkGenerator::flushChunks();
+    for (auto& pair : m_Chunks)
+    {
+        pair.second.getSVOBuffer()->free();
+    }
+
+    m_Chunks.clear();
+
+    for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
+    {
+        for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
+        {
+            glm::ivec3 pos = { newPos.x + x, 0, newPos.y + z };
+            m_Chunks.emplace(pos, Chunk{ pos, m_Dimension });
+            ChunkGenerator::addChunkToQueue(pos);
+        }
+    }
 }
 
 void SceneManager::createBufferChunks()

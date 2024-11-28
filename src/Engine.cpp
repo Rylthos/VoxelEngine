@@ -27,8 +27,10 @@ void Engine::init()
     spdlog::set_level(spdlog::level::trace);
     m_Window.create("Voxel Engine", 960, 960);
 
+    m_Camera = Camera(glm::vec3(0.0f, 0.0f, 2.0f), -45.0f, -45.f);
+
     m_PaletteManager.defaultPalette();
-    m_SceneManager = SceneManager(&m_PaletteManager);
+    m_SceneManager = SceneManager(&m_PaletteManager, &m_Camera);
 
     initVulkan();
     m_PaletteManager.initResources(m_Device, m_Allocator);
@@ -48,8 +50,6 @@ void Engine::init()
                                  m_ComputeQueue.queueFamily);
 
     updateScene();
-
-    m_Camera = Camera(glm::vec3(0.0f, 0.0f, 2.0f), -45.0f, -45.f);
 
     EventHandler::subscribe(
         { EventType::KeyboardInput, EventType::ImGuiRender, EventType::WindowResize }, this);
