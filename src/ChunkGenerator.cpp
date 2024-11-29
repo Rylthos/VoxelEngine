@@ -5,6 +5,7 @@
 
 #include <format>
 
+#include "SceneManager.hpp"
 #include "ShaderModule.hpp"
 #include "Timer.hpp"
 #include "VkCheck.hpp"
@@ -12,18 +13,18 @@
 std::mutex ChunkGenerator::s_GenerateQueueMutex;
 std::mutex ChunkGenerator::s_RemoveQueueMutex;
 std::mutex ChunkGenerator::s_SerializeQueueMutex;
+std::mutex ChunkGenerator::s_ComputeQueueAccess;
 
 std::condition_variable ChunkGenerator::s_GenerateCondition;
 std::condition_variable ChunkGenerator::s_SerializeCondition;
 
-std::atomic<int> ChunkGenerator::s_NumReadersActive;
-std::atomic<int> ChunkGenerator::s_NumWritersActive;
-
 std::unordered_set<glm::ivec3> ChunkGenerator::s_ToBeGenerated;
 std::unordered_set<glm::ivec3> ChunkGenerator::s_ToBeRemoved;
-std::queue<glm::ivec3> ChunkGenerator::s_ToBeSerialized;
+std::deque<glm::ivec3> ChunkGenerator::s_ToBeSerialized;
 
-std::unordered_map<glm::ivec3, Chunk>* ChunkGenerator::s_ActiveChunks;
+Chunks* ChunkGenerator::s_ActiveChunks;
+
+std::array<std::thread, SERIALISATION_THREADS> ChunkGenerator::s_SerialisationThreads;
 
 int ChunkGenerator::s_Seed = 0;
 VoxelGenerationPushConstants ChunkGenerator::s_GenerationPushConstants;
@@ -47,7 +48,7 @@ VkFence ChunkGenerator::s_CopyFence;
 
 void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
                                    VkQueue computeQueue, uint32_t computeQueueFamily,
-                                   std::unordered_map<glm::ivec3, Chunk>* chunks)
+                                   Chunks* chunks)
 {
     s_Allocator = allocator;
     s_Device = device;
@@ -123,9 +124,6 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
                                           &s_GenerationPipeline));
     }
 
-    s_NumReadersActive = 0;
-    s_NumWritersActive = 0;
-
     s_GenerationPushConstants.seed = s_Seed;
     s_GenerationPushConstants.cutoff = 0.0;
     s_GenerationPushConstants.p10 = 10;
@@ -135,6 +133,12 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
 
 void ChunkGenerator::freeResources()
 {
+    s_Running = false;
+
+    s_SerializeCondition.notify_all();
+    for (auto& thread : s_SerialisationThreads)
+        thread.join();
+
     s_StagingBuffer.free();
     s_GeneratedVoxels.free();
 
@@ -147,8 +151,8 @@ void ChunkGenerator::freeResources()
 
 void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 {
-    std::unique_lock<std::mutex> lk(s_GenerateQueueMutex);
-    std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
+    std::lock_guard<std::mutex> lk(s_GenerateQueueMutex);
+    std::lock_guard<std::mutex> lk2(s_RemoveQueueMutex);
 
     s_ToBeGenerated.insert(chunkPosition);
     s_GenerateCondition.notify_one();
@@ -158,50 +162,53 @@ void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 
 void ChunkGenerator::removeChunk(glm::ivec3 pos)
 {
-    std::unique_lock<std::mutex> lk_2(s_GenerateQueueMutex);
-    std::unique_lock<std::mutex> lk_1(s_RemoveQueueMutex);
-    s_ToBeRemoved.emplace(pos);
-
-    std::unordered_set<glm::ivec3> toRemove;
-    for (glm::ivec3 pos : s_ToBeGenerated)
     {
-        if (s_ToBeRemoved.contains(pos))
+        std::lock_guard<std::mutex> lk3(s_SerializeQueueMutex);
+        std::lock_guard<std::mutex> lk2(s_GenerateQueueMutex);
+        std::lock_guard<std::mutex> lk1(s_RemoveQueueMutex);
+        s_ToBeRemoved.emplace(pos);
         {
-            s_ToBeRemoved.erase(pos);
-            toRemove.emplace(pos);
+            std::unordered_set<glm::ivec3> copy = s_ToBeRemoved;
+            for (glm::ivec3 pos : copy)
+            {
+                s_ToBeGenerated.erase(pos);
+                s_ToBeRemoved.erase(pos);
+            }
         }
-    }
 
-    for (glm::ivec3 pos : toRemove)
-    {
-        s_ToBeGenerated.erase(pos);
-    }
-}
-
-void ChunkGenerator::sync()
-{
-    s_NumWritersActive += 1;
-
-    std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
-    s_SerializeCondition.wait(lk, [] { return s_NumReadersActive == 0; });
-
-    std::unique_lock<std::mutex> lk2(s_GenerateQueueMutex);
-    std::unique_lock<std::mutex> lk3(s_RemoveQueueMutex);
-
-    for (const glm::ivec3& pos : s_ToBeRemoved)
-    {
-        if (s_ToBeGenerated.contains(pos))
         {
-            s_ToBeGenerated.erase(pos);
-            s_ToBeRemoved.erase(pos);
+            std::deque<glm::ivec3> newList;
+            for (auto itr = s_ToBeSerialized.rbegin(); itr != s_ToBeSerialized.rend(); itr++)
+            {
+                if (s_ToBeRemoved.contains(*itr))
+                {
+                    s_ToBeRemoved.erase(pos);
+                }
+                else
+                {
+                    newList.emplace_back(*itr);
+                }
+            }
+
+            s_ToBeSerialized = newList;
         }
     }
 }
 
 void ChunkGenerator::generateChunkLoop()
 {
+    assert(!s_Running && "Already started loop");
+
     s_Running = true;
+
+    size_t id = 0;
+    for (auto& thread : s_SerialisationThreads)
+    {
+        thread = std::thread([&id]() { serializeChunk(id++); });
+    }
+
     spdlog::info("Started Chunk Generation");
+
     while (s_Running)
     {
         generateNextChunk();
@@ -219,7 +226,7 @@ void ChunkGenerator::generateNextChunk()
 
     glm::ivec3 chunkPosition;
     {
-        std::unique_lock<std::mutex> lk(s_GenerateQueueMutex);
+        std::lock_guard<std::mutex> lk(s_GenerateQueueMutex);
         auto itr = s_ToBeGenerated.begin();
         chunkPosition = *itr;
 
@@ -231,276 +238,311 @@ void ChunkGenerator::generateNextChunk()
     generateChunk(chunkPosition);
 
     Timer::stopTimer("Chunk Generation");
-
-    serializeChunk();
 }
 
 void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 {
-    VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
+    spdlog::info("Generating chunk: {}", glm::to_string(chunkPosition));
+    {
+        std::lock_guard<std::mutex> lk(s_ActiveChunks->mutex);
+        std::lock_guard<std::mutex> lk2(s_ComputeQueueAccess);
 
-    VkCommandBufferBeginInfo commandBufferBI{};
-    commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    commandBufferBI.pNext = nullptr;
-    commandBufferBI.pInheritanceInfo = nullptr;
-    commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        if (s_ToBeRemoved.contains(chunkPosition))
+        {
+            std::lock_guard<std::mutex> lk3(s_RemoveQueueMutex);
+            s_ToBeRemoved.erase(chunkPosition);
+            return;
+        }
 
-    Timer::startTimer("Chunk Compute");
-    VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
+        VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
 
-    size_t dimension = s_ActiveChunks->at(chunkPosition).getDimensions();
-    s_GenerationPushConstants.dimension = dimension;
-    s_GenerationPushConstants.size = Voxel::VOXEL_SIZE;
-    s_GenerationPushConstants.targetBuffer = s_GeneratedVoxels.getDeviceAddress(s_Device);
-    s_GenerationPushConstants.origin = glm::vec4(chunkPosition, 0.);
+        VkCommandBufferBeginInfo commandBufferBI{};
+        commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBI.pNext = nullptr;
+        commandBufferBI.pInheritanceInfo = nullptr;
+        commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_GenerationPipeline);
+        Timer::startTimer("Chunk Compute");
+        VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
 
-    vkCmdPushConstants(s_CommandBuffer, s_GenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(VoxelGenerationPushConstants), &s_GenerationPushConstants);
+        size_t dimension = s_ActiveChunks->chunks.at(chunkPosition).getDimensions();
 
-    vkCmdDispatch(s_CommandBuffer, dimension / 4, dimension / 4, dimension / 4);
+        s_GenerationPushConstants.dimension = dimension;
+        s_GenerationPushConstants.size = Voxel::VOXEL_SIZE;
+        s_GenerationPushConstants.targetBuffer = s_GeneratedVoxels.getDeviceAddress(s_Device);
+        s_GenerationPushConstants.origin = glm::vec4(chunkPosition, 0.);
 
-    VK_CHECK(vkEndCommandBuffer(s_CommandBuffer));
+        vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_GenerationPipeline);
 
-    VkCommandBufferSubmitInfo commandBufferSI{};
-    commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    commandBufferSI.pNext = nullptr;
-    commandBufferSI.commandBuffer = s_CommandBuffer;
-    commandBufferSI.deviceMask = 0;
+        vkCmdPushConstants(s_CommandBuffer, s_GenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
+                           0, sizeof(VoxelGenerationPushConstants), &s_GenerationPushConstants);
 
-    VkSubmitInfo2 submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-    submitInfo.pNext = nullptr;
-    submitInfo.commandBufferInfoCount = 1;
-    submitInfo.pCommandBufferInfos = &commandBufferSI;
+        vkCmdDispatch(s_CommandBuffer, dimension / 4, dimension / 4, dimension / 4);
 
-    VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
-    VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
-    VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
+        VK_CHECK(vkEndCommandBuffer(s_CommandBuffer));
+
+        VkCommandBufferSubmitInfo commandBufferSI{};
+        commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        commandBufferSI.pNext = nullptr;
+        commandBufferSI.commandBuffer = s_CommandBuffer;
+        commandBufferSI.deviceMask = 0;
+
+        VkSubmitInfo2 submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.pNext = nullptr;
+        submitInfo.commandBufferInfoCount = 1;
+        submitInfo.pCommandBufferInfos = &commandBufferSI;
+
+        VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
+        VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
+        VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
+    }
+
     Timer::stopTimer("Chunk Compute");
 
     Timer::startTimer("Chunk Copy");
     {
-        std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
+        std::lock_guard<std::mutex> lk(s_ActiveChunks->mutex);
         if (s_ToBeRemoved.contains(chunkPosition))
         {
+            std::lock_guard<std::mutex> lk2(s_RemoveQueueMutex);
             s_ToBeRemoved.erase(chunkPosition);
             Timer::stopTimer("Chunk Copy");
             return;
         }
-        else
-        {
-            s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->at(chunkPosition).getVoxels());
-        }
+
+        s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->chunks.at(chunkPosition).getVoxels());
     }
 
     Timer::stopTimer("Chunk Copy");
 
     {
-        std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
-        s_ToBeSerialized.push(chunkPosition);
-        s_SerializeCondition.notify_one();
+        std::lock_guard<std::mutex> lk(s_SerializeQueueMutex);
+        s_ToBeSerialized.push_back(chunkPosition);
     }
+    s_SerializeCondition.notify_all();
 }
 
-void ChunkGenerator::serializeChunk()
+void ChunkGenerator::serializeChunk(uint32_t id)
 {
-    static std::string timerString = std::format("Serialize Chunk: {}", 0);
-
-    size_t maxDepth;
-    glm::ivec3 chunkPosition;
+    const std::string timerString = std::format("Serialize Chunk: {}", id);
+    while (s_Running)
     {
-        std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
-        s_SerializeCondition.wait(lk, [] { return s_NumWritersActive == 0; });
-        s_NumReadersActive += 1;
-
-        chunkPosition = s_ToBeSerialized.front();
-        s_ToBeSerialized.pop();
-
-        if (s_ToBeRemoved.contains(chunkPosition))
+        size_t maxDepth;
+        glm::ivec3 chunkPosition;
         {
-            std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
-            s_ToBeRemoved.erase(chunkPosition);
-            return;
-        }
-        maxDepth = std::log2(s_ActiveChunks->at(chunkPosition).getDimensions());
-    }
-    Timer::startTimer(timerString);
+            std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
+            s_SerializeCondition.wait(lk, [] { return !s_ToBeSerialized.empty() || !s_Running; });
 
-    std::vector<std::vector<SVONode>> queues;
+            if (!s_Running) return;
 
-    std::vector<SVONode> finalNodes;
+            chunkPosition = s_ToBeSerialized.front();
+            s_ToBeSerialized.pop_front();
 
-    queues.resize(maxDepth + 1);
-    for (size_t i = 0; i < queues.size(); ++i)
-    {
-        queues[i].reserve(8);
-    }
-
-    int depth = maxDepth;
-    std::vector<Voxel> voxels;
-    {
-        std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
-        if (s_ToBeRemoved.contains(chunkPosition))
-        {
-            std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
-            s_ToBeRemoved.erase(chunkPosition);
-            Timer::stopTimer(timerString);
-            return;
-        }
-        voxels = s_ActiveChunks->at(chunkPosition).getVoxels();
-    }
-    size_t voxelSize = voxels.size();
-    for (size_t i = 0; i < voxelSize; ++i)
-    {
-        const Voxel& v = voxels.at(i);
-        SVONode node;
-        node.childPointer = 0;
-        node.validMask = 0;
-        node.leafMask = 0;
-
-        node.flags = 0;
-        node.flags ^= SVONODE_IS_SOLID;
-        node.flags ^= SVONODE_IS_AIR * (v.colourIndex < 0);
-
-        node.materialIndex = v.colourIndex;
-
-        queues[depth].push_back(node);
-        int d = depth;
-        while (d > 0 && queues[d].size() == 8)
-        {
-            std::unordered_map<uint8_t, int> coloursUsed;
-
-            std::vector<SVONode>& childQueue = queues[d];
-
-            SVONode parent;
-            parent.flags = 0;
-            parent.childPointer = 0;
-            parent.leafMask = 0;
-            parent.validMask = 0;
-            parent.flags ^= SVONODE_IS_PARENT;
-
-            bool childrenSolid = true;
-            for (size_t j = 0; j < 8; ++j)
+            std::lock_guard<std::mutex> lk2(s_ActiveChunks->mutex);
+            std::lock_guard<std::mutex> lk3(s_RemoveQueueMutex);
+            if (s_ToBeRemoved.contains(chunkPosition))
             {
-                const SVONode& child = childQueue[j];
-                bool isAir = child.flags & SVONODE_IS_AIR;
-                bool isSolid = child.flags & SVONODE_IS_SOLID;
-
-                parent.validMask |= (!isAir << j);
-
-                if (!isAir) // Node is not air
-                {
-                    if (coloursUsed.find(child.materialIndex) != coloursUsed.end())
-                        coloursUsed.at(child.materialIndex) += 1;
-                    else
-                        coloursUsed[child.materialIndex] = 1;
-                }
-
-                childrenSolid &= isSolid;
-                parent.leafMask |= (isSolid << j);
+                s_ToBeRemoved.erase(chunkPosition);
+                s_SerializeCondition.notify_one();
+                continue;
             }
 
-            int highestCount = -1;
-            uint8_t colour = 0;
-
-            for (auto pair : coloursUsed)
+            if (s_ActiveChunks->chunks.contains(chunkPosition))
             {
-                if (pair.second > highestCount)
-                {
-                    colour = pair.first;
-                    highestCount = pair.second;
-                }
+                maxDepth = std::log2(s_ActiveChunks->chunks.at(chunkPosition).getDimensions());
+            }
+            else
+            {
+                s_SerializeCondition.notify_one();
+                continue;
+            }
+        }
+        spdlog::info("Serializing: {}: {}", id, glm::to_string(chunkPosition));
+        Timer::startTimer(timerString);
+
+        std::vector<std::vector<SVONode>> queues;
+
+        std::vector<SVONode> finalNodes;
+
+        queues.resize(maxDepth + 1);
+        for (size_t i = 0; i < queues.size(); ++i)
+        {
+            queues[i].reserve(8);
+        }
+
+        int depth = maxDepth;
+
+        std::vector<Voxel> voxels;
+        {
+            std::lock_guard<std::mutex> lk2(s_ActiveChunks->mutex);
+            std::lock_guard<std::mutex> lk3(s_RemoveQueueMutex);
+
+            if (s_ToBeRemoved.contains(chunkPosition))
+            {
+                s_ToBeRemoved.erase(chunkPosition);
+                s_SerializeCondition.notify_one();
+                Timer::stopTimer(timerString);
+                continue;
             }
 
-            if (childrenSolid && highestCount == 8)
+            if (s_ActiveChunks->chunks.contains(chunkPosition))
             {
+                voxels = s_ActiveChunks->chunks.at(chunkPosition).getVoxels();
+            }
+            else
+            {
+                s_GenerateCondition.notify_one();
+                continue;
+            }
+        }
+
+        size_t voxelSize = voxels.size();
+        for (size_t i = 0; i < voxelSize; ++i)
+        {
+            const Voxel& v = voxels.at(i);
+            SVONode node;
+            node.childPointer = 0;
+            node.validMask = 0;
+            node.leafMask = 0;
+
+            node.flags = 0;
+            node.flags ^= SVONODE_IS_SOLID;
+            node.flags ^= SVONODE_IS_AIR * (v.colourIndex < 0);
+
+            node.materialIndex = v.colourIndex;
+
+            queues[depth].push_back(node);
+            int d = depth;
+            while (d > 0 && queues[d].size() == 8)
+            {
+                std::unordered_map<uint8_t, int> coloursUsed;
+
+                std::vector<SVONode>& childQueue = queues[d];
+
+                SVONode parent;
+                parent.flags = 0;
+                parent.childPointer = 0;
+                parent.leafMask = 0;
                 parent.validMask = 0;
-                parent.flags ^= SVONODE_IS_SOLID;
-            }
-            if (highestCount == -1) parent.flags ^= SVONODE_IS_AIR; // All Children are air
-            parent.materialIndex = colour;
+                parent.flags ^= SVONODE_IS_PARENT;
 
-            // Not all Children are the same so create children nodes
-            if (!(parent.flags & SVONODE_IS_SOLID) && !(parent.flags & SVONODE_IS_AIR))
-            {
+                bool childrenSolid = true;
                 for (size_t j = 0; j < 8; ++j)
                 {
-                    SVONode& child = childQueue[j];
+                    const SVONode& child = childQueue[j];
+                    bool isAir = child.flags & SVONODE_IS_AIR;
+                    bool isSolid = child.flags & SVONODE_IS_SOLID;
 
-                    if (child.childPointer != 0)
+                    parent.validMask |= (!isAir << j);
+
+                    if (!isAir) // Node is not air
                     {
-                        child.childPointer = finalNodes.size() - child.childPointer;
+                        if (coloursUsed.find(child.materialIndex) != coloursUsed.end())
+                            coloursUsed.at(child.materialIndex) += 1;
+                        else
+                            coloursUsed[child.materialIndex] = 1;
                     }
 
-                    if ((child.flags & SVONODE_IS_AIR) == 0) // Is Not Air
+                    childrenSolid &= isSolid;
+                    parent.leafMask |= (isSolid << j);
+                }
+
+                int highestCount = -1;
+                uint8_t colour = 0;
+
+                for (auto pair : coloursUsed)
+                {
+                    if (pair.second > highestCount)
                     {
-                        parent.childPointer = finalNodes.size();
-                        finalNodes.push_back(child);
+                        colour = pair.first;
+                        highestCount = pair.second;
                     }
                 }
+
+                if (childrenSolid && highestCount == 8)
+                {
+                    parent.validMask = 0;
+                    parent.flags ^= SVONODE_IS_SOLID;
+                }
+                if (highestCount == -1) parent.flags ^= SVONODE_IS_AIR; // All Children are air
+                parent.materialIndex = colour;
+
+                // Not all Children are the same so create children nodes
+                if (!(parent.flags & SVONODE_IS_SOLID) && !(parent.flags & SVONODE_IS_AIR))
+                {
+                    for (size_t j = 0; j < 8; ++j)
+                    {
+                        SVONode& child = childQueue[j];
+
+                        if (child.childPointer != 0)
+                        {
+                            child.childPointer = finalNodes.size() - child.childPointer;
+                        }
+
+                        if ((child.flags & SVONODE_IS_AIR) == 0) // Is Not Air
+                        {
+                            parent.childPointer = finalNodes.size();
+                            finalNodes.push_back(child);
+                        }
+                    }
+                }
+
+                childQueue.clear();
+                queues[d - 1].push_back(parent);
+                d--;
+            }
+        }
+
+        queues[0][0].childPointer = finalNodes.size() - queues[0][0].childPointer;
+        finalNodes.push_back(queues[0][0]);
+
+        std::vector<SVONode> reversed;
+        reversed.reserve(finalNodes.size());
+        for (auto itr = finalNodes.rbegin(); itr != finalNodes.rend(); itr++)
+        {
+            reversed.push_back(*itr);
+        }
+
+        {
+            std::lock_guard<std::mutex> lk3(s_ActiveChunks->mutex);
+
+            if (s_ToBeRemoved.contains(chunkPosition) ||
+                !s_ActiveChunks->chunks.contains(chunkPosition))
+            {
+                std::lock_guard<std::mutex> lk2(s_RemoveQueueMutex);
+                s_ToBeRemoved.erase(chunkPosition);
+                Timer::stopTimer(timerString);
+                s_SerializeCondition.notify_one();
+                continue;
             }
 
-            childQueue.clear();
-            queues[d - 1].push_back(parent);
-            d--;
-        }
-    }
+            size_t size = s_ActiveChunks->chunks.at(chunkPosition).getVoxels().size();
 
-    queues[0][0].childPointer = finalNodes.size() - queues[0][0].childPointer;
-    finalNodes.push_back(queues[0][0]);
+            size_t bytes = reversed.size() * sizeof(SVONode);
+            spdlog::info("{} Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB).",
+                         glm::to_string(chunkPosition), reversed.size(), size, bytes, bytes / 1024,
+                         bytes / (1024 * 1024));
 
-    std::vector<SVONode> reversed;
-    reversed.reserve(finalNodes.size());
-    for (auto itr = finalNodes.rbegin(); itr != finalNodes.rend(); itr++)
-    {
-        reversed.push_back(*itr);
-    }
+            spdlog::info("~{} bytes per voxel", (float)bytes / (float)size);
 
-    {
-        std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
-        std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
-        if (s_ToBeRemoved.contains(chunkPosition))
-        {
-            s_ToBeRemoved.erase(chunkPosition);
-            Timer::stopTimer(timerString);
-            return;
+            createStaging(reversed.size());
+            createSVO(s_ActiveChunks->chunks.at(chunkPosition).getSVOBuffer(), reversed.size());
+            s_StagingBuffer.copyFromData_CPUOnly<SVONode>(reversed);
+
+            copyStagingToChunk(chunkPosition, reversed.size() * sizeof(SVONode));
+
+            s_ActiveChunks->chunks.at(chunkPosition).setIsGenerated(true);
         }
 
-        size_t bytes = reversed.size() * sizeof(SVONode);
-        spdlog::info("{} Generated {} nodes ({} Voxels) ({} B) ({} KiB) ({} MiB).",
-                     glm::to_string(chunkPosition), reversed.size(),
-                     s_ActiveChunks->at(chunkPosition).getVoxels().size(), bytes, bytes / 1024,
-                     bytes / (1024 * 1024));
-
-        spdlog::info("~{} bytes per voxel",
-                     (float)bytes / (float)s_ActiveChunks->at(chunkPosition).getVoxels().size());
-
-        // TODO: LOCK QUEUE
-        createStaging(reversed.size());
-        createSVO(s_ActiveChunks->at(chunkPosition).getSVOBuffer(), reversed.size());
-        s_StagingBuffer.copyFromData_CPUOnly<SVONode>(reversed);
-
-        copyStagingToChunk(chunkPosition, reversed.size() * sizeof(SVONode));
-
-        s_ActiveChunks->at(chunkPosition).setIsGenerated(true);
+        Timer::stopTimer(timerString);
     }
-
-    {
-        std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
-        s_NumReadersActive -= 1;
-        if (s_NumReadersActive == 0)
-        {
-            s_SerializeCondition.notify_one();
-        }
-    }
-
-    Timer::stopTimer(timerString);
 }
 
 void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
 {
+    std::lock_guard<std::mutex> lk(s_ComputeQueueAccess);
+
     VK_CHECK(vkResetFences(s_Device, 1, &s_CopyFence));
     VK_CHECK(vkResetCommandBuffer(s_CopyCommandBuffer, 0));
 
@@ -512,7 +554,7 @@ void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
 
     VK_CHECK(vkBeginCommandBuffer(s_CopyCommandBuffer, &commandBufferBI));
 
-    s_ActiveChunks->at(chunkPosition)
+    s_ActiveChunks->chunks.at(chunkPosition)
         .getSVOBuffer()
         ->copyFromBuffer(s_CopyCommandBuffer, s_StagingBuffer, size);
 
@@ -531,6 +573,7 @@ void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
     VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_CopyFence));
+
     VK_CHECK(vkWaitForFences(s_Device, 1, &s_CopyFence, true, 1e10));
 }
 

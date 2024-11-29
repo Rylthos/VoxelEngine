@@ -36,22 +36,21 @@ void Timer::stopTimer(const std::string& name)
         std::chrono::duration(t.end - t.start));
 
     s_TrackedTimes.insert_or_assign(name, t);
-    // s_TrackedTimes.at(name) = t;
 }
 
 void Timer::ImGuiRender()
 {
-    std::map<int64_t, std::string> times;
+    std::map<std::string, int64_t> times;
     for (auto& pair : s_TrackedTimes)
     {
-        times.emplace(pair.second.duration.count(), pair.first);
+        times.emplace(pair.first, pair.second.duration.count());
     }
 
     if (ImGui::Begin("Timings"))
     {
-        for (auto itr = times.rbegin(); itr != times.rend(); itr++)
+        for (auto pair : times)
         {
-            ImGui::Text("%s", std::format("{}: {}ms", itr->second, itr->first).c_str());
+            ImGui::Text("%s", std::format("{}: {}ms", pair.first, pair.second).c_str());
         }
     }
     ImGui::End();

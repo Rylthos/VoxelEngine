@@ -199,6 +199,11 @@ void SceneManager::receive(const Event* event)
                 if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_Dimension)))
                     m_VoxelPushConstants.lod = LOD;
 
+                ImGui::Text("Generation Queue: %ld", ChunkGenerator::getGenerationQueueSize());
+                ImGui::Text("Removal Queue: %ld", ChunkGenerator::getRemovalQueueSize());
+                ImGui::Text("Serialization Queue: %ld",
+                            ChunkGenerator::getSerializationQueueSize());
+
                 /*
                 switch (currentGeneration)
                 {
@@ -279,7 +284,7 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
     createBufferChunks();
 
     std::vector<ChunkData> chunkData;
-    for (auto& chunkPair : m_Chunks)
+    for (auto& chunkPair : m_Chunks.chunks)
     {
         if (!chunkPair.second.isGenerated()) continue;
 
@@ -325,14 +330,14 @@ void SceneManager::checkChunks()
     glm::vec2 newPos = { chunkPosition.x, chunkPosition.z };
     glm::vec2 oldPos = { m_CurrentChunk.x, m_CurrentChunk.z };
     if (newPos == oldPos) return;
-    spdlog::info("Chunk position: {}", glm::to_string(chunkPosition));
+    spdlog::info("Current camera chunk position: {}", glm::to_string(chunkPosition));
 
     glm::ivec3 previousChunk = m_CurrentChunk;
     m_CurrentChunk = chunkPosition;
 
     std::unordered_set<glm::ivec3> toRemove;
     std::unordered_set<glm::ivec3> kept;
-    for (auto& pair : m_Chunks)
+    for (auto& pair : m_Chunks.chunks)
     {
         glm::ivec3 currentPos = pair.first;
         glm::ivec3 diff = glm::abs(currentPos - m_CurrentChunk);
@@ -348,31 +353,32 @@ void SceneManager::checkChunks()
     }
 
     // ChunkGenerator::flushChunks();
-    for (glm::ivec3 pos : toRemove)
     {
-        ChunkGenerator::removeChunk(pos);
-    }
-
-    // ChunkGenerator::sync();
-
-    for (const glm::ivec3& pos : toRemove)
-    {
-        m_Chunks.at(pos).getSVOBuffer()->free();
-        m_Chunks.erase(pos);
-    }
-
-    for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
-    {
-        for (int y = 0; y <= 1; y++)
+        for (glm::ivec3 pos : toRemove)
         {
-            for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
-            {
-                glm::ivec3 pos = { newPos.x + x, y, newPos.y + z };
+            ChunkGenerator::removeChunk(pos);
+        }
 
-                if (!kept.contains(pos))
+        std::lock_guard<std::mutex> lk(m_Chunks.mutex);
+        for (const glm::ivec3& pos : toRemove)
+        {
+            m_Chunks.chunks.at(pos).getSVOBuffer()->free();
+            m_Chunks.chunks.erase(pos);
+        }
+
+        for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
+        {
+            for (int y = 0; y <= 1; y++)
+            {
+                for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
                 {
-                    m_Chunks.emplace(pos, Chunk{ pos, m_Dimension });
-                    ChunkGenerator::addChunkToQueue(pos);
+                    glm::ivec3 pos = { newPos.x + x, y, newPos.y + z };
+
+                    if (!kept.contains(pos))
+                    {
+                        m_Chunks.chunks.emplace(pos, Chunk{ pos, m_Dimension });
+                        ChunkGenerator::addChunkToQueue(pos);
+                    }
                 }
             }
         }
@@ -381,7 +387,7 @@ void SceneManager::checkChunks()
 
 void SceneManager::createBufferChunks()
 {
-    size_t size = m_Chunks.size() * sizeof(ChunkData);
+    size_t size = m_Chunks.chunks.size() * sizeof(ChunkData);
 
     if (m_Staging.getSize() < size)
     {
@@ -403,9 +409,11 @@ void SceneManager::createBufferChunks()
 
 void SceneManager::freeBuffers()
 {
+    std::lock_guard<std::mutex> lk(m_Chunks.mutex);
+
     m_Staging.free();
 
-    for (auto& chunkPair : m_Chunks)
+    for (auto& chunkPair : m_Chunks.chunks)
     {
         chunkPair.second.getSVOBuffer()->free();
     }

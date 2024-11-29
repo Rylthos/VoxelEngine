@@ -19,6 +19,11 @@
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
+struct Chunks {
+    std::mutex mutex;
+    std::unordered_map<glm::ivec3, Chunk> chunks;
+};
+
 struct ChunkData {
     glm::vec4 chunkPosition;
     glm::vec2 _;
@@ -91,7 +96,7 @@ class SceneManager : public EventReceiver
     Camera* m_Camera;
 
     std::thread m_ChunkGeneration;
-    std::unordered_map<glm::ivec3, Chunk> m_Chunks;
+    Chunks m_Chunks;
 
     VkDevice m_Device;
     VmaAllocator m_Allocator;

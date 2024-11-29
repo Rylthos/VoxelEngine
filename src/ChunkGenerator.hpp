@@ -2,8 +2,9 @@
 
 #include <condition_variable>
 #include <cstdint>
+#include <deque>
 #include <mutex>
-#include <queue>
+#include <shared_mutex>
 #include <unordered_set>
 
 #include <glm/glm.hpp>
@@ -11,6 +12,10 @@
 #include <vulkan/vulkan.h>
 
 #include "Chunk.hpp"
+
+#define SERIALISATION_THREADS 8
+
+struct Chunks;
 
 enum SVONodeFlags {
     SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
@@ -43,8 +48,7 @@ class ChunkGenerator
 {
   public:
     static void initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                              VkQueue computeQueue, uint32_t computeQueueFamily,
-                              std::unordered_map<glm::ivec3, Chunk>* chunks);
+                              VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
     static void freeResources();
 
     static int getWorldSeed() { return s_Seed; }
@@ -57,11 +61,13 @@ class ChunkGenerator
         s_SerializeCondition.notify_all();
     }
 
+    static size_t getGenerationQueueSize() { return s_ToBeGenerated.size(); }
+    static size_t getRemovalQueueSize() { return s_ToBeRemoved.size(); }
+    static size_t getSerializationQueueSize() { return s_ToBeSerialized.size(); }
+
     static void addChunkToQueue(glm::ivec3 chunk);
 
-    // static void flushChunks();
     static void removeChunk(glm::ivec3 pos);
-    static void sync();
 
     static void generateChunkLoop();
 
@@ -74,14 +80,13 @@ class ChunkGenerator
     static std::condition_variable s_GenerateCondition;
     static std::condition_variable s_SerializeCondition;
 
-    static std::atomic<int> s_NumReadersActive;
-    static std::atomic<int> s_NumWritersActive;
-
     static std::unordered_set<glm::ivec3> s_ToBeGenerated;
     static std::unordered_set<glm::ivec3> s_ToBeRemoved;
-    static std::queue<glm::ivec3> s_ToBeSerialized;
+    static std::deque<glm::ivec3> s_ToBeSerialized;
 
-    static std::unordered_map<glm::ivec3, Chunk>* s_ActiveChunks;
+    static Chunks* s_ActiveChunks;
+
+    static std::array<std::thread, SERIALISATION_THREADS> s_SerialisationThreads;
 
     static bool s_Running;
 
@@ -107,7 +112,7 @@ class ChunkGenerator
   private:
     static void generateNextChunk();
     static void generateChunk(glm::ivec3 chunkPosition);
-    static void serializeChunk();
+    static void serializeChunk(uint32_t id);
 
     static void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
 
