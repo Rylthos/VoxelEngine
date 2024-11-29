@@ -3,6 +3,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <queue>
 #include <unordered_set>
 
 #include <glm/glm.hpp>
@@ -52,21 +53,33 @@ class ChunkGenerator
     static void stopRunning()
     {
         s_Running = false;
-        s_Condition.notify_all();
+        s_GenerateCondition.notify_all();
+        s_SerializeCondition.notify_all();
     }
 
     static void addChunkToQueue(glm::ivec3 chunk);
 
-    static void flushChunks();
+    // static void flushChunks();
     static void removeChunk(glm::ivec3 pos);
+    static void sync();
 
     static void generateChunkLoop();
 
   private:
-    static std::mutex s_QueueMutex;
-    static std::mutex s_QueueSubmitMutex;
-    static std::condition_variable s_Condition;
+    static std::mutex s_GenerateQueueMutex;  // Access to s_ToBeGenerated
+    static std::mutex s_RemoveQueueMutex;    // Access to s_ToBeRemoved
+    static std::mutex s_SerializeQueueMutex; // Access to s_ToBeSerialized
+    static std::mutex s_ComputeQueueAccess;  // Access to s_ComputeQueue
+
+    static std::condition_variable s_GenerateCondition;
+    static std::condition_variable s_SerializeCondition;
+
+    static std::atomic<int> s_NumReadersActive;
+    static std::atomic<int> s_NumWritersActive;
+
     static std::unordered_set<glm::ivec3> s_ToBeGenerated;
+    static std::unordered_set<glm::ivec3> s_ToBeRemoved;
+    static std::queue<glm::ivec3> s_ToBeSerialized;
 
     static std::unordered_map<glm::ivec3, Chunk>* s_ActiveChunks;
 
@@ -94,7 +107,7 @@ class ChunkGenerator
   private:
     static void generateNextChunk();
     static void generateChunk(glm::ivec3 chunkPosition);
-    static void serializeChunk(glm::ivec3 chunkPosition);
+    static void serializeChunk();
 
     static void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
 

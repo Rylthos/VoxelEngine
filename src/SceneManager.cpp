@@ -348,9 +348,15 @@ void SceneManager::checkChunks()
     }
 
     // ChunkGenerator::flushChunks();
-    for (const glm::ivec3& pos : toRemove)
+    for (glm::ivec3 pos : toRemove)
     {
         ChunkGenerator::removeChunk(pos);
+    }
+
+    // ChunkGenerator::sync();
+
+    for (const glm::ivec3& pos : toRemove)
+    {
         m_Chunks.at(pos).getSVOBuffer()->free();
         m_Chunks.erase(pos);
     }
