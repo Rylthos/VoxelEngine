@@ -212,10 +212,7 @@ void ChunkGenerator::generateNextChunk()
 {
     {
         std::unique_lock<std::mutex> lk(s_GenerateQueueMutex);
-        if (s_ToBeGenerated.empty())
-        {
-            s_GenerateCondition.wait(lk, [] { return !s_ToBeGenerated.empty() || !s_Running; });
-        }
+        s_GenerateCondition.wait(lk, [] { return !s_ToBeGenerated.empty() || !s_Running; });
     }
 
     if (!s_Running) return;
@@ -284,7 +281,20 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
     Timer::stopTimer("Chunk Compute");
 
     Timer::startTimer("Chunk Copy");
-    s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->at(chunkPosition).getVoxels());
+    {
+        std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
+        if (s_ToBeRemoved.contains(chunkPosition))
+        {
+            s_ToBeRemoved.erase(chunkPosition);
+            Timer::stopTimer("Chunk Copy");
+            return;
+        }
+        else
+        {
+            s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->at(chunkPosition).getVoxels());
+        }
+    }
+
     Timer::stopTimer("Chunk Copy");
 
     {
@@ -296,8 +306,9 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 
 void ChunkGenerator::serializeChunk()
 {
+    static std::string timerString = std::format("Serialize Chunk: {}", 0);
+
     size_t maxDepth;
-    Timer::startTimer(std::format("Serialize Chunk {}", 0));
     glm::ivec3 chunkPosition;
     {
         std::unique_lock<std::mutex> lk(s_SerializeQueueMutex);
@@ -311,11 +322,11 @@ void ChunkGenerator::serializeChunk()
         {
             std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
             s_ToBeRemoved.erase(chunkPosition);
-            Timer::stopTimer(std::format("Serialize Chunk {}", 0));
             return;
         }
         maxDepth = std::log2(s_ActiveChunks->at(chunkPosition).getDimensions());
     }
+    Timer::startTimer(timerString);
 
     std::vector<std::vector<SVONode>> queues;
 
@@ -335,7 +346,7 @@ void ChunkGenerator::serializeChunk()
         {
             std::unique_lock<std::mutex> lk2(s_RemoveQueueMutex);
             s_ToBeRemoved.erase(chunkPosition);
-            Timer::stopTimer(std::format("Serialize Chunk {}", 0));
+            Timer::stopTimer(timerString);
             return;
         }
         voxels = s_ActiveChunks->at(chunkPosition).getVoxels();
@@ -453,7 +464,7 @@ void ChunkGenerator::serializeChunk()
         if (s_ToBeRemoved.contains(chunkPosition))
         {
             s_ToBeRemoved.erase(chunkPosition);
-            Timer::stopTimer(std::format("Serialize Chunk {}", 0));
+            Timer::stopTimer(timerString);
             return;
         }
 
@@ -485,7 +496,7 @@ void ChunkGenerator::serializeChunk()
         }
     }
 
-    Timer::stopTimer(std::format("Serialize Chunk {}", 0));
+    Timer::stopTimer(timerString);
 }
 
 void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)

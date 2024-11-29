@@ -10,6 +10,7 @@
 struct TimeObject {
     std::chrono::time_point<std::chrono::steady_clock> start;
     std::chrono::time_point<std::chrono::steady_clock> end;
+    std::chrono::milliseconds duration;
 };
 
 class Timer : public EventReceiver
