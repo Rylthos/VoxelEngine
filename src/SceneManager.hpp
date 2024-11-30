@@ -90,6 +90,7 @@ class SceneManager : public EventReceiver
     bool m_Initialized = false;
     bool m_HasUpdated = false;
     bool m_AnimateCutoff = false;
+    bool m_PauseRegeneration = false;
 
     uint32_t m_Dimension = 1 << 7;
     PaletteManager* m_PaletteManager;
@@ -107,7 +108,7 @@ class SceneManager : public EventReceiver
     Buffer m_ChunkDataAddress;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
-    int m_ChunkRange = 3;
+    int m_ChunkRange = 2;
 
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);

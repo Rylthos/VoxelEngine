@@ -199,6 +199,8 @@ void SceneManager::receive(const Event* event)
                 if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_Dimension)))
                     m_VoxelPushConstants.lod = LOD;
 
+                ImGui::Checkbox("Pause regeneration of Chunks", &m_PauseRegeneration);
+
                 ImGui::Text("Generation Queue: %ld", ChunkGenerator::getGenerationQueueSize());
                 ImGui::Text("Removal Queue: %ld", ChunkGenerator::getRemovalQueueSize());
                 ImGui::Text("Serialization Queue: %ld",
@@ -326,14 +328,17 @@ glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
 
 void SceneManager::checkChunks()
 {
+    if (m_PauseRegeneration) return;
+
     glm::ivec3 chunkPosition = worldToChunkPos(m_Camera->getPosition());
-    glm::vec2 newPos = { chunkPosition.x, chunkPosition.z };
-    glm::vec2 oldPos = { m_CurrentChunk.x, m_CurrentChunk.z };
+    glm::vec3 newPos = { chunkPosition.x, chunkPosition.y + 1, chunkPosition.z };
+    glm::vec3 oldPos = { m_CurrentChunk.x, m_CurrentChunk.y, m_CurrentChunk.z };
+
     if (newPos == oldPos) return;
-    spdlog::info("Current camera chunk position: {}", glm::to_string(chunkPosition));
+    spdlog::info("Current camera chunk position: {}", glm::to_string(newPos));
 
     glm::ivec3 previousChunk = m_CurrentChunk;
-    m_CurrentChunk = chunkPosition;
+    m_CurrentChunk = newPos;
 
     std::unordered_set<glm::ivec3> toRemove;
     std::unordered_set<glm::ivec3> kept;
@@ -342,7 +347,7 @@ void SceneManager::checkChunks()
         glm::ivec3 currentPos = pair.first;
         glm::ivec3 diff = glm::abs(currentPos - m_CurrentChunk);
 
-        if (diff.x > m_ChunkRange || diff.z > m_ChunkRange)
+        if (diff.x > m_ChunkRange || diff.y > m_ChunkRange || diff.z > m_ChunkRange)
         {
             toRemove.emplace(pair.first);
         }
@@ -352,7 +357,6 @@ void SceneManager::checkChunks()
         }
     }
 
-    // ChunkGenerator::flushChunks();
     {
         for (glm::ivec3 pos : toRemove)
         {
@@ -368,11 +372,11 @@ void SceneManager::checkChunks()
 
         for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
         {
-            for (int y = 0; y <= 1; y++)
+            for (int y = -1; y <= 1; y++)
             {
                 for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
                 {
-                    glm::ivec3 pos = { newPos.x + x, y, newPos.y + z };
+                    glm::ivec3 pos = { newPos.x + x, newPos.y + y, newPos.z + z };
 
                     if (!kept.contains(pos))
                     {

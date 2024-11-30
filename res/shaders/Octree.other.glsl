@@ -242,7 +242,11 @@ HitRecord castRay(int chunkCount, ChunkBuffer chunks, Ray ray, uint voxelDimensi
                 maxIterations, maxLOD, closestT);
 
         if (hit.t < 0)
+        {
+            closestHit.deepest = max(closestHit.deepest, hit.deepest);
+            closestHit.heatMap = max(closestHit.heatMap, hit.heatMap);
             continue;
+        }
         else if (hit.t < closestT)
         {
             closestT = hit.t;
