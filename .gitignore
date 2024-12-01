@@ -10,4 +10,5 @@ imgui.ini
 callgrind.out.*
 
 *.vox
+Profiles/*
 NextSteps

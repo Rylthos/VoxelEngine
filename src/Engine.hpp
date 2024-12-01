@@ -12,6 +12,7 @@
 #include "Events.hpp"
 #include "Image.hpp"
 #include "PaletteManager.hpp"
+#include "Profilling.hpp"
 #include "SceneManager.hpp"
 #include "Window.hpp"
 
@@ -83,6 +84,9 @@ class Engine : EventReceiver
     std::vector<FrameData> m_Frames;
 
     VkDescriptorPool m_DescriptorPool;
+
+    VkCommandPool m_TracyCommandPool;
+    VkCommandBuffer m_TracyCommandBuffer;
 
     bool m_RenderImGui = true;
     VkDescriptorPool m_ImguiPool;

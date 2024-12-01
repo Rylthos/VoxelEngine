@@ -368,7 +368,7 @@ void SceneManager::checkChunks()
             ChunkGenerator::removeChunk(pos);
         }
 
-        std::lock_guard<LockableBase(std::mutex)> lk(m_Chunks.mutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
         for (const glm::ivec3& pos : toRemove)
         {
             m_Chunks.chunks.at(pos).getSVOBuffer()->free();
@@ -418,7 +418,7 @@ void SceneManager::createBufferChunks()
 
 void SceneManager::freeBuffers()
 {
-    std::lock_guard<LockableBase(std::mutex)> lk(m_Chunks.mutex);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
 
     m_Staging.free();
 

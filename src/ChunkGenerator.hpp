@@ -7,7 +7,7 @@
 #include <shared_mutex>
 #include <unordered_set>
 
-#include "tracy/Tracy.hpp"
+#include "Profilling.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
@@ -74,10 +74,10 @@ class ChunkGenerator
     static void generateChunkLoop();
 
   private:
-    static tracy::Lockable<std::mutex> s_GenerateQueueMutex;  // Access to s_ToBeGenerated
-    static tracy::Lockable<std::mutex> s_RemoveQueueMutex;    // Access to s_ToBeRemoved
-    static tracy::Lockable<std::mutex> s_SerializeQueueMutex; // Access to s_ToBeSerialized
-    static tracy::Lockable<std::mutex> s_ComputeQueueAccess;  // Access to s_ComputeQueue
+    static PROF_lockable_T<std::mutex> s_GenerateQueueMutex;  // Access to s_ToBeGenerated
+    static PROF_lockable_T<std::mutex> s_RemoveQueueMutex;    // Access to s_ToBeRemoved
+    static PROF_lockable_T<std::mutex> s_SerializeQueueMutex; // Access to s_ToBeSerialized
+    static PROF_lockable_T<std::mutex> s_ComputeQueueAccess;  // Access to s_ComputeQueue
 
     static std::condition_variable_any s_GenerateCondition;
     static std::condition_variable_any s_SerializeCondition;

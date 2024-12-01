@@ -5,13 +5,12 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
-#include "tracy/Tracy.hpp"
-
 #include <spdlog/fmt/ranges.h>
 
 #include "ChunkGenerator.hpp"
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
+#include "Profilling.hpp"
 #include "ShaderModule.hpp"
 #include "Timer.hpp"
 #include "VkCheck.hpp"
@@ -47,6 +46,23 @@ void Engine::init()
     initPipelines();
     initDescriptorSets();
     initQueryPool();
+
+#ifdef PROF_TRACY
+    PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT
+        myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT =
+            reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(
+                vkGetInstanceProcAddr(m_Instance,
+                                      "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
+
+    PFN_vkGetCalibratedTimestampsEXT myvkGetCalibratedTimestampsEXT =
+        reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(
+            vkGetInstanceProcAddr(m_Instance, "vkGetCalibratedTimestampsEXT"));
+
+    g_TracyVkCtx = TracyVkContextHostCalibrated(m_PhysicalDevice, m_Device, vkResetQueryPool,
+
+                                                myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+                                                myvkGetCalibratedTimestampsEXT);
+#endif
 
     m_SceneManager.initResources(m_Device, m_Allocator, m_ComputeQueue.queue,
                                  m_ComputeQueue.queueFamily);
@@ -87,14 +103,35 @@ void Engine::start()
 
         render(frameDelta);
 
+        {
+            VkCommandBufferBeginInfo commandBufferBI{};
+            commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            commandBufferBI.pNext = nullptr;
+            commandBufferBI.pInheritanceInfo = nullptr;
+            commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+            Timer::startTimer("Render");
+            VK_CHECK(vkResetCommandBuffer(m_TracyCommandBuffer, 0));
+
+            VK_CHECK(vkBeginCommandBuffer(m_TracyCommandBuffer, &commandBufferBI));
+
+            PROF_VK_COLLECT(m_TracyCommandBuffer);
+
+            VK_CHECK(vkEndCommandBuffer(m_TracyCommandBuffer));
+        }
+
         m_Window.swapBuffers();
-        FrameMark;
+        PROF_FRAME_MARK;
     }
 }
 
 void Engine::cleanup()
 {
     vkDeviceWaitIdle(m_Device);
+
+#ifdef PROF_TRACY
+    TracyVkDestroy(g_TracyVkCtx);
+#endif
 
     ImmediateSubmit::free();
 
@@ -120,6 +157,7 @@ void Engine::cleanup()
         vkDestroySemaphore(m_Device, m_Frames[i].swapchainSemaphore, nullptr);
     }
 
+    vkDestroyCommandPool(m_Device, m_TracyCommandPool, nullptr);
     for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
     {
         vkDestroyCommandPool(m_Device, m_Frames[i].commandPool, nullptr);
@@ -221,6 +259,8 @@ void Engine::initVulkan()
             .set_required_features_11(features11)
             .set_required_features(features)
             .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
+            // .add_required_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME)
+            .add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
             .set_surface(m_Surface)
             .select();
 
@@ -342,6 +382,11 @@ void Engine::initCommandPool()
         VK_CHECK(vkAllocateCommandBuffers(m_Device, &commandBufferAI, &m_Frames[i].commandBuffer));
         spdlog::info("Allocated Command Buffer: {}", i);
     }
+
+    VK_CHECK(vkCreateCommandPool(m_Device, &commandPoolCI, nullptr, &m_TracyCommandPool));
+
+    commandBufferAI.commandPool = m_TracyCommandPool;
+    VK_CHECK(vkAllocateCommandBuffers(m_Device, &commandBufferAI, &m_TracyCommandBuffer));
 }
 
 void Engine::initSyncStructures()
@@ -451,6 +496,7 @@ void Engine::initDescriptorPool()
     VK_CHECK(vkCreateDescriptorPool(m_Device, &descriptorPoolCI, nullptr, &m_DescriptorPool));
     spdlog::info("Created descriptor pool");
 }
+
 void Engine::initDescriptorLayouts()
 {
     m_VoxelDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
@@ -700,61 +746,65 @@ void Engine::render(float frameDelta)
 
     Timer::startTimer("Render");
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
+    {
+        PROF_VK_ZONE(commandBuffer, "VkRender");
 
-    vkCmdResetQueryPool(commandBuffer, m_QueryPool, frameIndex * 2, 2);
+        vkCmdResetQueryPool(commandBuffer, m_QueryPool, frameIndex * 2, 2);
 
-    m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
-                                           VK_IMAGE_LAYOUT_GENERAL);
+        m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
+                                               VK_IMAGE_LAYOUT_GENERAL);
 
-    Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-                      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
+                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool,
-                        frameIndex * 2);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool,
+                            frameIndex * 2);
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
 
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipelineLayout, 0,
-                            1, &m_VoxelDescriptorSet, 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                m_VoxelPipelineLayout, 0, 1, &m_VoxelDescriptorSet, 0, nullptr);
 
-    VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants();
-    pushConstants.cameraPosition = m_Camera.getPosition();
-    glm::uvec2 windowSize = m_Window.getSize();
-    pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
-    pushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
-    pushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
-    pushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
+        VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants();
+        pushConstants.cameraPosition = m_Camera.getPosition();
+        glm::uvec2 windowSize = m_Window.getSize();
+        pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
+        pushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
+        pushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
+        pushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
 
-    vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(pushConstants), &pushConstants);
+        vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                           sizeof(pushConstants), &pushConstants);
 
-    vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
-                  std::ceil(drawExtent.height / 16.0), 1);
+        vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
+                      std::ceil(drawExtent.height / 16.0), 1);
 
-    vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool,
-                        frameIndex * 2 + 1);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool,
+                            frameIndex * 2 + 1);
 
-    renderImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
-                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        renderImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-    VkExtent3D target = { .width = m_SwapchainImageExtent.width,
-                          .height = m_SwapchainImageExtent.height,
-                          .depth = 1 };
+        VkExtent3D target = { .width = m_SwapchainImageExtent.width,
+                              .height = m_SwapchainImageExtent.height,
+                              .depth = 1 };
 
-    Image::copyFromTo(commandBuffer, renderImage.getImage(), m_SwapchainImages[swapchainImageIndex],
-                      renderImage.getExtent(), target);
+        Image::copyFromTo(commandBuffer, renderImage.getImage(),
+                          m_SwapchainImages[swapchainImageIndex], renderImage.getExtent(), target);
 
-    Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-    renderImGui(commandBuffer, m_SwapchainImageViews[swapchainImageIndex], m_SwapchainImageExtent);
+        renderImGui(commandBuffer, m_SwapchainImageViews[swapchainImageIndex],
+                    m_SwapchainImageExtent);
 
-    Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
+        Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+    }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
     VkCommandBufferSubmitInfo commandBufferSI{};

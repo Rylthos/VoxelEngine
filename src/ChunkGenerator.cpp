@@ -3,19 +3,18 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-#include "tracy/Tracy.hpp"
-
 #include <format>
 
+#include "Profilling.hpp"
 #include "SceneManager.hpp"
 #include "ShaderModule.hpp"
 #include "Timer.hpp"
 #include "VkCheck.hpp"
 
-TracyLockableN(std::mutex, ChunkGenerator::s_GenerateQueueMutex, "Generate Queue");
-TracyLockableN(std::mutex, ChunkGenerator::s_RemoveQueueMutex, "Removal Queue");
-TracyLockableN(std::mutex, ChunkGenerator::s_SerializeQueueMutex, "Serialize Queue");
-TracyLockableN(std::mutex, ChunkGenerator::s_ComputeQueueAccess, "VkAccess ompute Queue");
+PROF_LOCKABLE_MUTEX(std::mutex, ChunkGenerator::s_GenerateQueueMutex, "Generate Queue");
+PROF_LOCKABLE_MUTEX(std::mutex, ChunkGenerator::s_RemoveQueueMutex, "Removal Queue");
+PROF_LOCKABLE_MUTEX(std::mutex, ChunkGenerator::s_SerializeQueueMutex, "Serialize Queue");
+PROF_LOCKABLE_MUTEX(std::mutex, ChunkGenerator::s_ComputeQueueAccess, "VkAccess ompute Queue");
 
 std::condition_variable_any ChunkGenerator::s_GenerateCondition;
 std::condition_variable_any ChunkGenerator::s_SerializeCondition;
@@ -153,8 +152,8 @@ void ChunkGenerator::freeResources()
 
 void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 {
-    std::lock_guard<LockableBase(std::mutex)> lk(s_GenerateQueueMutex);
-    std::lock_guard<LockableBase(std::mutex)> lk2(s_RemoveQueueMutex);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_GenerateQueueMutex);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_RemoveQueueMutex);
 
     s_ToBeGenerated.insert(chunkPosition);
     s_GenerateCondition.notify_one();
@@ -165,9 +164,9 @@ void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 void ChunkGenerator::removeChunk(glm::ivec3 pos)
 {
     {
-        std::lock_guard<LockableBase(std::mutex)> lk3(s_SerializeQueueMutex);
-        std::lock_guard<LockableBase(std::mutex)> lk2(s_GenerateQueueMutex);
-        std::lock_guard<LockableBase(std::mutex)> lk1(s_RemoveQueueMutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk3(s_SerializeQueueMutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_GenerateQueueMutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk1(s_RemoveQueueMutex);
         s_ToBeRemoved.emplace(pos);
         {
             std::unordered_set<glm::ivec3> copy = s_ToBeRemoved;
@@ -203,6 +202,8 @@ void ChunkGenerator::generateChunkLoop()
 
     s_Running = true;
 
+    PROF_THREAD_NAME("Chunk Generation");
+
     size_t id = 0;
     for (auto& thread : s_SerialisationThreads)
     {
@@ -219,9 +220,9 @@ void ChunkGenerator::generateChunkLoop()
 
 void ChunkGenerator::generateNextChunk()
 {
-    ZoneScoped;
+    PROF_ZONE_SCOPED;
     {
-        std::unique_lock<LockableBase(std::mutex)> lk(s_GenerateQueueMutex);
+        std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(s_GenerateQueueMutex);
         s_GenerateCondition.wait(lk, [] { return !s_ToBeGenerated.empty() || !s_Running; });
     }
 
@@ -229,7 +230,7 @@ void ChunkGenerator::generateNextChunk()
 
     glm::ivec3 chunkPosition;
     {
-        std::lock_guard<LockableBase(std::mutex)> lk(s_GenerateQueueMutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_GenerateQueueMutex);
         auto itr = s_ToBeGenerated.begin();
         chunkPosition = *itr;
 
@@ -245,15 +246,15 @@ void ChunkGenerator::generateNextChunk()
 
 void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 {
-    ZoneScoped;
+    PROF_ZONE_SCOPED;
     spdlog::info("Generating chunk: {}", glm::to_string(chunkPosition));
     {
-        std::lock_guard<LockableBase(std::mutex)> lk(s_ActiveChunks->mutex);
-        std::lock_guard<LockableBase(std::mutex)> lk2(s_ComputeQueueAccess);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ComputeQueueAccess);
 
         if (s_ToBeRemoved.contains(chunkPosition))
         {
-            std::lock_guard<LockableBase(std::mutex)> lk3(s_RemoveQueueMutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk3(s_RemoveQueueMutex);
             s_ToBeRemoved.erase(chunkPosition);
             return;
         }
@@ -268,21 +269,25 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 
         Timer::startTimer("Chunk Compute");
         VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
+        {
+            PROF_VK_ZONE(s_CommandBuffer, "Chunk Compute Generation");
 
-        size_t dimension = s_ActiveChunks->chunks.at(chunkPosition).getDimensions();
+            size_t dimension = s_ActiveChunks->chunks.at(chunkPosition).getDimensions();
 
-        s_GenerationPushConstants.dimension = dimension;
-        s_GenerationPushConstants.size = Voxel::VOXEL_SIZE;
-        s_GenerationPushConstants.targetBuffer = s_GeneratedVoxels.getDeviceAddress(s_Device);
-        s_GenerationPushConstants.origin = glm::vec4(chunkPosition, 0.);
+            s_GenerationPushConstants.dimension = dimension;
+            s_GenerationPushConstants.size = Voxel::VOXEL_SIZE;
+            s_GenerationPushConstants.targetBuffer = s_GeneratedVoxels.getDeviceAddress(s_Device);
+            s_GenerationPushConstants.origin = glm::vec4(chunkPosition, 0.);
 
-        vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_GenerationPipeline);
+            vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                              s_GenerationPipeline);
 
-        vkCmdPushConstants(s_CommandBuffer, s_GenerationPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
-                           0, sizeof(VoxelGenerationPushConstants), &s_GenerationPushConstants);
+            vkCmdPushConstants(s_CommandBuffer, s_GenerationPipelineLayout,
+                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VoxelGenerationPushConstants),
+                               &s_GenerationPushConstants);
 
-        vkCmdDispatch(s_CommandBuffer, dimension / 4, dimension / 4, dimension / 4);
-
+            vkCmdDispatch(s_CommandBuffer, dimension / 4, dimension / 4, dimension / 4);
+        }
         VK_CHECK(vkEndCommandBuffer(s_CommandBuffer));
 
         VkCommandBufferSubmitInfo commandBufferSI{};
@@ -306,10 +311,10 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 
     Timer::startTimer("Chunk Copy");
     {
-        std::lock_guard<LockableBase(std::mutex)> lk(s_ActiveChunks->mutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
         if (s_ToBeRemoved.contains(chunkPosition))
         {
-            std::lock_guard<LockableBase(std::mutex)> lk2(s_RemoveQueueMutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_RemoveQueueMutex);
             s_ToBeRemoved.erase(chunkPosition);
             Timer::stopTimer("Chunk Copy");
             return;
@@ -321,7 +326,7 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
     Timer::stopTimer("Chunk Copy");
 
     {
-        std::lock_guard<LockableBase(std::mutex)> lk(s_SerializeQueueMutex);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_SerializeQueueMutex);
         s_ToBeSerialized.push_back(chunkPosition);
     }
     s_SerializeCondition.notify_all();
@@ -331,14 +336,15 @@ void ChunkGenerator::serializeChunk(uint32_t id)
 {
     const std::string timerString = std::format("Serialize Chunk: {}", id);
     const std::string threadName = std::format("SerializeThread{}", id);
-    tracy::SetThreadName(threadName.c_str());
+    PROF_THREAD_NAME(threadName.c_str());
+
     while (s_Running)
     {
-        ZoneScoped;
+        PROF_ZONE_SCOPED;
         size_t maxDepth;
         glm::ivec3 chunkPosition;
         {
-            std::unique_lock<LockableBase(std::mutex)> lk(s_SerializeQueueMutex);
+            std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(s_SerializeQueueMutex);
             s_SerializeCondition.wait(lk, [] { return !s_ToBeSerialized.empty() || !s_Running; });
 
             if (!s_Running) return;
@@ -346,8 +352,8 @@ void ChunkGenerator::serializeChunk(uint32_t id)
             chunkPosition = s_ToBeSerialized.front();
             s_ToBeSerialized.pop_front();
 
-            std::lock_guard<LockableBase(std::mutex)> lk2(s_ActiveChunks->mutex);
-            std::lock_guard<LockableBase(std::mutex)> lk3(s_RemoveQueueMutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ActiveChunks->mutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk3(s_RemoveQueueMutex);
             if (s_ToBeRemoved.contains(chunkPosition))
             {
                 s_ToBeRemoved.erase(chunkPosition);
@@ -382,8 +388,8 @@ void ChunkGenerator::serializeChunk(uint32_t id)
 
         std::vector<Voxel> voxels;
         {
-            std::lock_guard<LockableBase(std::mutex)> lk2(s_ActiveChunks->mutex);
-            std::lock_guard<LockableBase(std::mutex)> lk3(s_RemoveQueueMutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ActiveChunks->mutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk3(s_RemoveQueueMutex);
 
             if (s_ToBeRemoved.contains(chunkPosition))
             {
@@ -404,7 +410,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
             }
         }
 
-        ZoneNamedN(Zone1, "Serializing", true);
+        PROF_ZONE_NAMED_N(PROF_ZONE_1, "Serializing", true);
         size_t voxelSize = voxels.size();
         for (size_t i = 0; i < voxelSize; ++i)
         {
@@ -424,6 +430,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
             int d = depth;
             while (d > 0 && queues[d].size() == 8)
             {
+                PROF_ZONE_NAMED_N(PROF_ZONE_2, "Depth Push", true);
                 std::unordered_map<uint8_t, int> coloursUsed;
 
                 std::vector<SVONode>& childQueue = queues[d];
@@ -436,35 +443,41 @@ void ChunkGenerator::serializeChunk(uint32_t id)
                 parent.flags ^= SVONODE_IS_PARENT;
 
                 bool childrenSolid = true;
-                for (size_t j = 0; j < 8; ++j)
                 {
-                    const SVONode& child = childQueue[j];
-                    bool isAir = child.flags & SVONODE_IS_AIR;
-                    bool isSolid = child.flags & SVONODE_IS_SOLID;
-
-                    parent.validMask |= (!isAir << j);
-
-                    if (!isAir) // Node is not air
+                    PROF_ZONE_NAMED_N(PROF_ZONE_3, "Checking Children", true);
+                    for (size_t j = 0; j < 8; ++j)
                     {
-                        if (coloursUsed.find(child.materialIndex) != coloursUsed.end())
-                            coloursUsed.at(child.materialIndex) += 1;
-                        else
-                            coloursUsed[child.materialIndex] = 1;
-                    }
+                        const SVONode& child = childQueue[j];
+                        bool isAir = child.flags & SVONODE_IS_AIR;
+                        bool isSolid = child.flags & SVONODE_IS_SOLID;
 
-                    childrenSolid &= isSolid;
-                    parent.leafMask |= (isSolid << j);
+                        parent.validMask |= (!isAir << j);
+
+                        if (!isAir) // Node is not air
+                        {
+                            if (coloursUsed.contains(child.materialIndex))
+                                coloursUsed.at(child.materialIndex) += 1;
+                            else
+                                coloursUsed[child.materialIndex] = 1;
+                        }
+
+                        childrenSolid &= isSolid;
+                        parent.leafMask |= (isSolid << j);
+                    }
                 }
 
                 int highestCount = -1;
                 uint8_t colour = 0;
 
-                for (auto pair : coloursUsed)
                 {
-                    if (pair.second > highestCount)
+                    PROF_ZONE_NAMED_N(PROF_ZONE_4, "Colour Check", true);
+                    for (auto pair : coloursUsed)
                     {
-                        colour = pair.first;
-                        highestCount = pair.second;
+                        if (pair.second > highestCount)
+                        {
+                            colour = pair.first;
+                            highestCount = pair.second;
+                        }
                     }
                 }
 
@@ -508,7 +521,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
         std::vector<SVONode> reversed;
         reversed.reserve(finalNodes.size());
         {
-            ZoneNamedN(Zone2, "Reversing", true);
+            PROF_ZONE_NAMED_N(PROF_ZONE_5, "Reversing", true);
             for (auto itr = finalNodes.rbegin(); itr != finalNodes.rend(); itr++)
             {
                 reversed.push_back(*itr);
@@ -516,12 +529,12 @@ void ChunkGenerator::serializeChunk(uint32_t id)
         }
 
         {
-            std::lock_guard<LockableBase(std::mutex)> lk3(s_ActiveChunks->mutex);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk3(s_ActiveChunks->mutex);
 
             if (s_ToBeRemoved.contains(chunkPosition) ||
                 !s_ActiveChunks->chunks.contains(chunkPosition))
             {
-                std::lock_guard<LockableBase(std::mutex)> lk2(s_RemoveQueueMutex);
+                std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_RemoveQueueMutex);
                 s_ToBeRemoved.erase(chunkPosition);
                 Timer::stopTimer(timerString);
                 s_SerializeCondition.notify_one();
@@ -552,8 +565,8 @@ void ChunkGenerator::serializeChunk(uint32_t id)
 
 void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
 {
-    ZoneScoped;
-    std::lock_guard<LockableBase(std::mutex)> lk(s_ComputeQueueAccess);
+    PROF_ZONE_SCOPED;
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ComputeQueueAccess);
 
     VK_CHECK(vkResetFences(s_Device, 1, &s_CopyFence));
     VK_CHECK(vkResetCommandBuffer(s_CopyCommandBuffer, 0));

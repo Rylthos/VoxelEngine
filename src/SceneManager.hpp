@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "tracy/Tracy.hpp"
+#include "Profilling.hpp"
 
 #include <glm/glm.hpp>
 #include <spdlog/fmt/bin_to_hex.h>
@@ -22,7 +22,7 @@
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct Chunks {
-    TracyLockableN(std::mutex, mutex, "Chunk Access");
+    PROF_LOCKABLE_MUTEX(std::mutex, mutex, "Chunk Access");
     std::unordered_map<glm::ivec3, Chunk> chunks;
 };
 
