@@ -5,6 +5,8 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
+#include "tracy/Tracy.hpp"
+
 #include <spdlog/fmt/ranges.h>
 
 #include "ChunkGenerator.hpp"
@@ -85,7 +87,8 @@ void Engine::start()
 
         render(frameDelta);
 
-        m_Window.swapBuffes();
+        m_Window.swapBuffers();
+        FrameMark;
     }
 }
 
@@ -611,6 +614,7 @@ void Engine::updateImGui()
 
 void Engine::update(float frameDelta)
 {
+    ZoneScoped;
     GameUpdate update;
     update.frameDelta = frameDelta;
     EventHandler::dispatchEvent(&update);
@@ -661,6 +665,7 @@ void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView,
 
 void Engine::render(float frameDelta)
 {
+    ZoneScoped;
     static uint32_t currentFrameIndex = 0;
     int frameIndex = currentFrameIndex % FRAMES_IN_FLIGHT;
     FrameData& currentFrame = m_Frames[frameIndex];

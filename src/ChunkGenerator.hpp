@@ -7,6 +7,8 @@
 #include <shared_mutex>
 #include <unordered_set>
 
+#include "tracy/Tracy.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan.h>
@@ -72,13 +74,13 @@ class ChunkGenerator
     static void generateChunkLoop();
 
   private:
-    static std::mutex s_GenerateQueueMutex;  // Access to s_ToBeGenerated
-    static std::mutex s_RemoveQueueMutex;    // Access to s_ToBeRemoved
-    static std::mutex s_SerializeQueueMutex; // Access to s_ToBeSerialized
-    static std::mutex s_ComputeQueueAccess;  // Access to s_ComputeQueue
+    static tracy::Lockable<std::mutex> s_GenerateQueueMutex;  // Access to s_ToBeGenerated
+    static tracy::Lockable<std::mutex> s_RemoveQueueMutex;    // Access to s_ToBeRemoved
+    static tracy::Lockable<std::mutex> s_SerializeQueueMutex; // Access to s_ToBeSerialized
+    static tracy::Lockable<std::mutex> s_ComputeQueueAccess;  // Access to s_ComputeQueue
 
-    static std::condition_variable s_GenerateCondition;
-    static std::condition_variable s_SerializeCondition;
+    static std::condition_variable_any s_GenerateCondition;
+    static std::condition_variable_any s_SerializeCondition;
 
     static std::unordered_set<glm::ivec3> s_ToBeGenerated;
     static std::unordered_set<glm::ivec3> s_ToBeRemoved;

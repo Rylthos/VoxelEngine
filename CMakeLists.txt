@@ -44,7 +44,8 @@ add_subdirectory(vendor)
 
 # Add all files
 file(GLOB_RECURSE projectFiles CONFIGURE_DEPENDS "src/*.cpp" "src/*.hpp")
-add_executable(${PROJECT_NAME} ${projectFiles})
+add_executable(${PROJECT_NAME} ${projectFiles}
+                               vendor/tracy/public/TracyClient.cpp)
 
 target_include_directories(
   ${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIR}
@@ -60,7 +61,8 @@ target_link_libraries(
          # STB
          GPUOpen::VulkanMemoryAllocator
          spdlog
-         Imgui)
+         Imgui
+         Tracy::TracyClient)
 
 set(InputRes "${PROJECT_SOURCE_DIR}/res")
 set(OutputRes "${outputDirectory}/res")

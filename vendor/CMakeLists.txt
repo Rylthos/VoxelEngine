@@ -37,3 +37,7 @@ add_compile_definitions(GLFW_INCLUDE_NONE)
 target_include_directories(Imgui PUBLIC "imgui/" "imgui/backends")
 set_target_properties(Imgui PROPERTIES LINKER_LANGUAGE CXX)
 target_link_libraries(Imgui PUBLIC glfw Vulkan::Vulkan)
+
+option(TRACY_ENABLE "" ON)
+option(TRACY_ON_DEMAND "" ON)
+add_subdirectory(tracy)

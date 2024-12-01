@@ -4,6 +4,8 @@
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
+#include "tracy/Tracy.hpp"
+
 #include "imgui.h"
 #include <GLFW/glfw3.h>
 
@@ -330,6 +332,7 @@ glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
 
 void SceneManager::checkChunks()
 {
+    ZoneScoped;
     if (m_PauseRegeneration) return;
 
     glm::ivec3 chunkPosition = worldToChunkPos(m_Camera->getPosition());
@@ -365,7 +368,7 @@ void SceneManager::checkChunks()
             ChunkGenerator::removeChunk(pos);
         }
 
-        std::lock_guard<std::mutex> lk(m_Chunks.mutex);
+        std::lock_guard<LockableBase(std::mutex)> lk(m_Chunks.mutex);
         for (const glm::ivec3& pos : toRemove)
         {
             m_Chunks.chunks.at(pos).getSVOBuffer()->free();
@@ -415,7 +418,7 @@ void SceneManager::createBufferChunks()
 
 void SceneManager::freeBuffers()
 {
-    std::lock_guard<std::mutex> lk(m_Chunks.mutex);
+    std::lock_guard<LockableBase(std::mutex)> lk(m_Chunks.mutex);
 
     m_Staging.free();
 

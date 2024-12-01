@@ -21,7 +21,7 @@ class Window
     const glm::uvec2 getSize();
 
     void pollInput();
-    void swapBuffes();
+    void swapBuffers();
 
     bool shouldClose();
 

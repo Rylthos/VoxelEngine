@@ -34,7 +34,7 @@ const glm::uvec2 Window::getSize()
 }
 
 void Window::pollInput() { glfwPollEvents(); }
-void Window::swapBuffes() { glfwSwapBuffers(m_Window); }
+void Window::swapBuffers() { glfwSwapBuffers(m_Window); }
 bool Window::shouldClose() { return glfwWindowShouldClose(m_Window); }
 VkSurfaceKHR Window::createSurface(VkInstance instance)
 {
