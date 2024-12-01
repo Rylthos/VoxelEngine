@@ -280,6 +280,8 @@ void SceneManager::receive(const Event* event)
 
 VoxelPushConstants& SceneManager::getVoxelPushConstants()
 {
+    if (m_PauseRegeneration) return m_VoxelPushConstants;
+
     m_VoxelPushConstants.dimension = m_Dimension;
     m_VoxelPushConstants.size = Voxel::VOXEL_SIZE;
 

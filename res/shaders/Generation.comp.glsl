@@ -88,34 +88,32 @@ void main()
     uv /= 2;
 
     float noiseValue = snoise(uv.xz); // [-1, 1]
-    noiseValue *= 1;
+    noiseValue *= 0.5;
     Voxel outputVoxel;
 
     outputVoxel.type = AIR;
-    if (uv.y > noiseValue)
+    // if (uv.y > noiseValue)
+    //     outputVoxel.type = int16_t(p_P10);
+
+    float cutoff = 1 - uv.y;
+    float remaining = 1 - cutoff;
+    float p10 = cutoff + remaining * 0.1;
+    float p50 = cutoff + remaining * 0.5;
+    float p100 = cutoff + remaining;
+
+    outputVoxel.type = int16_t(p_P100);
+    if (noiseValue <= cutoff)
+    {
+        outputVoxel.type = AIR;
+    }
+    else if (noiseValue <= p10)
+    {
         outputVoxel.type = int16_t(p_P10);
-
-    /*
-                        float cutoff = p_Cutoff;
-                        float remaining = 1 - p_Cutoff;
-                        float p10 = cutoff + remaining * 0.1;
-                        float p50 = cutoff + remaining * 0.5;
-                        float p100 = cutoff + remaining;
-
-                        outputVoxel.type = int16_t(p_P100);
-                        if (noiseValue <= cutoff)
-                        {
-                            outputVoxel.type = AIR;
-                        }
-                        else if (noiseValue <= p10)
-                        {
-                            outputVoxel.type = int16_t(p_P10);
-                        }
-                        else if (noiseValue <= p50)
-                        {
-                            outputVoxel.type = int16_t(p_P50);
-                        }
-                        */
+    }
+    else if (noiseValue <= p50)
+    {
+        outputVoxel.type = int16_t(p_P50);
+    }
 
     p_TargetBuffer.voxels[flatIndex] = outputVoxel;
 }
