@@ -7,17 +7,6 @@
 
 class Image
 {
-  private:
-    VkImage m_Image = 0;
-    VkImageView m_ImageView = 0;
-    VmaAllocation m_Allocation = 0;
-
-    VkExtent3D m_Extent;
-    VkFormat m_Format;
-
-    VmaAllocator m_Allocator;
-    VkDevice m_Device;
-
   public:
     Image();
     Image(Image&) = delete;
@@ -27,7 +16,8 @@ class Image
 
     void create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, VkImageType type,
                 VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
-                VkMemoryPropertyFlags memoryProperties);
+                VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels = 1);
+
     void createImageView(VkDevice device, VkImageViewType viewType);
     void free();
 
@@ -36,6 +26,7 @@ class Image
     VkFormat getFormat() const { return m_Format; }
     VkImageView getImageView() const { return m_ImageView; }
     VmaAllocation getAllocation() const { return m_Allocation; }
+    uint32_t getMiplevels() const { return m_MipLevels; }
 
     void transition(VkCommandBuffer commandBuffer, VkImageLayout current, VkImageLayout target);
     static void transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current,
@@ -48,4 +39,17 @@ class Image
 
     static void copyFromTo(VkCommandBuffer commandBuffer, VkImage src, VkImage dst,
                            VkExtent3D srcSize, VkExtent3D dstSize);
+
+  private:
+    VkImage m_Image = 0;
+    VkImageView m_ImageView = 0;
+    VmaAllocation m_Allocation = 0;
+
+    uint32_t m_MipLevels;
+
+    VkExtent3D m_Extent;
+    VkFormat m_Format;
+
+    VmaAllocator m_Allocator;
+    VkDevice m_Device;
 };

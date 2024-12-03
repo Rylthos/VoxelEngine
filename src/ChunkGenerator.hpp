@@ -14,8 +14,9 @@
 #include <vulkan/vulkan.h>
 
 #include "Chunk.hpp"
+#include "Image.hpp"
 
-#define SERIALISATION_THREADS 8
+#define SERIALISATION_THREADS 1
 
 struct Chunks;
 
@@ -43,7 +44,10 @@ struct VoxelGenerationPushConstants {
     int32_t p50;
     int32_t p100;
     glm::ivec4 origin;
-    VkDeviceAddress targetBuffer;
+};
+
+struct VoxelSerializePushConstants {
+    int32_t sourceLevel;
 };
 
 class ChunkGenerator
@@ -93,12 +97,23 @@ class ChunkGenerator
     static bool s_Running;
 
     static int s_Seed;
+    static uint32_t s_Depth;
     static VoxelGenerationPushConstants s_GenerationPushConstants;
 
-    static Buffer s_GeneratedVoxels;
+    static VkDescriptorPool s_DescriptorPool;
+    static VkDescriptorSetLayout s_DescriptorLayout;
+    static VkDescriptorSet s_DescriptorSet;
+
+    static Image s_GeneratedVoxels;
+    static std::vector<VkImageView> s_GeneratedImageViews;
+
     static Buffer s_StagingBuffer;
+
     static VkPipeline s_GenerationPipeline;
     static VkPipelineLayout s_GenerationPipelineLayout;
+
+    static VkPipeline s_SerializePipeline;
+    static VkPipelineLayout s_SerializePipelineLayout;
 
     static VmaAllocator s_Allocator;
     static VkDevice s_Device;
@@ -116,6 +131,7 @@ class ChunkGenerator
     static void generateChunk(glm::ivec3 chunkPosition);
     static void serializeChunk(uint32_t id);
 
+    static void transitionImages();
     static void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
 
     static void createSVO(Buffer* buffer, size_t count);

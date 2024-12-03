@@ -8,11 +8,12 @@ Image::~Image() { free(); }
 
 void Image::create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, VkImageType type,
                    VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
-                   VkMemoryPropertyFlags memoryProperties)
+                   VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels)
 {
     m_Allocator = allocator;
     m_Format = format;
     m_Extent = extent;
+    m_MipLevels = mipLevels;
 
     VkImageCreateInfo imageCI{};
     imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -20,7 +21,7 @@ void Image::create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, V
     imageCI.imageType = type;
     imageCI.format = m_Format;
     imageCI.extent = m_Extent;
-    imageCI.mipLevels = 1;
+    imageCI.mipLevels = mipLevels;
     imageCI.arrayLayers = 1;
     imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
     imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -42,7 +43,7 @@ void Image::createImageView(VkDevice device, VkImageViewType viewType)
     imageViewCI.image = m_Image;
     imageViewCI.format = m_Format;
     imageViewCI.subresourceRange.baseMipLevel = 0;
-    imageViewCI.subresourceRange.levelCount = 1;
+    imageViewCI.subresourceRange.levelCount = m_MipLevels;
     imageViewCI.subresourceRange.baseArrayLayer = 0;
     imageViewCI.subresourceRange.layerCount = 1;
     imageViewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

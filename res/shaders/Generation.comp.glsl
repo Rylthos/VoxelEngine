@@ -6,19 +6,18 @@
 
 layout(local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
 
+#define VOXEL_IS_SOLID 1
+#define VOXEL_IS_PARENT 2
+#define VOXEL_IS_AIR 4
+
+// R: OFFSET_H
+// G: OFFSET_L
+// B: FLAG COLOUR
+// A: VALID LEAF
+layout(rgba16ui, set = 0, binding = 0) uniform uimage3D o_Generated[];
+
 #include "Hash.other.glsl"
 #include "Noise.other.glsl"
-
-#define AIR int16_t(-1)
-
-struct Voxel
-{
-    int16_t type;
-};
-
-layout(buffer_reference, std430) writeonly buffer VoxelBuffer {
-    Voxel voxels[];
-};
 
 layout(push_constant) uniform constants {
     uint32_t p_Dimension;
@@ -30,51 +29,7 @@ layout(push_constant) uniform constants {
     int p_P50;
     int p_P100;
     ivec4 p_Origin;
-    VoxelBuffer p_TargetBuffer;
 };
-
-int64_t splitBy3(uint32_t a)
-{
-    int64_t x = int64_t(a);
-    x &= 0x000003ff; // x = ---- ---- ---- ---- ---- --98 7654 3210
-    x = (x ^ (x << 16)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
-    x = (x ^ (x << 8)) & 0x0300f00f; // x = ---- --98 ---- ---- 7654 ---- ---- 3210
-    x = (x ^ (x << 4)) & 0x030c30c3; // x = ---- --98 ---- 76-- --54 ---- 32-- --10
-    x = (x ^ (x << 2)) & 0x09249249; // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
-    return x;
-}
-
-uint32_t compactBy3(int64_t a)
-{
-    int64_t x = a;
-    x &= 0x09249249; // x = ---- 9--8 --7- -6-- 5--4 --3- -2-- 1--0
-    x = (x ^ (x >> 2)) & 0x030c30c3; // x = ---- --98 ---- 76-- --54 ---- 32-- --10
-    x = (x ^ (x >> 4)) & 0x0300f00f; // x = ---- --98 ---- ---- 7654 ---- ---- 3210
-    x = (x ^ (x >> 8)) & 0xff0000ff; // x = ---- --98 ---- ---- ---- ---- 7654 3210
-    x = (x ^ (x >> 16)) & 0x000003ff; // x = ---- ---- ---- ---- ---- --98 7654 3210
-    return uint32_t(x);
-}
-
-uvec3 mortenDecode(int64_t code)
-{
-    uvec3 position;
-    position.x = compactBy3(code >> 0);
-    position.y = compactBy3(code >> 2);
-    position.z = compactBy3(code >> 1);
-
-    return position;
-}
-
-int64_t mortenEncode(uvec3 position)
-{
-    return (splitBy3(position.x) | (splitBy3(position.y) << 2) | splitBy3(position.z) << 1);
-}
-
-uint convertFlatIndexToMorten(uvec3 position)
-{
-    int64_t morten = mortenEncode(position);
-    return uint(morten);
-}
 
 float height(vec3 pos)
 {
@@ -90,7 +45,7 @@ float height(vec3 pos)
 void main()
 {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
-    uint flatIndex = convertFlatIndexToMorten(currentIndex);
+    // uint flatIndex = convertFlatIndexToMorten(currentIndex);
 
     vec3 uv = currentIndex / vec3(p_Dimension);
 
@@ -99,11 +54,8 @@ void main()
     uv /= 2;
 
     float heightValue = height(uv / 5.); // [-1, 1]
-    Voxel outputVoxel;
 
-    outputVoxel.type = AIR;
-    // if (uv.y > noiseValue)
-    //     outputVoxel.type = int16_t(p_P10);
+    int type = -1;
 
     float cutoff = 1 - uv.y;
     float remaining = 1 - cutoff;
@@ -111,19 +63,26 @@ void main()
     float p50 = cutoff + remaining * 0.5;
     float p100 = cutoff + remaining;
 
-    outputVoxel.type = int16_t(p_P100);
+    type = p_P100;
     if (heightValue <= cutoff)
     {
-        outputVoxel.type = AIR;
+        type = -1;
     }
     else if (heightValue <= p10)
     {
-        outputVoxel.type = int16_t(p_P10);
+        type = p_P10;
     }
     else if (heightValue <= p50)
     {
-        outputVoxel.type = int16_t(p_P50);
+        type = p_P50;
     }
 
-    p_TargetBuffer.voxels[flatIndex] = outputVoxel;
+    int flags = 0;
+    if (type < 0) {
+        flags = VOXEL_IS_PARENT;
+        type = 0;
+    }
+
+    ivec4 data = ivec4(0, 0, (flags << 8) & 0xFF | (type & 0xFF), 0);
+    imageStore(o_Generated[0], ivec3(currentIndex), data);
 }
