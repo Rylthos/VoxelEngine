@@ -92,7 +92,7 @@ bool VoxLoader::readChunk(std::ifstream& file)
             if (c == 255)
                 m_Chunk->setVoxel({ x, y, z }, { .colourIndex = -1 });
             else
-                m_Chunk->setVoxel({ x, y, z }, { .colourIndex = (int16_t)(c + 1) });
+                m_Chunk->setVoxel({ x, y, z }, { .colourIndex = (int16_t)(255 - c) });
         }
         return true;
     }

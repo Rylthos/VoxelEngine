@@ -127,9 +127,9 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
 
     s_GenerationPushConstants.seed = s_Seed;
     s_GenerationPushConstants.cutoff = 0.0;
-    s_GenerationPushConstants.p10 = 10;
-    s_GenerationPushConstants.p50 = 50;
-    s_GenerationPushConstants.p100 = 100;
+    s_GenerationPushConstants.p10 = 245;
+    s_GenerationPushConstants.p50 = 205;
+    s_GenerationPushConstants.p100 = 155;
 }
 
 void ChunkGenerator::freeResources()
@@ -430,7 +430,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
             int d = depth;
             while (d > 0 && queues[d].size() == 8)
             {
-                PROF_ZONE_NAMED_N(PROF_ZONE_2, "Depth Push", true);
+                // PROF_ZONE_NAMED_N(PROF_ZONE_2, "Depth Push", true);
                 std::unordered_map<uint8_t, int> coloursUsed;
 
                 std::vector<SVONode>& childQueue = queues[d];
@@ -444,7 +444,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
 
                 bool childrenSolid = true;
                 {
-                    PROF_ZONE_NAMED_N(PROF_ZONE_3, "Checking Children", true);
+                    // PROF_ZONE_NAMED_N(PROF_ZONE_3, "Checking Children", true);
                     for (size_t j = 0; j < 8; ++j)
                     {
                         const SVONode& child = childQueue[j];
@@ -470,7 +470,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
                 uint8_t colour = 0;
 
                 {
-                    PROF_ZONE_NAMED_N(PROF_ZONE_4, "Colour Check", true);
+                    // PROF_ZONE_NAMED_N(PROF_ZONE_4, "Colour Check", true);
                     for (auto pair : coloursUsed)
                     {
                         if (pair.second > highestCount)
@@ -521,7 +521,7 @@ void ChunkGenerator::serializeChunk(uint32_t id)
         std::vector<SVONode> reversed;
         reversed.reserve(finalNodes.size());
         {
-            PROF_ZONE_NAMED_N(PROF_ZONE_5, "Reversing", true);
+            // PROF_ZONE_NAMED_N(PROF_ZONE_5, "Reversing", true);
             for (auto itr = finalNodes.rbegin(); itr != finalNodes.rend(); itr++)
             {
                 reversed.push_back(*itr);

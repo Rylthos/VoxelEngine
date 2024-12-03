@@ -76,19 +76,29 @@ uint convertFlatIndexToMorten(uvec3 position)
     return uint(morten);
 }
 
+float height(vec3 pos)
+{
+    float noiseValue = (16 / 30.) * snoise(pos.xz) +
+            (8 / 30.) * snoise(pos.xz * 2.0) +
+            (4 / 30.) * snoise(pos.xz * 4.0) +
+            (2 / 30.) * snoise(pos.xz * 8.0);
+    // noiseValue *= 10;
+
+    return noiseValue;
+}
+
 void main()
 {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
     uint flatIndex = convertFlatIndexToMorten(currentIndex);
 
-    vec3 uv = currentIndex / vec3(p_Dimension - 1);
+    vec3 uv = currentIndex / vec3(p_Dimension);
 
     uv += p_Origin.xyz;
 
     uv /= 2;
 
-    float noiseValue = snoise(uv.xz); // [-1, 1]
-    noiseValue *= 0.5;
+    float heightValue = height(uv / 5.); // [-1, 1]
     Voxel outputVoxel;
 
     outputVoxel.type = AIR;
@@ -102,15 +112,15 @@ void main()
     float p100 = cutoff + remaining;
 
     outputVoxel.type = int16_t(p_P100);
-    if (noiseValue <= cutoff)
+    if (heightValue <= cutoff)
     {
         outputVoxel.type = AIR;
     }
-    else if (noiseValue <= p10)
+    else if (heightValue <= p10)
     {
         outputVoxel.type = int16_t(p_P10);
     }
-    else if (noiseValue <= p50)
+    else if (heightValue <= p50)
     {
         outputVoxel.type = int16_t(p_P50);
     }
