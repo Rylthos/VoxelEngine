@@ -45,7 +45,6 @@ float height(vec3 pos)
 void main()
 {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
-    // uint flatIndex = convertFlatIndexToMorten(currentIndex);
 
     vec3 uv = currentIndex / vec3(p_Dimension);
 
@@ -77,12 +76,13 @@ void main()
         type = p_P50;
     }
 
-    int flags = 0;
+    uint flags = VOXEL_IS_SOLID;
     if (type < 0) {
-        flags = VOXEL_IS_PARENT;
+        flags |= VOXEL_IS_AIR;
         type = 0;
     }
 
-    ivec4 data = ivec4(0, 0, (flags << 8) & 0xFF | (type & 0xFF), 0);
+    uvec4 data = uvec4(0, 0, ((flags & 0xFF) << 8) | (type & 0xFF),
+            0);
     imageStore(o_Generated[0], ivec3(currentIndex), data);
 }

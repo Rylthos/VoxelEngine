@@ -30,24 +30,36 @@ void main()
     uvec3 bottomRight = startIndex + uvec3(1);
 
     bool allAir = true;
+    uint flags = VOXEL_IS_PARENT;
+    uint8_t valid = uint8_t(0);
+    uint8_t leaf = uint8_t(0);
+
     for (int y = 0; y <= 1; y++)
     {
         for (int z = 0; z <= 1; z++)
         {
             for (int x = 0; x <= 1; x++)
             {
-                uvec4 data = imageLoad(o_Generated[p_SourceLevel], ivec3(topLeft + ivec3(x, y, z)));
-                if (((data.b >> 8) & VOXEL_IS_AIR) == 0)
+                uvec4 childData = imageLoad(o_Generated[p_SourceLevel], ivec3(topLeft + ivec3(x, y, z)));
+                uint8_t flags = uint8_t((childData.b >> 8) & 0xFF);
+                valid <<= 1;
+                leaf <<= 1;
+                if ((flags & VOXEL_IS_AIR) == 0) // Not Air
+                {
                     allAir = false;
+                    valid |= uint8_t(1);
+                }
+
+                if ((flags & VOXEL_IS_PARENT) == 0) // Not a parent
+                    leaf |= uint8_t(1);
             }
         }
     }
 
-    int flags = VOXEL_IS_PARENT;
-    if (allAir) flags |= (VOXEL_IS_SOLID | VOXEL_IS_AIR);
+    if (allAir) flags |= (VOXEL_IS_AIR | VOXEL_IS_SOLID);
+    // flags |= (VOXEL_IS_AIR | VOXEL_IS_SOLID);
 
-    uvec4 data = uvec4(1, 0, (flags << 8) & 0xFF | 0, 0);
-    // uvec4 data = uvec4(gl_GlobalInvocationID.xyz, 0);
-    // imageStore(o_Generated[], ivec3(gl_GlobalInvocationID), uvec4(1));
+    uvec4 data = uvec4(1, 1, ((flags & 0xFF) << 8) | 0, (uint16_t(valid) << 8) | (leaf));
+    // uvec4 data = uvec4(bottomRight, 0);
     imageStore(o_Generated[p_SourceLevel + 1u], ivec3(gl_GlobalInvocationID), data);
 }
