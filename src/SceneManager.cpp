@@ -53,24 +53,24 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, VkQueu
     m_Device = device;
     m_Allocator = allocator;
 
-    ChunkGenerator::initResources(m_Dimension, m_Allocator, m_Device, computeQueue,
-                                  computeQueueFamily, &m_Chunks);
+    ChunkGenerator::init(m_Dimension, m_Allocator, m_Device, computeQueue, computeQueueFamily,
+                         &m_Chunks);
 
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
 
     checkChunks();
 
-    m_ChunkGeneration = std::thread([&]() { ChunkGenerator::generateChunkLoop(); });
+    m_ChunkGeneration = std::thread([&]() { ChunkGenerator::getInstance().generateChunkLoop(); });
 }
 
 void SceneManager::freeResources()
 {
     if (!m_Initialized) return;
-    ChunkGenerator::stopRunning();
+    ChunkGenerator::getInstance().stopRunning();
     m_ChunkGeneration.join();
 
-    ChunkGenerator::freeResources();
+    ChunkGenerator::getInstance().free();
     freeBuffers();
     m_Initialized = false;
 }
@@ -203,10 +203,10 @@ void SceneManager::receive(const Event* event)
 
                 ImGui::Checkbox("Pause regeneration of Chunks", &m_PauseRegeneration);
 
-                ImGui::Text("Generation Queue: %ld", ChunkGenerator::getGenerationQueueSize());
-                ImGui::Text("Removal Queue: %ld", ChunkGenerator::getRemovalQueueSize());
-                ImGui::Text("Serialization Queue: %ld",
-                            ChunkGenerator::getSerializationQueueSize());
+                ChunkGenerator& chunkGenerator = ChunkGenerator::getInstance();
+                ImGui::Text("Generation Queue: %ld", chunkGenerator.getGenerationQueueSize());
+                ImGui::Text("Removal Queue: %ld", chunkGenerator.getRemovalQueueSize());
+                ImGui::Text("Serialization Queue: %ld", chunkGenerator.getSerializationQueueSize());
 
                 /*
                 switch (currentGeneration)
@@ -365,7 +365,7 @@ void SceneManager::checkChunks()
     {
         for (glm::ivec3 pos : toRemove)
         {
-            ChunkGenerator::removeChunk(pos);
+            ChunkGenerator::getInstance().removeChunk(pos);
         }
 
         std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
@@ -386,7 +386,7 @@ void SceneManager::checkChunks()
                     if (!kept.contains(pos))
                     {
                         m_Chunks.chunks.emplace(pos, Chunk{ pos, m_Dimension });
-                        ChunkGenerator::addChunkToQueue(pos);
+                        ChunkGenerator::getInstance().addChunkToQueue(pos);
                     }
                 }
             }

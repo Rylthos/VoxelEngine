@@ -21,9 +21,9 @@
 struct Chunks;
 
 enum SVONodeFlags {
-    SVONODE_IS_SOLID = 1 << 0,  // All Smaller nodes are equal
-    SVONODE_IS_PARENT = 1 << 1, // Has Smaller Nodes
-    SVONODE_IS_AIR = 1 << 2     // Is air
+    SVONODE_Im_SOLID = 1 << 0,  // All Smaller nodes are equal
+    SVONODE_Im_PARENT = 1 << 1, // Has Smaller Nodes
+    SVONODE_Im_AIR = 1 << 2     // Is air
 };
 
 struct SVONode {
@@ -63,96 +63,105 @@ struct VoxelSerializePushConstants {
 class ChunkGenerator
 {
   public:
-    static void initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                              VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
-    static void freeResources();
+    static ChunkGenerator& getInstance();
+    static void init(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
+                     VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
+    static void free();
 
-    static int getWorldSeed() { return s_Seed; }
-    static void setWorldSeed(int seed) { s_Seed = seed; }
+    int getWorldSeed() { return m_Seed; }
+    void setWorldSeed(int seed) { m_Seed = seed; }
 
-    static void stopRunning()
+    void stopRunning()
     {
-        s_Running = false;
-        s_GenerateCondition.notify_all();
-        s_SerializeCondition.notify_all();
+        m_Running = false;
+        m_GenerateCondition.notify_all();
+        m_SerializeCondition.notify_all();
     }
 
-    static size_t getGenerationQueueSize() { return s_ToBeGenerated.size(); }
-    static size_t getRemovalQueueSize() { return s_ToBeRemoved.size(); }
-    static size_t getSerializationQueueSize() { return s_ToBeSerialized.size(); }
+    size_t getGenerationQueueSize() { return m_ToBeGenerated.size(); }
+    size_t getRemovalQueueSize() { return m_ToBeRemoved.size(); }
+    size_t getSerializationQueueSize() { return m_ToBeSerialized.size(); }
 
-    static void addChunkToQueue(glm::ivec3 chunk);
+    void addChunkToQueue(glm::ivec3 chunk);
 
-    static void removeChunk(glm::ivec3 pos);
+    void removeChunk(glm::ivec3 pos);
 
-    static void generateChunkLoop();
-
-  private:
-    static PROF_lockable_T<std::mutex> s_GenerateQueueMutex;  // Access to s_ToBeGenerated
-    static PROF_lockable_T<std::mutex> s_RemoveQueueMutex;    // Access to s_ToBeRemoved
-    static PROF_lockable_T<std::mutex> s_SerializeQueueMutex; // Access to s_ToBeSerialized
-    static PROF_lockable_T<std::mutex> s_ComputeQueueAccess;  // Access to s_ComputeQueue
-
-    static std::condition_variable_any s_GenerateCondition;
-    static std::condition_variable_any s_SerializeCondition;
-
-    static std::unordered_set<glm::ivec3> s_ToBeGenerated;
-    static std::unordered_set<glm::ivec3> s_ToBeRemoved;
-    static std::deque<glm::ivec3> s_ToBeSerialized;
-
-    static Chunks* s_ActiveChunks;
-
-    static std::array<std::thread, SERIALISATION_THREADS> s_SerialisationThreads;
-
-    static bool s_Running;
-
-    static int s_Seed;
-    static uint32_t s_Depth;
-    static VoxelGenerationPushConstants s_GenerationPushConstants;
-
-    static VkDescriptorPool s_DescriptorPool;
-
-    static VkDescriptorSetLayout s_MipmapImageSetLayout;
-    static VkDescriptorSet s_MipmapImageSet;
-
-    static VkDescriptorSetLayout s_MipmapDataSetLayout;
-    static VkDescriptorSet s_MipmapDataSet;
-
-    static Image s_GeneratedVoxels;
-    static Buffer s_SerializeBuffer;
-    static std::vector<VkImageView> s_GeneratedImageViews;
-
-    static Buffer s_StagingBuffer;
-
-    static VkPipeline s_GenerationPipeline;
-    static VkPipelineLayout s_GenerationPipelineLayout;
-
-    static VkPipeline s_MipmapPipeline;
-    static VkPipelineLayout s_MipmapPipelineLayout;
-
-    static VkPipeline s_SerializePipeline;
-    static VkPipelineLayout s_SerializePipelineLayout;
-
-    static VmaAllocator s_Allocator;
-    static VkDevice s_Device;
-    static VkQueue s_ComputeQueue;
-    static VkCommandPool s_CommandPool;
-
-    static VkCommandBuffer s_CommandBuffer;
-    static VkCommandBuffer s_CopyCommandBuffer;
-
-    static VkFence s_GeneratedFence;
-    static VkFence s_CopyFence;
+    void generateChunkLoop();
 
   private:
-    static void generateNextChunk();
-    static void generateChunk(glm::ivec3 chunkPosition);
-    static void serializeChunk(uint32_t id);
+    PROF_LOCKABLE_MUTEX(std::mutex, m_GenerateQueueMutex, "Generate Queue");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_RemoveQueueMutex, "Removal Queue");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_SerializeQueueMutex, "Serialize Queue");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_ComputeQueueAccess, "VkAccess compute Queue");
 
-    static void transitionImages();
-    static void copyStagingToBuffer(Buffer* buffer);
-    static void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
+    std::condition_variable_any m_GenerateCondition;
+    std::condition_variable_any m_SerializeCondition;
 
-    static void createSVO(Buffer* buffer, size_t count);
-    static void createStaging(size_t count, size_t elem_size = sizeof(SVONode));
+    std::unordered_set<glm::ivec3> m_ToBeGenerated;
+    std::unordered_set<glm::ivec3> m_ToBeRemoved;
+    std::deque<glm::ivec3> m_ToBeSerialized;
+
+    Chunks* m_ActiveChunks;
+
+    std::array<std::thread, SERIALISATION_THREADS> m_SerialisationThreads;
+
+    bool m_Running;
+
+    int m_Seed = 0;
+    uint32_t m_Depth;
+    VoxelGenerationPushConstants m_GenerationPushConstants;
+
+    VkDescriptorPool m_DescriptorPool;
+
+    VkDescriptorSetLayout m_MipmapImageSetLayout;
+    VkDescriptorSet m_MipmapImageSet;
+
+    VkDescriptorSetLayout m_MipmapDataSetLayout;
+    VkDescriptorSet m_MipmapDataSet;
+
+    Image m_GeneratedVoxels;
+    Buffer m_SerializeBuffer;
+    std::vector<VkImageView> m_GeneratedImageViews;
+
+    Buffer m_StagingBuffer;
+
+    VkPipeline m_GenerationPipeline;
+    VkPipelineLayout m_GenerationPipelineLayout;
+
+    VkPipeline m_MipmapPipeline;
+    VkPipelineLayout m_MipmapPipelineLayout;
+
+    VkPipeline m_SerializePipeline;
+    VkPipelineLayout m_SerializePipelineLayout;
+
+    VmaAllocator m_Allocator;
+    VkDevice m_Device;
+    VkQueue m_ComputeQueue;
+    VkCommandPool m_CommandPool;
+
+    VkCommandBuffer m_CommandBuffer;
+    VkCommandBuffer m_CopyCommandBuffer;
+
+    VkFence m_GeneratedFence;
+    VkFence m_CopyFence;
+
+  private:
+    ChunkGenerator() {}
+    ~ChunkGenerator() {}
+
+    void initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
+                       VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
+
+    void freeResources();
+
+    void generateNextChunk();
+    void generateChunk(glm::ivec3 chunkPosition);
+    void serializeChunk(uint32_t id);
+
+    void transitionImages();
+    void copyStagingToBuffer(Buffer* buffer);
+    void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
+
+    void createSVO(Buffer* buffer, size_t count);
+    void createStaging(size_t count, size_t elem_size = sizeof(SVONode));
 };

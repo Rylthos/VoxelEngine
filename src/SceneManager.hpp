@@ -110,7 +110,7 @@ class SceneManager : public EventReceiver
     Buffer m_ChunkDataAddress;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
-    int m_ChunkRange = 1;
+    int m_ChunkRange = 2;
 
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);

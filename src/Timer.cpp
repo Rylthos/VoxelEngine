@@ -17,7 +17,7 @@ void Timer::startTimer(const std::string& name)
     }
     time.start = std::chrono::steady_clock::now();
 
-    std::unique_lock<std::mutex> lk(s_TimeLock);
+    std::lock_guard<std::mutex> lk(s_TimeLock);
 
     s_TrackedTimes.insert_or_assign(name, time);
 }
@@ -26,7 +26,7 @@ void Timer::stopTimer(const std::string& name)
 {
     std::chrono::time_point endTime = std::chrono::steady_clock::now();
 
-    std::unique_lock<std::mutex> lk(s_TimeLock);
+    std::lock_guard<std::mutex> lk(s_TimeLock);
 
     TimeObject t = s_TrackedTimes.at(name);
 
