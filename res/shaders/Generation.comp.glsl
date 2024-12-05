@@ -66,27 +66,28 @@ void main()
     float p50 = cutoff + remaining * 0.5;
     float p100 = cutoff + remaining;
 
-    type = p_P100;
+    type = 100;
     if (heightValue <= cutoff)
     {
         type = -1;
     }
     else if (heightValue <= p10)
     {
-        type = p_P10;
+        type = 10;
     }
     else if (heightValue <= p50)
     {
-        type = p_P50;
+        type = 50;
     }
 
-    type = 4;
-    if ((gl_GlobalInvocationID.x + gl_GlobalInvocationID.y + gl_GlobalInvocationID.z) % 2 == 0)
-        type = 20;
+    // if (currentIndex.x % 8 == 0 && currentIndex.z % 4 == 0 && currentIndex.y % 2 == 0)
+    //     type = 5;
+    // else
+    //     type = -1;
 
     uint flags = VOXEL_IS_SOLID;
     if (type < 0) {
-        flags |= VOXEL_IS_AIR;
+        flags = VOXEL_IS_AIR;
         type = 0;
     }
 

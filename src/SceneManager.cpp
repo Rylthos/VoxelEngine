@@ -12,7 +12,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
-    : m_Dimension(1 << 7), m_PaletteManager(paletteManager), m_Camera(camera)
+    : m_Dimension(1 << 8), m_PaletteManager(paletteManager), m_Camera(camera)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -61,7 +61,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, VkQueu
 
     checkChunks();
 
-    m_ChunkGeneration = std::thread([&]() { ChunkGenerator::getInstance().generateChunkLoop(); });
+    m_ChunkGeneration = std::thread([&]() { ChunkGenerator::getInstance().generationLoop(); });
 }
 
 void SceneManager::freeResources()
@@ -198,7 +198,7 @@ void SceneManager::receive(const Event* event)
 
                 ImGui::Text("Max LOD");
                 int LOD = m_VoxelPushConstants.lod;
-                if (ImGui::SliderInt("##MaxLOD", &LOD, 1, std::log2(m_Dimension)))
+                if (ImGui::SliderInt("##MaxLOD", &LOD, 0, std::log2(m_Dimension)))
                     m_VoxelPushConstants.lod = LOD;
 
                 ImGui::Checkbox("Pause regeneration of Chunks", &m_PauseRegeneration);
@@ -206,7 +206,6 @@ void SceneManager::receive(const Event* event)
                 ChunkGenerator& chunkGenerator = ChunkGenerator::getInstance();
                 ImGui::Text("Generation Queue: %ld", chunkGenerator.getGenerationQueueSize());
                 ImGui::Text("Removal Queue: %ld", chunkGenerator.getRemovalQueueSize());
-                ImGui::Text("Serialization Queue: %ld", chunkGenerator.getSerializationQueueSize());
 
                 /*
                 switch (currentGeneration)

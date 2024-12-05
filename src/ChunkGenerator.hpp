@@ -56,7 +56,6 @@ struct VoxelMipmapPushConstants {
 
 struct VoxelSerializePushConstants {
     uint32_t currentLevel;
-    uint32_t numNodes;
     VkDeviceAddress targetBuffer;
 };
 
@@ -75,40 +74,34 @@ class ChunkGenerator
     {
         m_Running = false;
         m_GenerateCondition.notify_all();
-        m_SerializeCondition.notify_all();
     }
 
     size_t getGenerationQueueSize() { return m_ToBeGenerated.size(); }
     size_t getRemovalQueueSize() { return m_ToBeRemoved.size(); }
-    size_t getSerializationQueueSize() { return m_ToBeSerialized.size(); }
 
     void addChunkToQueue(glm::ivec3 chunk);
 
     void removeChunk(glm::ivec3 pos);
 
-    void generateChunkLoop();
+    void generationLoop();
 
   private:
     PROF_LOCKABLE_MUTEX(std::mutex, m_GenerateQueueMutex, "Generate Queue");
     PROF_LOCKABLE_MUTEX(std::mutex, m_RemoveQueueMutex, "Removal Queue");
-    PROF_LOCKABLE_MUTEX(std::mutex, m_SerializeQueueMutex, "Serialize Queue");
     PROF_LOCKABLE_MUTEX(std::mutex, m_ComputeQueueAccess, "VkAccess compute Queue");
 
     std::condition_variable_any m_GenerateCondition;
-    std::condition_variable_any m_SerializeCondition;
 
     std::unordered_set<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_ToBeRemoved;
-    std::deque<glm::ivec3> m_ToBeSerialized;
 
-    Chunks* m_ActiveChunks;
+    Chunks* m_ActiveChunks = nullptr;
 
-    std::array<std::thread, SERIALISATION_THREADS> m_SerialisationThreads;
-
-    bool m_Running;
+    bool m_Running = false;
 
     int m_Seed = 0;
-    uint32_t m_Depth;
+    uint32_t m_Depth = 0;
+    uint32_t m_Dimension = 0;
     VoxelGenerationPushConstants m_GenerationPushConstants;
 
     VkDescriptorPool m_DescriptorPool;
@@ -151,17 +144,15 @@ class ChunkGenerator
 
     void initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
                        VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
-
     void freeResources();
 
-    void generateNextChunk();
     void generateChunk(glm::ivec3 chunkPosition);
-    void serializeChunk(uint32_t id);
+    void computeGenerate(glm::ivec3 chunkPosition);
+    void computeSerialize(glm::ivec3 chunkPosition, int nodes);
 
     void transitionImages();
     void copyStagingToBuffer(Buffer* buffer);
-    void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
 
     void createSVO(Buffer* buffer, size_t count);
-    void createStaging(size_t count, size_t elem_size = sizeof(SVONode));
+    void createStaging(size_t count, size_t elem_size);
 };

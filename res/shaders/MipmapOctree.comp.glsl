@@ -11,7 +11,7 @@ layout(local_size_x = 2, local_size_y = 2, local_size_z = 2) in;
 #define VOXEL_IS_PARENT 2
 #define VOXEL_IS_AIR 4
 
-layout(rgba16ui, set = 0, binding = 0) uniform uimage3D o_Generated[8];
+layout(rgba16ui, set = 0, binding = 0) uniform uimage3D o_Generated[];
 
 layout(std430, set = 1, binding = 0) buffer SharedData {
     uint32_t counter;
@@ -21,7 +21,7 @@ layout(push_constant) uniform constants {
     int p_SourceLevel;
 };
 
-int countColour(uvec3 start, uint8_t currentColour)
+int countColour(uvec3 start, uint currentColour)
 {
     int count = 0;
     for (int y = 0; y <= 1; y++)
@@ -31,8 +31,8 @@ int countColour(uvec3 start, uint8_t currentColour)
             for (int x = 0; x <= 1; x++)
             {
                 uvec4 childData = imageLoad(o_Generated[p_SourceLevel], ivec3(start + ivec3(x, y, z)));
-                uint8_t flags = uint8_t((childData.b >> 8) & 0xFF);
-                uint8_t colour = uint8_t(childData.b & 0xFF);
+                uint flags = (childData.b >> 8) & 0xFF;
+                uint colour = childData.b & 0xFF;
 
                 if ((flags & VOXEL_IS_AIR) != 0) continue;
 
@@ -50,10 +50,7 @@ void main()
     if (gl_GlobalInvocationID.x >= mipImageSize.x || gl_GlobalInvocationID.y >= mipImageSize.y || gl_GlobalInvocationID.z >= mipImageSize.z)
         return;
 
-    uvec3 startIndex = 2 * gl_GlobalInvocationID;
-
-    uvec3 topLeft = startIndex;
-    uvec3 bottomRight = startIndex + uvec3(1);
+    const uvec3 topLeft = 2 * gl_GlobalInvocationID.xyz;
 
     bool allAir = true;
     bool allSolid = true;
@@ -62,9 +59,7 @@ void main()
     uint leaf = 0x0;
 
     int maxCount = 0;
-    int bestColour = 0;
-
-    int childCount = 0;
+    int bestColour = -1;
     for (int y = 0; y <= 1; y++)
     {
         for (int z = 0; z <= 1; z++)
@@ -75,15 +70,17 @@ void main()
                 int bitFlag = 1 << childOffset;
 
                 uvec4 childData = imageLoad(o_Generated[p_SourceLevel], ivec3(topLeft + ivec3(x, y, z)));
-                uint8_t childFlags = uint8_t((childData.b >> 8) & 0xFF);
-                uint8_t colour = uint8_t(childData.b & 0xFF);
+                uint childFlags = (childData.b >> 8) & 0xFF;
+                uint colour = (childData.b & 0xFF);
+
+                debugPrintfEXT("    Child: %v3u, Bitflag: %d, Colour: %d, validFlags: %x", uvec3(topLeft + ivec3(x, y, z)), bitFlag, uint8_t(colour), childFlags);
 
                 if ((childFlags & VOXEL_IS_AIR) == 0) // Not Air
                 {
                     allAir = false;
                     int count = countColour(topLeft, colour);
                     if (count > maxCount) {
-                        bestColour = colour;
+                        bestColour = int(colour);
                         maxCount = count;
                     }
 
@@ -98,18 +95,19 @@ void main()
         }
     }
 
-    // if (maxCount == 8 && allSolid)
-    // {
-    //     flags |= VOXEL_IS_SOLID;
-    //     valid = 0;
-    // }
-
-    if (allAir) {
-        flags |= (VOXEL_IS_AIR | VOXEL_IS_SOLID);
+    if (maxCount == 8 && allSolid)
+    {
+        flags = VOXEL_IS_SOLID;
         valid = 0;
+        leaf = 0;
     }
 
-    bestColour = 10;
+    if (allAir) {
+        flags = VOXEL_IS_AIR | VOXEL_IS_SOLID;
+        valid = 0;
+        leaf = 0;
+        bestColour = 0;
+    }
 
     atomicAdd(o_Shared.counter, bitCount(valid));
 
