@@ -11,11 +11,12 @@ DescriptorLayoutBuilder DescriptorLayoutBuilder::start(VkDevice device)
 
 DescriptorLayoutBuilder& DescriptorLayoutBuilder::addBinding(uint32_t binding,
                                                              VkDescriptorType descriptorType,
-                                                             VkShaderStageFlags shaderStages)
+                                                             VkShaderStageFlags shaderStages,
+                                                             uint32_t count)
 {
     VkDescriptorSetLayoutBinding layoutBinding{};
     layoutBinding.binding = binding;
-    layoutBinding.descriptorCount = 1;
+    layoutBinding.descriptorCount = count;
     layoutBinding.descriptorType = descriptorType;
     layoutBinding.stageFlags = shaderStages;
     layoutBinding.pImmutableSamplers = nullptr;
@@ -37,6 +38,15 @@ DescriptorLayoutBuilder& DescriptorLayoutBuilder::addStorageImage(uint32_t bindi
                                                                   VkShaderStageFlags shaderStages)
 {
     addBinding(binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, shaderStages);
+
+    return *this;
+}
+
+DescriptorLayoutBuilder&
+DescriptorLayoutBuilder::addStorageImageArray(uint32_t binding, int count,
+                                              VkShaderStageFlags shaderStages)
+{
+    addBinding(binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, shaderStages, count);
 
     return *this;
 }
@@ -138,6 +148,32 @@ DescriptorSetBuilder& DescriptorSetBuilder::addStorageImage(uint32_t binding,
                               .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
                               .pBufferInfo = nullptr,
                               .pTexelBufferView = nullptr });
+
+    return *this;
+}
+
+DescriptorSetBuilder&
+DescriptorSetBuilder::addStorageImageArray(uint32_t binding, VkImageLayout imageLayout,
+                                           std::vector<VkImageView> imageViews)
+{
+    for (size_t i = 0; i < imageViews.size(); i++)
+    {
+        m_ImageInfos.push_back(VkDescriptorImageInfo{
+            .sampler = 0,
+            .imageView = imageViews.at(i),
+            .imageLayout = imageLayout,
+        });
+
+        m_DescriptorWrites[-1].push_back(
+            VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                  .dstBinding = binding,
+                                  .dstArrayElement = (uint32_t)i,
+                                  .descriptorCount = 1,
+                                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                  .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
+                                  .pBufferInfo = nullptr,
+                                  .pTexelBufferView = nullptr });
+    }
 
     return *this;
 }

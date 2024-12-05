@@ -11,7 +11,7 @@ layout(local_size_x = 2, local_size_y = 2, local_size_z = 2) in;
 #define VOXEL_IS_PARENT 2
 #define VOXEL_IS_AIR 4
 
-layout(rgba16ui, set = 0, binding = 0) uniform uimage3D o_Generated[4];
+layout(rgba16ui, set = 0, binding = 0) uniform uimage3D o_Generated[8];
 
 layout(std430, set = 1, binding = 0) buffer SharedData {
     uint32_t counter;

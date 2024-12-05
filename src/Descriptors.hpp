@@ -14,10 +14,12 @@ class DescriptorLayoutBuilder
     static DescriptorLayoutBuilder start(VkDevice device);
 
     DescriptorLayoutBuilder& addBinding(uint32_t binding, VkDescriptorType descriptorType,
-                                        VkShaderStageFlags shaderStages);
+                                        VkShaderStageFlags shaderStages, uint32_t count = 1);
 
     DescriptorLayoutBuilder& addStorageBuffer(uint32_t binding, VkShaderStageFlags shaderStages);
     DescriptorLayoutBuilder& addStorageImage(uint32_t binding, VkShaderStageFlags shaderStages);
+    DescriptorLayoutBuilder& addStorageImageArray(uint32_t binding, int count,
+                                                  VkShaderStageFlags shaderStages);
     DescriptorLayoutBuilder& addCombinedImageSampler(uint32_t binding,
                                                      VkShaderStageFlags shaderStages);
 
@@ -51,6 +53,8 @@ class DescriptorSetBuilder
 
     DescriptorSetBuilder& addStorageImage(uint32_t binding, VkImageLayout imageLayout,
                                           VkImageView imageView);
+    DescriptorSetBuilder& addStorageImageArray(uint32_t binding, VkImageLayout imageLayout,
+                                               std::vector<VkImageView> imageView);
 
     DescriptorSetBuilder& addStorageBuffer(uint32_t binding, VkBuffer buffer, uint32_t offset,
                                            size_t range);

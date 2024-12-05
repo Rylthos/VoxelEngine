@@ -377,7 +377,7 @@ void SceneManager::checkChunks()
 
         for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
         {
-            for (int y = -m_ChunkRange; y <= m_ChunkRange; y++)
+            for (int y = 0; y < m_ChunkRange * 2; y++)
             {
                 for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
                 {
