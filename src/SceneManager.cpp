@@ -12,7 +12,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
-    : m_Dimension(1 << 8), m_PaletteManager(paletteManager), m_Camera(camera)
+    : m_Dimension(1 << 7), m_PaletteManager(paletteManager), m_Camera(camera)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);

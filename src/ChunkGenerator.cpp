@@ -529,8 +529,10 @@ void ChunkGenerator::computeSerialize(glm::ivec3 chunkPosition, int nodes)
 
         VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
                                     .pNext = nullptr,
-                                    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-                                    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT };
+                                    .srcAccessMask =
+                                        VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+                                    .dstAccessMask =
+                                        VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT };
 
         for (uint32_t i = m_GeneratedVoxels.getMiplevels() - 1; i > 0; i--)
         {
