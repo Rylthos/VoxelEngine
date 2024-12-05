@@ -431,9 +431,10 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 {
     PROF_ZONE_SCOPED;
     spdlog::info("Generating chunk: {}", glm::to_string(chunkPosition));
+
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ComputeQueueAccess);
     {
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ComputeQueueAccess);
 
         if (s_ToBeRemoved.contains(chunkPosition))
         {
@@ -479,7 +480,8 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VoxelGenerationPushConstants),
                                &s_GenerationPushConstants);
 
-            vkCmdDispatch(s_CommandBuffer, dimension / 4, dimension / 4, dimension / 4);
+            size_t dispatchSize = std::ceil(dimension / 4.);
+            vkCmdDispatch(s_CommandBuffer, dispatchSize, dispatchSize, dispatchSize);
 
             vkCmdPipelineBarrier(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                  VK_PIPELINE_BIND_POINT_COMPUTE, 0, 0, nullptr, 0, nullptr, 0,
@@ -530,18 +532,14 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
         VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
         VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
         VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
-        VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
     }
     Timer::stopTimer("Chunk Compute");
 
-    Timer::startTimer("Chunk Copy");
+    // Timer::startTimer("Chunk Copy");
     std::vector<VoxelMipmapBuffer> returnData;
     s_SerializeBuffer.copyToVector(returnData);
 
     {
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ComputeQueueAccess);
-
         int32_t numNodes = returnData.at(0).counter;
         spdlog::info("Generated {} Nodes in mipmap", numNodes);
 
@@ -576,14 +574,20 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
             vkCmdBindDescriptorSets(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     s_SerializePipelineLayout, 1, 1, &s_MipmapDataSet, 0, nullptr);
 
+            VkMemoryBarrier barrier;
+            barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            barrier.pNext = nullptr;
+            barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
             for (uint32_t i = s_GeneratedVoxels.getMiplevels() - 1; i > 0; i--)
             {
-                if (i < s_GeneratedVoxels.getMiplevels() - 1)
-                {
-                    vkCmdPipelineBarrier(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                         VK_PIPELINE_BIND_POINT_COMPUTE, 0, 0, nullptr, 0, nullptr,
-                                         0, nullptr);
-                }
+                // if (i < s_GeneratedVoxels.getMiplevels() - 1)
+                // {
+
+                vkCmdPipelineBarrier(s_CommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0,
+                                     nullptr, 0, nullptr);
+                // }
 
                 VoxelSerializePushConstants pushConstant;
                 pushConstant.numNodes = numNodes;
@@ -598,6 +602,10 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
                 uint32_t size = std::ceil((dimension >> i) / 2.);
                 vkCmdDispatch(s_CommandBuffer, size, size, size);
             }
+
+            vkCmdPipelineBarrier(s_CommandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr,
+                                 0, nullptr);
         }
         VK_CHECK(vkEndCommandBuffer(s_CommandBuffer));
 
@@ -616,36 +624,15 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
         VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
         VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
         VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
-        VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
 
         s_ActiveChunks->chunks.at(chunkPosition).setIsGenerated(true);
     }
-
-    // {
-    //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
-    //     if (s_ToBeRemoved.contains(chunkPosition))
-    //     {
-    //         std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_RemoveQueueMutex);
-    //         s_ToBeRemoved.erase(chunkPosition);
-    //         Timer::stopTimer("Chunk Copy");
-    //         return;
-    //     }
-    //
-    //     //
-    //     s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->chunks.at(chunkPosition).getVoxels());
-    // }
-
-    Timer::stopTimer("Chunk Copy");
-
-    {
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_SerializeQueueMutex);
-        s_ToBeSerialized.push_back(chunkPosition);
-    }
-    s_SerializeCondition.notify_all();
 }
 
 void ChunkGenerator::serializeChunk(uint32_t id)
 {
+    return;
+
     const std::string timerString = std::format("Serialize Chunk: {}", id);
     const std::string threadName = std::format("SerializeThread{}", id);
     PROF_THREAD_NAME(threadName.c_str());

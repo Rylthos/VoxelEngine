@@ -730,6 +730,8 @@ void Engine::render(float frameDelta)
         if (result == VK_ERROR_OUT_OF_DATE_KHR) m_ShouldResize = true;
     }
 
+    vkDeviceWaitIdle(m_Device);
+
     VkCommandBuffer commandBuffer = currentFrame.commandBuffer;
     VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
 

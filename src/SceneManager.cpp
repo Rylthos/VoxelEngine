@@ -12,7 +12,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
-    : m_Dimension(1 << 3), m_PaletteManager(paletteManager), m_Camera(camera)
+    : m_Dimension(1 << 7), m_PaletteManager(paletteManager), m_Camera(camera)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -377,7 +377,7 @@ void SceneManager::checkChunks()
 
         for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
         {
-            for (int y = -1; y <= 1; y++)
+            for (int y = -m_ChunkRange; y <= m_ChunkRange; y++)
             {
                 for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
                 {

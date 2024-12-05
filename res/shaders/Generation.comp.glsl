@@ -46,7 +46,11 @@ void main()
 {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
 
-    vec3 uv = currentIndex / vec3(p_Dimension);
+    const uvec3 mipImageSize = imageSize(o_Generated[0]);
+    if (gl_GlobalInvocationID.x >= mipImageSize.x || gl_GlobalInvocationID.y >= mipImageSize.y || gl_GlobalInvocationID.z >= mipImageSize.z)
+        return;
+
+    vec3 uv = currentIndex / vec3(mipImageSize);
 
     uv += p_Origin.xyz;
 
@@ -76,7 +80,9 @@ void main()
         type = p_P50;
     }
 
-    type = 1;
+    type = 4;
+    if ((gl_GlobalInvocationID.x + gl_GlobalInvocationID.y + gl_GlobalInvocationID.z) % 2 == 0)
+        type = 20;
 
     uint flags = VOXEL_IS_SOLID;
     if (type < 0) {

@@ -3,6 +3,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
+#extension GL_EXT_debug_printf : enable
 
 layout(local_size_x = 2, local_size_y = 2, local_size_z = 2) in;
 
@@ -70,12 +71,12 @@ void main()
         {
             for (int x = 0; x <= 1; x++)
             {
+                int childOffset = (0x4 * y) + (0x2 * z) + (0x1 * x);
+                int bitFlag = 1 << childOffset;
+
                 uvec4 childData = imageLoad(o_Generated[p_SourceLevel], ivec3(topLeft + ivec3(x, y, z)));
                 uint8_t childFlags = uint8_t((childData.b >> 8) & 0xFF);
                 uint8_t colour = uint8_t(childData.b & 0xFF);
-
-                valid <<= 1;
-                leaf <<= 1;
 
                 if ((childFlags & VOXEL_IS_AIR) == 0) // Not Air
                 {
@@ -86,11 +87,11 @@ void main()
                         maxCount = count;
                     }
 
-                    valid |= 1;
+                    valid |= bitFlag;
                 }
 
                 if ((childFlags & VOXEL_IS_SOLID) != 0) // Is solid
-                    leaf |= 1;
+                    leaf |= bitFlag;
                 else
                     allSolid = false;
             }
@@ -108,7 +109,11 @@ void main()
         valid = 0;
     }
 
+    bestColour = 10;
+
     atomicAdd(o_Shared.counter, bitCount(valid));
+
+    debugPrintfEXT("Node: %v3u, Material: %d, Flags: %x, Leaf: %x, Valid: %x", gl_GlobalInvocationID, bestColour, flags, leaf, valid);
 
     uvec4 data = uvec4(0, 0, ((flags & 0xFF) << 8) | (bestColour & 0xFF), ((valid & 0xFF) << 8) | (leaf));
     // uvec4 data = uvec4(bottomRight, 0);

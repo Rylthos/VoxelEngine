@@ -4,6 +4,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_EXT_buffer_reference : enable
+#extension GL_EXT_debug_printf : enable
 
 layout(local_size_x = 2, local_size_y = 2, local_size_z = 2) in;
 
@@ -31,13 +32,13 @@ layout(push_constant) uniform constants {
     SVONodeBuffer p_Nodes;
 };
 
-void writeNode(uint32_t placement, uvec4 data)
+void writeNode(uint32_t nodePlacement, uvec4 data)
 {
-    p_Nodes.nodes[placement].childPtr = 0;
-    p_Nodes.nodes[placement].unused = int8_t((data.b >> 8) & 0xFF);
-    p_Nodes.nodes[placement].materialIndex = uint8_t(data.b & 0xFF);
-    p_Nodes.nodes[placement].validMask = uint8_t((data.a >> 8) & 0xFF);
-    p_Nodes.nodes[placement].leafMask = uint8_t(data.a & 0xFF);
+    p_Nodes.nodes[nodePlacement].childPtr = 0;
+    p_Nodes.nodes[nodePlacement].unused = int8_t((data.b >> 8) & 0xFF);
+    p_Nodes.nodes[nodePlacement].materialIndex = uint8_t(data.b & 0xFF);
+    p_Nodes.nodes[nodePlacement].validMask = uint8_t((data.a >> 8) & 0xFF);
+    p_Nodes.nodes[nodePlacement].leafMask = uint8_t(data.a & 0xFF);
 }
 
 void main()
@@ -52,7 +53,7 @@ void main()
         return;
 
     uvec4 data = imageLoad(o_Generated[p_CurrentMip], ivec3(gl_GlobalInvocationID.xyz));
-    uint32_t placement = uint32_t(data.r << 16) | data.g;
+    uint32_t placement = (uint32_t(data.r) << 16) | uint32_t(data.g);
     uint validFlags = (data.a >> 8) & 0xFF;
 
     int childCount = bitCount(validFlags);
@@ -61,8 +62,10 @@ void main()
     writeNode(placement, data);
     uint32_t newChildPtr = childrenPlacement - placement;
     p_Nodes.nodes[placement].childPtr = newChildPtr;
+    p_Nodes.nodes[0].childPtr = 1;
 
     uvec3 childStart = gl_GlobalInvocationID.xyz * 2;
+    debugPrintfEXT("Child: %v3u, Placement: %d, Flags: %x, childPtr: %d", childStart, placement, validFlags, newChildPtr);
 
     int childOffset = childCount - 1;
     for (int y = 0; y <= 1; y++)
@@ -81,7 +84,9 @@ void main()
                 uint32_t childPlacement = childrenPlacement + childOffset;
                 writeNode(childPlacement, data);
 
-                data.r = (placement >> 16) & 0xFFFF;
+                debugPrintfEXT("    Child: BitFlag: %d, Placement: %d", bitFlag, childPlacement);
+
+                data.r = (childPlacement >> 16) & 0xFFFF;
                 data.g = childPlacement & 0xFFFF;
                 imageStore(o_Generated[p_CurrentMip - 1], ivec3(childStart + uvec3(x, y, z)), data);
 
