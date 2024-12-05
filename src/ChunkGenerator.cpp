@@ -33,15 +33,23 @@ uint32_t ChunkGenerator::s_Depth;
 VoxelGenerationPushConstants ChunkGenerator::s_GenerationPushConstants;
 
 VkDescriptorPool ChunkGenerator::s_DescriptorPool;
-VkDescriptorSetLayout ChunkGenerator::s_DescriptorLayout;
-VkDescriptorSet ChunkGenerator::s_DescriptorSet;
+
+VkDescriptorSetLayout ChunkGenerator::s_MipmapImageSetLayout;
+VkDescriptorSet ChunkGenerator::s_MipmapImageSet;
+
+VkDescriptorSetLayout ChunkGenerator::s_MipmapDataSetLayout;
+VkDescriptorSet ChunkGenerator::s_MipmapDataSet;
 
 Image ChunkGenerator::s_GeneratedVoxels;
+Buffer ChunkGenerator::s_SerializeBuffer;
 std::vector<VkImageView> ChunkGenerator::s_GeneratedImageViews;
 
 Buffer ChunkGenerator::s_StagingBuffer;
 VkPipeline ChunkGenerator::s_GenerationPipeline;
 VkPipelineLayout ChunkGenerator::s_GenerationPipelineLayout;
+
+VkPipeline ChunkGenerator::s_MipmapPipeline;
+VkPipelineLayout ChunkGenerator::s_MipmapPipelineLayout;
 
 VkPipeline ChunkGenerator::s_SerializePipeline;
 VkPipelineLayout ChunkGenerator::s_SerializePipelineLayout;
@@ -96,7 +104,8 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
     VK_CHECK(vkCreateFence(s_Device, &fenceCI, nullptr, &s_CopyFence));
 
     std::vector<VkDescriptorPoolSize> poolSizes = {
-        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = s_Depth }
+        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  .descriptorCount = s_Depth },
+        { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1       }
     };
 
     VkDescriptorPoolCreateInfo descriptorPoolCI{};
@@ -104,7 +113,7 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
     descriptorPoolCI.pNext = nullptr;
     descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     descriptorPoolCI.pPoolSizes = poolSizes.data();
-    descriptorPoolCI.maxSets = 1;
+    descriptorPoolCI.maxSets = 2;
     descriptorPoolCI.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     VK_CHECK(vkCreateDescriptorPool(s_Device, &descriptorPoolCI, nullptr, &s_DescriptorPool));
 
@@ -114,13 +123,22 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
         {
             builder.addStorageImage(i, VK_SHADER_STAGE_COMPUTE_BIT);
         }
-        s_DescriptorLayout = builder.build();
+        s_MipmapImageSetLayout = builder.build();
     }
+
+    s_MipmapDataSetLayout = DescriptorLayoutBuilder::start(s_Device)
+                                .addStorageBuffer(0, VK_SHADER_STAGE_COMPUTE_BIT)
+                                .build();
 
     s_GeneratedVoxels.create(s_Allocator, VK_FORMAT_R16G16B16A16_UINT,
                              { chunkSize, chunkSize, chunkSize }, VK_IMAGE_TYPE_3D,
                              VK_IMAGE_USAGE_STORAGE_BIT, VMA_MEMORY_USAGE_GPU_ONLY,
                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, std::log2(chunkSize) + 1);
+
+    s_SerializeBuffer.create(s_Allocator, sizeof(VoxelMipmapBuffer),
+                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                             VMA_MEMORY_USAGE_GPU_TO_CPU);
 
     for (uint32_t i = 0; i < s_Depth; i++)
     {
@@ -152,7 +170,7 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
         generationLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         generationLayoutCI.pNext = nullptr;
         generationLayoutCI.setLayoutCount = 1;
-        generationLayoutCI.pSetLayouts = &s_DescriptorLayout;
+        generationLayoutCI.pSetLayouts = &s_MipmapImageSetLayout;
         generationLayoutCI.pushConstantRangeCount = 1;
         generationLayoutCI.pPushConstantRanges = &pushConstant;
 
@@ -179,22 +197,24 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
                                           &s_GenerationPipeline));
     }
 
-    {
+    { // Mipmapping
         VkPushConstantRange pushConstant{};
         pushConstant.offset = 0;
-        pushConstant.size = sizeof(VoxelSerializePushConstants);
+        pushConstant.size = sizeof(VoxelMipmapPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+        std::vector<VkDescriptorSetLayout> layouts = { s_MipmapImageSetLayout,
+                                                       s_MipmapDataSetLayout };
         VkPipelineLayoutCreateInfo generationLayoutCI{};
         generationLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         generationLayoutCI.pNext = nullptr;
-        generationLayoutCI.setLayoutCount = 1;
-        generationLayoutCI.pSetLayouts = &s_DescriptorLayout;
+        generationLayoutCI.setLayoutCount = layouts.size();
+        generationLayoutCI.pSetLayouts = layouts.data();
         generationLayoutCI.pushConstantRangeCount = 1;
         generationLayoutCI.pPushConstantRanges = &pushConstant;
 
         VK_CHECK(vkCreatePipelineLayout(s_Device, &generationLayoutCI, nullptr,
-                                        &s_SerializePipelineLayout));
+                                        &s_MipmapPipelineLayout));
 
         ShaderModule mipmapShader;
         mipmapShader.create("res/shaders/MipmapOctree.comp.spv", s_Device);
@@ -209,6 +229,45 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
         VkComputePipelineCreateInfo computePipelineCI{};
         computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         computePipelineCI.pNext = nullptr;
+        computePipelineCI.layout = s_MipmapPipelineLayout;
+        computePipelineCI.stage = shaderStageCI;
+
+        VK_CHECK(vkCreateComputePipelines(s_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
+                                          &s_MipmapPipeline));
+    }
+
+    { // Serializing
+        VkPushConstantRange pushConstant{};
+        pushConstant.offset = 0;
+        pushConstant.size = sizeof(VoxelSerializePushConstants);
+        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        std::vector<VkDescriptorSetLayout> layouts = { s_MipmapImageSetLayout,
+                                                       s_MipmapDataSetLayout };
+        VkPipelineLayoutCreateInfo generationLayoutCI{};
+        generationLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        generationLayoutCI.pNext = nullptr;
+        generationLayoutCI.setLayoutCount = layouts.size();
+        generationLayoutCI.pSetLayouts = layouts.data();
+        generationLayoutCI.pushConstantRangeCount = 1;
+        generationLayoutCI.pPushConstantRanges = &pushConstant;
+
+        VK_CHECK(vkCreatePipelineLayout(s_Device, &generationLayoutCI, nullptr,
+                                        &s_SerializePipelineLayout));
+
+        ShaderModule serializeShader;
+        serializeShader.create("res/shaders/SerializeOctree.comp.spv", s_Device);
+
+        VkPipelineShaderStageCreateInfo shaderStageCI{};
+        shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStageCI.pNext = nullptr;
+        shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        shaderStageCI.module = serializeShader.getShaderModule();
+        shaderStageCI.pName = "main";
+
+        VkComputePipelineCreateInfo computePipelineCI{};
+        computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        computePipelineCI.pNext = nullptr;
         computePipelineCI.layout = s_SerializePipelineLayout;
         computePipelineCI.stage = shaderStageCI;
 
@@ -217,13 +276,20 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
     }
 
     {
-        auto builder = DescriptorSetBuilder::start(s_Device, s_DescriptorPool, s_DescriptorLayout);
+        auto builder =
+            DescriptorSetBuilder::start(s_Device, s_DescriptorPool, s_MipmapImageSetLayout);
         for (size_t i = 0; i < s_GeneratedImageViews.size(); i++)
         {
             builder.addStorageImage(i, VK_IMAGE_LAYOUT_GENERAL, s_GeneratedImageViews.at(i));
         }
-        s_DescriptorSet = builder.build().at(0);
+        s_MipmapImageSet = builder.build().at(0);
     }
+
+    s_MipmapDataSet =
+        DescriptorSetBuilder::start(s_Device, s_DescriptorPool, s_MipmapDataSetLayout)
+            .addStorageBuffer(0, s_SerializeBuffer.getBuffer(), 0, sizeof(VoxelMipmapBuffer))
+            .build()
+            .at(0);
 
     s_GenerationPushConstants.seed = s_Seed;
     s_GenerationPushConstants.cutoff = 0.0;
@@ -239,8 +305,8 @@ void ChunkGenerator::freeResources()
     s_Running = false;
 
     s_SerializeCondition.notify_all();
-    for (auto& thread : s_SerialisationThreads)
-        thread.join();
+    // for (auto& thread : s_SerialisationThreads)
+    //     thread.join();
 
     s_StagingBuffer.free();
     for (size_t i = 0; i < s_GeneratedImageViews.size(); i++)
@@ -249,12 +315,16 @@ void ChunkGenerator::freeResources()
     }
 
     s_GeneratedVoxels.free();
+    s_SerializeBuffer.free();
 
-    vkDestroyDescriptorSetLayout(s_Device, s_DescriptorLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_Device, s_MipmapImageSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(s_Device, s_MipmapDataSetLayout, nullptr);
     vkDestroyDescriptorPool(s_Device, s_DescriptorPool, nullptr);
 
     vkDestroyPipeline(s_Device, s_SerializePipeline, nullptr);
     vkDestroyPipelineLayout(s_Device, s_SerializePipelineLayout, nullptr);
+    vkDestroyPipeline(s_Device, s_MipmapPipeline, nullptr);
+    vkDestroyPipelineLayout(s_Device, s_MipmapPipelineLayout, nullptr);
     vkDestroyPipeline(s_Device, s_GenerationPipeline, nullptr);
     vkDestroyPipelineLayout(s_Device, s_GenerationPipelineLayout, nullptr);
 
@@ -317,11 +387,11 @@ void ChunkGenerator::generateChunkLoop()
 
     PROF_THREAD_NAME("Chunk Generation");
 
-    size_t id = 0;
-    for (auto& thread : s_SerialisationThreads)
-    {
-        thread = std::thread([&id]() { serializeChunk(id++); });
-    }
+    // size_t id = 0;
+    // for (auto& thread : s_SerialisationThreads)
+    // {
+    //     thread = std::thread([&id]() { serializeChunk(id++); });
+    // }
 
     spdlog::info("Started Chunk Generation");
 
@@ -383,6 +453,13 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 
         size_t dimension = s_ActiveChunks->chunks.at(chunkPosition).getDimensions();
 
+        std::vector<VoxelMipmapBuffer> data;
+        data.push_back({ .counter = 1 });
+
+        createStaging(1, sizeof(VoxelMipmapBuffer));
+        s_StagingBuffer.copyFromData_CPUOnly<VoxelMipmapBuffer>(data);
+        copyStagingToBuffer(&s_SerializeBuffer);
+
         VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
         {
             PROF_VK_ZONE(s_CommandBuffer, "Chunk Compute Generation");
@@ -395,7 +472,8 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
                               s_GenerationPipeline);
 
             vkCmdBindDescriptorSets(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    s_GenerationPipelineLayout, 0, 1, &s_DescriptorSet, 0, nullptr);
+                                    s_GenerationPipelineLayout, 0, 1, &s_MipmapImageSet, 0,
+                                    nullptr);
 
             vkCmdPushConstants(s_CommandBuffer, s_GenerationPipelineLayout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VoxelGenerationPushConstants),
@@ -407,10 +485,13 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
                                  VK_PIPELINE_BIND_POINT_COMPUTE, 0, 0, nullptr, 0, nullptr, 0,
                                  nullptr);
 
-            vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_SerializePipeline);
+            vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_MipmapPipeline);
 
             vkCmdBindDescriptorSets(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    s_SerializePipelineLayout, 0, 1, &s_DescriptorSet, 0, nullptr);
+                                    s_MipmapPipelineLayout, 1, 1, &s_MipmapDataSet, 0, nullptr);
+
+            vkCmdBindDescriptorSets(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    s_MipmapPipelineLayout, 0, 1, &s_MipmapImageSet, 0, nullptr);
 
             for (uint32_t i = 0; i < s_GeneratedVoxels.getMiplevels() - 1; i++)
             {
@@ -421,14 +502,14 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
                                          0, nullptr);
                 }
 
-                VoxelSerializePushConstants pushConstant;
+                VoxelMipmapPushConstants pushConstant;
                 pushConstant.sourceLevel = i;
 
-                vkCmdPushConstants(s_CommandBuffer, s_SerializePipelineLayout,
-                                   VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                                   sizeof(VoxelSerializePushConstants), &pushConstant);
+                vkCmdPushConstants(s_CommandBuffer, s_MipmapPipelineLayout,
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(VoxelMipmapPushConstants),
+                                   &pushConstant);
 
-                uint32_t size = (dimension >> i) / 2;
+                uint32_t size = std::ceil((dimension >> (i + 1)) / 2.);
                 vkCmdDispatch(s_CommandBuffer, size, size, size);
             }
         }
@@ -454,18 +535,105 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
     Timer::stopTimer("Chunk Compute");
 
     Timer::startTimer("Chunk Copy");
+    std::vector<VoxelMipmapBuffer> returnData;
+    s_SerializeBuffer.copyToVector(returnData);
+
     {
         std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
-        if (s_ToBeRemoved.contains(chunkPosition))
-        {
-            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_RemoveQueueMutex);
-            s_ToBeRemoved.erase(chunkPosition);
-            Timer::stopTimer("Chunk Copy");
-            return;
-        }
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_ComputeQueueAccess);
 
-        // s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->chunks.at(chunkPosition).getVoxels());
+        int32_t numNodes = returnData.at(0).counter;
+        spdlog::info("Generated {} Nodes in mipmap", numNodes);
+
+        createSVO(s_ActiveChunks->chunks.at(chunkPosition).getSVOBuffer(), numNodes);
+
+        std::vector<VoxelMipmapBuffer> data;
+        data.push_back({ .counter = 1 });
+
+        createStaging(1, sizeof(VoxelMipmapBuffer));
+        s_StagingBuffer.copyFromData_CPUOnly<VoxelMipmapBuffer>(data);
+        copyStagingToBuffer(&s_SerializeBuffer);
+
+        VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
+
+        VkCommandBufferBeginInfo commandBufferBI{};
+        commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBI.pNext = nullptr;
+        commandBufferBI.pInheritanceInfo = nullptr;
+        commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        size_t dimension = s_ActiveChunks->chunks.at(chunkPosition).getDimensions();
+
+        VK_CHECK(vkBeginCommandBuffer(s_CommandBuffer, &commandBufferBI));
+        {
+            PROF_VK_ZONE(s_CommandBuffer, "Chunk Compute Serialization");
+
+            vkCmdBindPipeline(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_SerializePipeline);
+
+            vkCmdBindDescriptorSets(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    s_SerializePipelineLayout, 0, 1, &s_MipmapImageSet, 0, nullptr);
+
+            vkCmdBindDescriptorSets(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    s_SerializePipelineLayout, 1, 1, &s_MipmapDataSet, 0, nullptr);
+
+            for (uint32_t i = s_GeneratedVoxels.getMiplevels() - 1; i > 0; i--)
+            {
+                if (i < s_GeneratedVoxels.getMiplevels() - 1)
+                {
+                    vkCmdPipelineBarrier(s_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                         VK_PIPELINE_BIND_POINT_COMPUTE, 0, 0, nullptr, 0, nullptr,
+                                         0, nullptr);
+                }
+
+                VoxelSerializePushConstants pushConstant;
+                pushConstant.numNodes = numNodes;
+                pushConstant.currentLevel = i;
+                pushConstant.targetBuffer =
+                    s_ActiveChunks->chunks.at(chunkPosition).getBufferAddress(s_Device);
+
+                vkCmdPushConstants(s_CommandBuffer, s_SerializePipelineLayout,
+                                   VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                                   sizeof(VoxelSerializePushConstants), &pushConstant);
+
+                uint32_t size = std::ceil((dimension >> i) / 2.);
+                vkCmdDispatch(s_CommandBuffer, size, size, size);
+            }
+        }
+        VK_CHECK(vkEndCommandBuffer(s_CommandBuffer));
+
+        VkCommandBufferSubmitInfo commandBufferSI{};
+        commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        commandBufferSI.pNext = nullptr;
+        commandBufferSI.commandBuffer = s_CommandBuffer;
+        commandBufferSI.deviceMask = 0;
+
+        VkSubmitInfo2 submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.pNext = nullptr;
+        submitInfo.commandBufferInfoCount = 1;
+        submitInfo.pCommandBufferInfos = &commandBufferSI;
+
+        VK_CHECK(vkQueueSubmit2(s_ComputeQueue, 1, &submitInfo, s_GeneratedFence));
+        VK_CHECK(vkWaitForFences(s_Device, 1, &s_GeneratedFence, VK_TRUE, 1e10));
+        VK_CHECK(vkResetFences(s_Device, 1, &s_GeneratedFence));
+        VK_CHECK(vkResetCommandBuffer(s_CommandBuffer, 0));
+
+        s_ActiveChunks->chunks.at(chunkPosition).setIsGenerated(true);
     }
+
+    // {
+    //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ActiveChunks->mutex);
+    //     if (s_ToBeRemoved.contains(chunkPosition))
+    //     {
+    //         std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(s_RemoveQueueMutex);
+    //         s_ToBeRemoved.erase(chunkPosition);
+    //         Timer::stopTimer("Chunk Copy");
+    //         return;
+    //     }
+    //
+    //     //
+    //     s_GeneratedVoxels.copyToVector<Voxel>(s_ActiveChunks->chunks.at(chunkPosition).getVoxels());
+    // }
 
     Timer::stopTimer("Chunk Copy");
 
@@ -740,11 +908,8 @@ void ChunkGenerator::transitionImages()
     VK_CHECK(vkWaitForFences(s_Device, 1, &s_CopyFence, true, 1e10));
 }
 
-void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
+void ChunkGenerator::copyStagingToBuffer(Buffer* buffer)
 {
-    PROF_ZONE_SCOPED;
-    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ComputeQueueAccess);
-
     VK_CHECK(vkResetFences(s_Device, 1, &s_CopyFence));
     VK_CHECK(vkResetCommandBuffer(s_CopyCommandBuffer, 0));
 
@@ -756,9 +921,7 @@ void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
 
     VK_CHECK(vkBeginCommandBuffer(s_CopyCommandBuffer, &commandBufferBI));
 
-    s_ActiveChunks->chunks.at(chunkPosition)
-        .getSVOBuffer()
-        ->copyFromBuffer(s_CopyCommandBuffer, s_StagingBuffer, size);
+    buffer->copyFromBuffer(s_CopyCommandBuffer, s_StagingBuffer, buffer->getSize());
 
     VK_CHECK(vkEndCommandBuffer(s_CopyCommandBuffer));
 
@@ -779,6 +942,14 @@ void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
     VK_CHECK(vkWaitForFences(s_Device, 1, &s_CopyFence, true, 1e10));
 }
 
+void ChunkGenerator::copyStagingToChunk(glm::ivec3 chunkPosition, size_t size)
+{
+    PROF_ZONE_SCOPED;
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(s_ComputeQueueAccess);
+
+    copyStagingToBuffer(s_ActiveChunks->chunks.at(chunkPosition).getSVOBuffer());
+}
+
 void ChunkGenerator::createSVO(Buffer* buffer, size_t count)
 {
     buffer->create(s_Allocator, count * sizeof(SVONode),
@@ -787,9 +958,9 @@ void ChunkGenerator::createSVO(Buffer* buffer, size_t count)
                    VMA_MEMORY_USAGE_GPU_ONLY);
 }
 
-void ChunkGenerator::createStaging(size_t count)
+void ChunkGenerator::createStaging(size_t count, size_t elem_size)
 {
-    size_t size = count * sizeof(SVONode);
+    size_t size = count * elem_size;
     if (s_StagingBuffer.getSize() < size)
     {
         s_StagingBuffer.free();

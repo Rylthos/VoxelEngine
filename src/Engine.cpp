@@ -238,6 +238,7 @@ void Engine::initVulkan()
     features12.hostQueryReset = true;
     features12.shaderInt8 = true;
     features12.storageBuffer8BitAccess = true;
+    features12.runtimeDescriptorArray = true;
 
     VkPhysicalDeviceVulkan11Features features11{};
     features11.shaderDrawParameters = true;

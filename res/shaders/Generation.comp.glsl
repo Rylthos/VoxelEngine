@@ -76,13 +76,14 @@ void main()
         type = p_P50;
     }
 
+    type = 1;
+
     uint flags = VOXEL_IS_SOLID;
     if (type < 0) {
         flags |= VOXEL_IS_AIR;
         type = 0;
     }
 
-    uvec4 data = uvec4(0, 0, ((flags & 0xFF) << 8) | (type & 0xFF),
-            0);
+    uvec4 data = uvec4(0, 0, ((flags & 0xFF) << 8) | (type & 0xFF), 0);
     imageStore(o_Generated[0], ivec3(currentIndex), data);
 }

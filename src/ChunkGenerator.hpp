@@ -46,8 +46,18 @@ struct VoxelGenerationPushConstants {
     glm::ivec4 origin;
 };
 
-struct VoxelSerializePushConstants {
+struct VoxelMipmapBuffer {
+    uint32_t counter;
+};
+
+struct VoxelMipmapPushConstants {
     int32_t sourceLevel;
+};
+
+struct VoxelSerializePushConstants {
+    uint32_t currentLevel;
+    uint32_t numNodes;
+    VkDeviceAddress targetBuffer;
 };
 
 class ChunkGenerator
@@ -101,16 +111,24 @@ class ChunkGenerator
     static VoxelGenerationPushConstants s_GenerationPushConstants;
 
     static VkDescriptorPool s_DescriptorPool;
-    static VkDescriptorSetLayout s_DescriptorLayout;
-    static VkDescriptorSet s_DescriptorSet;
+
+    static VkDescriptorSetLayout s_MipmapImageSetLayout;
+    static VkDescriptorSet s_MipmapImageSet;
+
+    static VkDescriptorSetLayout s_MipmapDataSetLayout;
+    static VkDescriptorSet s_MipmapDataSet;
 
     static Image s_GeneratedVoxels;
+    static Buffer s_SerializeBuffer;
     static std::vector<VkImageView> s_GeneratedImageViews;
 
     static Buffer s_StagingBuffer;
 
     static VkPipeline s_GenerationPipeline;
     static VkPipelineLayout s_GenerationPipelineLayout;
+
+    static VkPipeline s_MipmapPipeline;
+    static VkPipelineLayout s_MipmapPipelineLayout;
 
     static VkPipeline s_SerializePipeline;
     static VkPipelineLayout s_SerializePipelineLayout;
@@ -132,8 +150,9 @@ class ChunkGenerator
     static void serializeChunk(uint32_t id);
 
     static void transitionImages();
+    static void copyStagingToBuffer(Buffer* buffer);
     static void copyStagingToChunk(glm::ivec3 chunkPosition, size_t size);
 
     static void createSVO(Buffer* buffer, size_t count);
-    static void createStaging(size_t count);
+    static void createStaging(size_t count, size_t elem_size = sizeof(SVONode));
 };
