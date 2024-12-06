@@ -281,6 +281,8 @@ void SceneManager::receive(const Event* event)
 
 VoxelPushConstants& SceneManager::getVoxelPushConstants()
 {
+    PROF_ZONE_SCOPED;
+
     if (m_PauseRegeneration) return m_VoxelPushConstants;
 
     m_VoxelPushConstants.dimension = m_Dimension;
@@ -291,7 +293,8 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
     std::vector<ChunkData> chunkData;
     for (auto& chunkPair : m_Chunks.chunks)
     {
-        if (!chunkPair.second.isGenerated()) continue;
+        if (!chunkPair.second.isGenerated() || chunkPair.second.getSVOBuffer() == VK_NULL_HANDLE)
+            continue;
 
         chunkData.push_back({ .chunkPosition = glm::vec4(chunkPair.second.getPosition(), 0),
                               .chunkData = chunkPair.second.getBufferAddress(m_Device) });
@@ -395,6 +398,7 @@ void SceneManager::checkChunks()
 
 void SceneManager::createBufferChunks()
 {
+    PROF_ZONE_SCOPED;
     size_t size = m_Chunks.chunks.size() * sizeof(ChunkData);
 
     if (m_Staging.getSize() < size)

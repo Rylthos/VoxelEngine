@@ -404,8 +404,6 @@ void Engine::initSyncStructures()
     for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
     {
         VK_CHECK(vkCreateFence(m_Device, &fenceCI, nullptr, &m_Frames[i].renderFence));
-        spdlog::info("T0: {} | {}", i, std::format("{:x}", (uint64_t)m_Frames[i].renderFence));
-
         VK_CHECK(
             vkCreateSemaphore(m_Device, &semaphoreCI, nullptr, &m_Frames[i].swapchainSemaphore));
         VK_CHECK(vkCreateSemaphore(m_Device, &semaphoreCI, nullptr, &m_Frames[i].renderSemaphore));

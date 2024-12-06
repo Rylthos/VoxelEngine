@@ -40,6 +40,7 @@ void ChunkGenerator::free()
 
 void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 {
+    PROF_ZONE_SCOPED;
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_GenerateQueueMutex);
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_RemoveQueueMutex);
 
@@ -51,6 +52,7 @@ void ChunkGenerator::addChunkToQueue(glm::ivec3 chunkPosition)
 
 void ChunkGenerator::removeChunk(glm::ivec3 pos)
 {
+    PROF_ZONE_SCOPED;
     {
         std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_GenerateQueueMutex);
         std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk1(m_RemoveQueueMutex);
@@ -392,6 +394,7 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
 
 void ChunkGenerator::computeGenerate(glm::ivec3 chunkPosition)
 {
+    PROF_ZONE_SCOPED;
     Timer::startTimer("Chunk Compute");
     VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
 
@@ -487,12 +490,14 @@ void ChunkGenerator::computeGenerate(glm::ivec3 chunkPosition)
 
 void ChunkGenerator::computeSerialize(glm::ivec3 chunkPosition, int nodes)
 {
+    PROF_ZONE_SCOPED;
     Timer::startTimer("Chunk Serialize");
     spdlog::info("Generated {} Nodes in mipmap", nodes);
 
     size_t bytes = nodes * sizeof(SVONode);
     spdlog::info("Generated SVO of size {} bytes, {} kb, {} mb", nodes, bytes, bytes / 1024,
                  bytes / (1024 * 1024));
+
     spdlog::info("~{} bytes per voxel",
                  (float)bytes / (float)(m_Dimension * m_Dimension * m_Dimension));
 
@@ -598,10 +603,12 @@ void ChunkGenerator::transitionImages()
     commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     VK_CHECK(vkBeginCommandBuffer(m_CopyCommandBuffer, &commandBufferBI));
+    {
+        PROF_VK_ZONE(m_CopyCommandBuffer, "Transition images");
 
-    m_GeneratedVoxels.transition(m_CopyCommandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
-                                 VK_IMAGE_LAYOUT_GENERAL);
-
+        m_GeneratedVoxels.transition(m_CopyCommandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
+                                     VK_IMAGE_LAYOUT_GENERAL);
+    }
     VK_CHECK(vkEndCommandBuffer(m_CopyCommandBuffer));
 
     VkCommandBufferSubmitInfo commandBufferSI{};
@@ -623,6 +630,7 @@ void ChunkGenerator::transitionImages()
 
 void ChunkGenerator::copyStagingToBuffer(Buffer* buffer)
 {
+    PROF_ZONE_SCOPED;
     VK_CHECK(vkResetFences(m_Device, 1, &m_CopyFence));
     VK_CHECK(vkResetCommandBuffer(m_CopyCommandBuffer, 0));
 
@@ -633,9 +641,11 @@ void ChunkGenerator::copyStagingToBuffer(Buffer* buffer)
     commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     VK_CHECK(vkBeginCommandBuffer(m_CopyCommandBuffer, &commandBufferBI));
+    {
+        PROF_VK_ZONE(m_CopyCommandBuffer, "Copy staging to buffer");
 
-    buffer->copyFromBuffer(m_CopyCommandBuffer, m_StagingBuffer, buffer->getSize());
-
+        buffer->copyFromBuffer(m_CopyCommandBuffer, m_StagingBuffer, buffer->getSize());
+    }
     VK_CHECK(vkEndCommandBuffer(m_CopyCommandBuffer));
 
     VkCommandBufferSubmitInfo commandBufferSI{};
@@ -651,7 +661,6 @@ void ChunkGenerator::copyStagingToBuffer(Buffer* buffer)
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
     VK_CHECK(vkQueueSubmit2(m_ComputeQueue, 1, &submitInfo, m_CopyFence));
-
     VK_CHECK(vkWaitForFences(m_Device, 1, &m_CopyFence, true, 1e10));
 }
 
