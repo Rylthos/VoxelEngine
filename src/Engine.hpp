@@ -13,13 +13,9 @@
 #include "Image.hpp"
 #include "PaletteManager.hpp"
 #include "Profilling.hpp"
+#include "Queue.hpp"
 #include "SceneManager.hpp"
 #include "Window.hpp"
-
-struct Queue {
-    VkQueue queue;
-    uint32_t queueFamily;
-};
 
 struct FrameData {
     VkCommandPool commandPool;
@@ -115,8 +111,6 @@ class Engine : EventReceiver
     void initSyncStructures();
 
     void initImGui();
-
-    void updateScene();
 
     void initDescriptorPool();
     void initDescriptorLayouts();

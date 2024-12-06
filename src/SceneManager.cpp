@@ -12,7 +12,7 @@
 #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
-    : m_Dimension(1 << 7), m_PaletteManager(paletteManager), m_Camera(camera)
+    : m_Dimension(1 << 8), m_PaletteManager(paletteManager), m_Camera(camera)
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -45,16 +45,14 @@ SceneManager SceneManager::operator=(const SceneManager& other)
     return *this;
 }
 
-void SceneManager::initResources(VkDevice device, VmaAllocator allocator, VkQueue computeQueue,
-                                 uint32_t computeQueueFamily)
+void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
 {
     if (m_Initialized) return;
 
     m_Device = device;
     m_Allocator = allocator;
 
-    ChunkGenerator::init(m_Dimension, m_Allocator, m_Device, computeQueue, computeQueueFamily,
-                         &m_Chunks);
+    ChunkGenerator::init(m_Dimension, m_Allocator, m_Device, computeQueue, &m_Chunks);
 
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
@@ -160,7 +158,7 @@ void SceneManager::receive(const Event* event)
                             }
                         }
 
-                        m_HasUpdated = true;
+                        // m_HasUpdated = true;
                     }
 
                     ImGui::EndCombo();
@@ -316,13 +314,6 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
     return m_VoxelPushConstants;
 }
 
-void SceneManager::updateBuffers()
-{
-    freeBuffers();
-
-    m_VoxelPushConstants.initialParent = 0;
-}
-
 glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
 {
     float chunkSize = m_Dimension * Voxel::VOXEL_SIZE;
@@ -379,7 +370,7 @@ void SceneManager::checkChunks()
 
         for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
         {
-            for (int y = 0; y < m_ChunkRange * 2; y++)
+            for (int y = -1; y <= 1; y++)
             {
                 for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
                 {

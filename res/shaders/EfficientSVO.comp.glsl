@@ -69,19 +69,19 @@ void main()
         float diff = max(dot(hit.normal, lightDir), 0.);
         vec4 diffuse = lightColour * diff;
 
-        // Ray shadowRay;
-        // shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
-        // shadowRay.direction = lightPosition - shadowRay.origin;
-        //
-        // HitRecord shadow = castRay(p_ChunkCount, p_Tree, shadowRay,
-        //         p_Dimension, p_Size, p_MaxIterations, p_LOD);
+        Ray shadowRay;
+        shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
+        shadowRay.direction = lightPosition - shadowRay.origin;
+
+        HitRecord shadow = castRay(p_ChunkCount, p_Tree, shadowRay,
+                p_Dimension, p_Size, p_MaxIterations, p_LOD);
 
         const float ambientStrength = 0.7;
         vec4 ambient = lightColour * ambientStrength;
 
         float diffStrength = 1.;
-        // if (shadow.t >= 0.)
-        //     diffStrength = 0.1;
+        if (shadow.t >= 0.)
+            diffStrength = 0.1;
 
         vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
 

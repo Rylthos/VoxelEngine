@@ -2,12 +2,8 @@
 
 #include <glm/gtx/hash.hpp>
 
-#include <string>
 #include <thread>
 #include <unordered_map>
-#include <vector>
-
-#include "Profilling.hpp"
 
 #include <glm/glm.hpp>
 #include <spdlog/fmt/bin_to_hex.h>
@@ -15,7 +11,8 @@
 #include "Buffer.hpp"
 #include "Camera.hpp"
 #include "PaletteManager.hpp"
-#include "Voxel.hpp"
+#include "Profilling.hpp"
+#include "Queue.hpp"
 
 #include "Chunk.hpp"
 
@@ -68,29 +65,15 @@ class SceneManager : public EventReceiver
 
     SceneManager operator=(const SceneManager& other);
 
-    void initResources(VkDevice device, VmaAllocator allocator, VkQueue computeQueue,
-                       uint32_t computeQueueFamily);
+    void initResources(VkDevice device, VmaAllocator allocator, Queue* computeQueue);
     void freeResources();
 
     void receive(const Event* event);
 
     VoxelPushConstants& getVoxelPushConstants();
 
-    bool hasUpdated()
-    {
-        if (m_HasUpdated)
-        {
-            m_HasUpdated = false;
-            return true;
-        }
-        return false;
-    }
-
-    void updateBuffers();
-
   private:
     bool m_Initialized = false;
-    bool m_HasUpdated = false;
     bool m_AnimateCutoff = false;
     bool m_PauseRegeneration = false;
 
@@ -110,7 +93,7 @@ class SceneManager : public EventReceiver
     Buffer m_ChunkDataAddress;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
-    int m_ChunkRange = 1;
+    int m_ChunkRange = 2;
 
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);

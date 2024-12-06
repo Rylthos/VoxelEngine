@@ -7,14 +7,14 @@
 #include <shared_mutex>
 #include <unordered_set>
 
-#include "Profilling.hpp"
-
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan.h>
 
 #include "Chunk.hpp"
 #include "Image.hpp"
+#include "Profilling.hpp"
+#include "Queue.hpp"
 
 #define SERIALISATION_THREADS 1
 
@@ -64,7 +64,7 @@ class ChunkGenerator
   public:
     static ChunkGenerator& getInstance();
     static void init(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                     VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
+                     Queue* computeQueue, Chunks* chunks);
     static void free();
 
     int getWorldSeed() { return m_Seed; }
@@ -88,7 +88,6 @@ class ChunkGenerator
   private:
     PROF_LOCKABLE_MUTEX(std::mutex, m_GenerateQueueMutex, "Generate Queue");
     PROF_LOCKABLE_MUTEX(std::mutex, m_RemoveQueueMutex, "Removal Queue");
-    PROF_LOCKABLE_MUTEX(std::mutex, m_ComputeQueueAccess, "VkAccess compute Queue");
 
     std::condition_variable_any m_GenerateCondition;
 
@@ -129,7 +128,7 @@ class ChunkGenerator
 
     VmaAllocator m_Allocator;
     VkDevice m_Device;
-    VkQueue m_ComputeQueue;
+    Queue* m_ComputeQueue;
     VkCommandPool m_CommandPool;
 
     VkCommandBuffer m_CommandBuffer;
@@ -143,7 +142,7 @@ class ChunkGenerator
     ~ChunkGenerator() {}
 
     void initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                       VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks);
+                       Queue* computeQueue, Chunks* chunks);
     void freeResources();
 
     void generateChunk(glm::ivec3 chunkPosition);

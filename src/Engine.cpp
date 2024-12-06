@@ -7,7 +7,6 @@
 
 #include <spdlog/fmt/ranges.h>
 
-#include "ChunkGenerator.hpp"
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
 #include "Profilling.hpp"
@@ -64,10 +63,9 @@ void Engine::init()
                                                 myvkGetCalibratedTimestampsEXT);
 #endif
 
-    m_SceneManager.initResources(m_Device, m_Allocator, m_ComputeQueue.queue,
-                                 m_ComputeQueue.queueFamily);
+    m_SceneManager.initResources(m_Device, m_Allocator, &m_ComputeQueue);
 
-    updateScene();
+    m_PaletteManager.updateImage();
 
     EventHandler::subscribe(
         { EventType::KeyboardInput, EventType::ImGuiRender, EventType::WindowResize }, this);
@@ -127,6 +125,9 @@ void Engine::start()
 
 void Engine::cleanup()
 {
+    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
+    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_GraphicsQueue.queueMutex);
+
     vkDeviceWaitIdle(m_Device);
 
 #ifdef PROF_TRACY
@@ -469,14 +470,6 @@ void Engine::initImGui()
     spdlog::info("Initialized ImGui");
 }
 
-void Engine::updateScene()
-{
-    vkDeviceWaitIdle(m_Device);
-
-    m_SceneManager.updateBuffers();
-    m_PaletteManager.updateImage();
-}
-
 void Engine::initDescriptorPool()
 {
     std::vector<VkDescriptorPoolSize> poolSizes = {
@@ -672,8 +665,6 @@ void Engine::update(float frameDelta)
     ImGuiRender imGuiRender;
     EventHandler::dispatchEvent(&imGuiRender);
 
-    if (m_SceneManager.hasUpdated()) updateScene();
-
     ImGui::Render();
 }
 
@@ -727,8 +718,6 @@ void Engine::render(float frameDelta)
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR) m_ShouldResize = true;
     }
-
-    vkDeviceWaitIdle(m_Device);
 
     VkCommandBuffer commandBuffer = currentFrame.commandBuffer;
     VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));

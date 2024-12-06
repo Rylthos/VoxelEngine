@@ -21,13 +21,12 @@ ChunkGenerator& ChunkGenerator::getInstance()
 }
 
 void ChunkGenerator::init(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                          VkQueue computeQueue, uint32_t computeQueueFamily, Chunks* chunks)
+                          Queue* computeQueue, Chunks* chunks)
 {
     assert(!m_Instance);
 
     m_Instance = new ChunkGenerator();
-    getInstance().initResources(chunkSize, allocator, device, computeQueue, computeQueueFamily,
-                                chunks);
+    getInstance().initResources(chunkSize, allocator, device, computeQueue, chunks);
 }
 
 void ChunkGenerator::free()
@@ -106,8 +105,7 @@ void ChunkGenerator::generationLoop()
 }
 
 void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, VkDevice device,
-                                   VkQueue computeQueue, uint32_t computeQueueFamily,
-                                   Chunks* chunks)
+                                   Queue* computeQueue, Chunks* chunks)
 {
     m_Allocator = allocator;
     m_Device = device;
@@ -120,7 +118,7 @@ void ChunkGenerator::initResources(uint32_t chunkSize, VmaAllocator allocator, V
     commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolCI.pNext = nullptr;
     commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    commandPoolCI.queueFamilyIndex = computeQueueFamily;
+    commandPoolCI.queueFamilyIndex = m_ComputeQueue->queueFamily;
 
     VK_CHECK(vkCreateCommandPool(m_Device, &commandPoolCI, nullptr, &m_CommandPool));
 
@@ -368,7 +366,7 @@ void ChunkGenerator::generateChunk(glm::ivec3 chunkPosition)
     spdlog::info("Generating chunk: {}", glm::to_string(chunkPosition));
 
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ActiveChunks->mutex);
-    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_ComputeQueueAccess);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_ComputeQueue->queueMutex);
 
     if (m_ToBeRemoved.contains(chunkPosition))
     {
@@ -482,7 +480,7 @@ void ChunkGenerator::computeGenerate(glm::ivec3 chunkPosition)
     submitInfo.commandBufferInfoCount = 1;
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
-    VK_CHECK(vkQueueSubmit2(m_ComputeQueue, 1, &submitInfo, m_GeneratedFence));
+    VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_GeneratedFence));
     VK_CHECK(vkWaitForFences(m_Device, 1, &m_GeneratedFence, VK_TRUE, 1e10));
     VK_CHECK(vkResetFences(m_Device, 1, &m_GeneratedFence));
     Timer::stopTimer("Chunk Compute");
@@ -579,7 +577,7 @@ void ChunkGenerator::computeSerialize(glm::ivec3 chunkPosition, int nodes)
     submitInfo.commandBufferInfoCount = 1;
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
-    VK_CHECK(vkQueueSubmit2(m_ComputeQueue, 1, &submitInfo, m_GeneratedFence));
+    VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_GeneratedFence));
     VK_CHECK(vkWaitForFences(m_Device, 1, &m_GeneratedFence, VK_TRUE, 1e10));
     VK_CHECK(vkResetFences(m_Device, 1, &m_GeneratedFence));
 
@@ -591,7 +589,6 @@ void ChunkGenerator::computeSerialize(glm::ivec3 chunkPosition, int nodes)
 void ChunkGenerator::transitionImages()
 {
     PROF_ZONE_SCOPED;
-    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueueAccess);
 
     VK_CHECK(vkResetFences(m_Device, 1, &m_CopyFence));
     VK_CHECK(vkResetCommandBuffer(m_CopyCommandBuffer, 0));
@@ -623,7 +620,7 @@ void ChunkGenerator::transitionImages()
     submitInfo.commandBufferInfoCount = 1;
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
-    VK_CHECK(vkQueueSubmit2(m_ComputeQueue, 1, &submitInfo, m_CopyFence));
+    VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_CopyFence));
 
     VK_CHECK(vkWaitForFences(m_Device, 1, &m_CopyFence, true, 1e10));
 }
@@ -660,7 +657,7 @@ void ChunkGenerator::copyStagingToBuffer(Buffer* buffer)
     submitInfo.commandBufferInfoCount = 1;
     submitInfo.pCommandBufferInfos = &commandBufferSI;
 
-    VK_CHECK(vkQueueSubmit2(m_ComputeQueue, 1, &submitInfo, m_CopyFence));
+    VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_CopyFence));
     VK_CHECK(vkWaitForFences(m_Device, 1, &m_CopyFence, true, 1e10));
 }
 
