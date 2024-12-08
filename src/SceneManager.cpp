@@ -9,7 +9,7 @@
 #include "imgui.h"
 #include <GLFW/glfw3.h>
 
-#include "ChunkGenerator.hpp"
+// #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
     : m_Dimension(1 << 8), m_PaletteManager(paletteManager), m_Camera(camera)
@@ -52,23 +52,38 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_Device = device;
     m_Allocator = allocator;
 
-    ChunkGenerator::init(m_Dimension, m_Allocator, m_Device, computeQueue, &m_Chunks);
+    // ChunkGenerator::init(m_Dimension, m_Allocator, m_Device, computeQueue, &m_Chunks);
 
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
 
-    checkChunks();
+    m_BrickmapBuffer.create(m_Allocator, sizeof(Brickmap),
+                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                            VMA_MEMORY_USAGE_GPU_ONLY);
 
-    m_ChunkGeneration = std::thread([&]() { ChunkGenerator::getInstance().generationLoop(); });
+    // 4 Corners
+    m_Brick.solidMask[0] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
+    m_Brick.solidMask[7] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
+    std::vector<Brickmap> temp{ m_Brick };
+    m_Staging.create(m_Allocator, sizeof(Brickmap), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                     VMA_MEMORY_USAGE_CPU_TO_GPU);
+    m_Staging.copyFromData_CPUOnly<Brickmap>(temp);
+    m_BrickmapBuffer.copyFromBuffer(m_Staging, sizeof(Brickmap));
+
+    // checkChunks();
+
+    // m_ChunkGeneration = std::thread([&]() { ChunkGenerator::getInstance().generationLoop(); });
 }
 
 void SceneManager::freeResources()
 {
     if (!m_Initialized) return;
-    ChunkGenerator::getInstance().stopRunning();
-    m_ChunkGeneration.join();
+    // ChunkGenerator::getInstance().stopRunning();
+    // m_ChunkGeneration.join();
 
-    ChunkGenerator::getInstance().free();
+    // ChunkGenerator::getInstance().free();
     freeBuffers();
     m_Initialized = false;
 }
@@ -86,7 +101,7 @@ void SceneManager::receive(const Event* event)
         {
             const GameUpdate* gu = static_cast<const GameUpdate*>(event);
 
-            checkChunks();
+            // checkChunks();
 
             if (!previousState && m_AnimateCutoff) // Started
             {
@@ -201,9 +216,9 @@ void SceneManager::receive(const Event* event)
 
                 ImGui::Checkbox("Pause regeneration of Chunks", &m_PauseRegeneration);
 
-                ChunkGenerator& chunkGenerator = ChunkGenerator::getInstance();
-                ImGui::Text("Generation Queue: %ld", chunkGenerator.getGenerationQueueSize());
-                ImGui::Text("Removal Queue: %ld", chunkGenerator.getRemovalQueueSize());
+                // ChunkGenerator& chunkGenerator = ChunkGenerator::getInstance();
+                // ImGui::Text("Generation Queue: %ld", chunkGenerator.getGenerationQueueSize());
+                // ImGui::Text("Removal Queue: %ld", chunkGenerator.getRemovalQueueSize());
 
                 /*
                 switch (currentGeneration)
@@ -283,33 +298,35 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
 
     if (m_PauseRegeneration) return m_VoxelPushConstants;
 
-    m_VoxelPushConstants.dimension = m_Dimension;
+    // m_VoxelPushConstants.dimension = m_Dimension;
     m_VoxelPushConstants.size = Voxel::VOXEL_SIZE;
 
-    createBufferChunks();
+    // createBufferChunks();
 
-    std::vector<ChunkData> chunkData;
-    for (auto& chunkPair : m_Chunks.chunks)
-    {
-        if (!chunkPair.second.isGenerated() || chunkPair.second.getSVOBuffer() == VK_NULL_HANDLE)
-            continue;
+    // std::vector<ChunkData> chunkData;
+    // for (auto& chunkPair : m_Chunks.chunks)
+    // {
+    //     if (!chunkPair.second.isGenerated() || chunkPair.second.getSVOBuffer() == VK_NULL_HANDLE)
+    //         continue;
+    //
+    //     chunkData.push_back({ .chunkPosition = glm::vec4(chunkPair.second.getPosition(), 0),
+    //                           .chunkData = chunkPair.second.getBufferAddress(m_Device) });
+    // }
+    // m_VoxelPushConstants.chunkCount = chunkData.size();
 
-        chunkData.push_back({ .chunkPosition = glm::vec4(chunkPair.second.getPosition(), 0),
-                              .chunkData = chunkPair.second.getBufferAddress(m_Device) });
-    }
-    m_VoxelPushConstants.chunkCount = chunkData.size();
+    // if (chunkData.size() > 0)
+    // {
+    //     m_Staging.copyFromData_CPUOnly<ChunkData>(chunkData);
+    //     m_ChunkDataAddress.copyFromBuffer(m_Staging, chunkData.size() * sizeof(ChunkData));
+    //
+    //     m_VoxelPushConstants.chunks = m_ChunkDataAddress.getDeviceAddress(m_Device);
+    // }
+    // else
+    // {
+    //     m_VoxelPushConstants.chunks = 0;
+    // }
 
-    if (chunkData.size() > 0)
-    {
-        m_Staging.copyFromData_CPUOnly<ChunkData>(chunkData);
-        m_ChunkDataAddress.copyFromBuffer(m_Staging, chunkData.size() * sizeof(ChunkData));
-
-        m_VoxelPushConstants.chunks = m_ChunkDataAddress.getDeviceAddress(m_Device);
-    }
-    else
-    {
-        m_VoxelPushConstants.chunks = 0;
-    }
+    m_VoxelPushConstants.brick = m_BrickmapBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
 }
@@ -338,88 +355,89 @@ void SceneManager::checkChunks()
     glm::ivec3 previousChunk = m_CurrentChunk;
     m_CurrentChunk = newPos;
 
-    std::unordered_set<glm::ivec3> toRemove;
-    std::unordered_set<glm::ivec3> kept;
-    for (auto& pair : m_Chunks.chunks)
+    // std::unordered_set<glm::ivec3> toRemove;
+    // std::unordered_set<glm::ivec3> kept;
+    // for (auto& pair : m_Chunks.chunks)
+    // {
+    //     glm::ivec3 currentPos = pair.first;
+    //     glm::ivec3 diff = glm::abs(currentPos - m_CurrentChunk);
+    //
+    //     if (diff.x > m_ChunkRange || diff.y > m_ChunkRange || diff.z > m_ChunkRange)
+    //     {
+    //         toRemove.emplace(pair.first);
+    //     }
+    //     else
+    //     {
+    //         kept.emplace(pair.first);
+    //     }
+    // }
+
     {
-        glm::ivec3 currentPos = pair.first;
-        glm::ivec3 diff = glm::abs(currentPos - m_CurrentChunk);
+        // for (glm::ivec3 pos : toRemove)
+        // {
+        //     ChunkGenerator::getInstance().removeChunk(pos);
+        // }
 
-        if (diff.x > m_ChunkRange || diff.y > m_ChunkRange || diff.z > m_ChunkRange)
-        {
-            toRemove.emplace(pair.first);
-        }
-        else
-        {
-            kept.emplace(pair.first);
-        }
-    }
+        // std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
+        // for (const glm::ivec3& pos : toRemove)
+        // {
+        //     m_Chunks.chunks.at(pos).getSVOBuffer()->free();
+        //     m_Chunks.chunks.erase(pos);
+        // }
 
-    {
-        for (glm::ivec3 pos : toRemove)
-        {
-            ChunkGenerator::getInstance().removeChunk(pos);
-        }
-
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
-        for (const glm::ivec3& pos : toRemove)
-        {
-            m_Chunks.chunks.at(pos).getSVOBuffer()->free();
-            m_Chunks.chunks.erase(pos);
-        }
-
-        for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
-        {
-            for (int y = -1; y <= 1; y++)
-            {
-                for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
-                {
-                    glm::ivec3 pos = { newPos.x + x, newPos.y + y, newPos.z + z };
-
-                    if (!kept.contains(pos))
-                    {
-                        m_Chunks.chunks.emplace(pos, Chunk{ pos, m_Dimension });
-                        ChunkGenerator::getInstance().addChunkToQueue(pos);
-                    }
-                }
-            }
-        }
-    }
-}
-
-void SceneManager::createBufferChunks()
-{
-    PROF_ZONE_SCOPED;
-    size_t size = m_Chunks.chunks.size() * sizeof(ChunkData);
-
-    if (m_Staging.getSize() < size)
-    {
-        m_Staging.free();
-        m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VMA_MEMORY_USAGE_CPU_TO_GPU);
-    }
-
-    if (m_ChunkDataAddress.getSize() < size)
-    {
-        m_ChunkDataAddress.free();
-        m_ChunkDataAddress.create(m_Allocator, size,
-                                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                                  VMA_MEMORY_USAGE_GPU_ONLY);
+        // for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
+        // {
+        //     for (int y = -1; y <= 1; y++)
+        //     {
+        //         for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
+        //         {
+        //             glm::ivec3 pos = { newPos.x + x, newPos.y + y, newPos.z + z };
+        //
+        //             if (!kept.contains(pos))
+        //             {
+        //                 m_Chunks.chunks.emplace(pos, Chunk{ pos, m_Dimension });
+        //                 ChunkGenerator::getInstance().addChunkToQueue(pos);
+        //             }
+        //         }
+        //     }
+        // }
     }
 }
+
+// void SceneManager::createBufferChunks()
+// {
+//     PROF_ZONE_SCOPED;
+//     size_t size = m_Chunks.chunks.size() * sizeof(ChunkData);
+//
+//     if (m_Staging.getSize() < size)
+//     {
+//         m_Staging.free();
+//         m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+//                          VMA_MEMORY_USAGE_CPU_TO_GPU);
+//     }
+
+// if (m_ChunkDataAddress.getSize() < size)
+// {
+//     m_ChunkDataAddress.free();
+//     m_ChunkDataAddress.create(m_Allocator, size,
+//                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+//                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+//                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+//                               VMA_MEMORY_USAGE_GPU_ONLY);
+// }
+// }
 
 void SceneManager::freeBuffers()
 {
-    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
+    // std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
 
     m_Staging.free();
 
-    for (auto& chunkPair : m_Chunks.chunks)
-    {
-        chunkPair.second.getSVOBuffer()->free();
-    }
+    // for (auto& chunkPair : m_Chunks.chunks)
+    // {
+    //     chunkPair.second.getSVOBuffer()->free();
+    // }
 
-    m_ChunkDataAddress.free();
+    m_BrickmapBuffer.free();
+    // m_ChunkDataAddress.free();
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#if false
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -155,3 +156,4 @@ class ChunkGenerator
     void createSVO(Buffer* buffer, size_t count);
     void createStaging(size_t count, size_t elem_size);
 };
+#endif

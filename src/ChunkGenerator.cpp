@@ -1,3 +1,4 @@
+#if false
 #include "ChunkGenerator.hpp"
 
 #include <glm/gtx/hash.hpp>
@@ -680,3 +681,4 @@ void ChunkGenerator::createStaging(size_t count, size_t elem_size)
                                VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
 }
+#endif

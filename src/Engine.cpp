@@ -519,7 +519,7 @@ void Engine::initPipelines()
             vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_VoxelPipelineLayout));
 
         ShaderModule voxelShader;
-        voxelShader.create("res/shaders/EfficientSVO.comp.spv", m_Device);
+        voxelShader.create("res/shaders/Brickmap.comp.spv", m_Device);
 
         VkPipelineShaderStageCreateInfo shaderStageCI{};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

@@ -18,15 +18,21 @@
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
-struct Chunks {
-    PROF_LOCKABLE_MUTEX(std::mutex, mutex, "Chunk Access");
-    std::unordered_map<glm::ivec3, Chunk> chunks;
-};
+// struct Chunks {
+//     PROF_LOCKABLE_MUTEX(std::mutex, mutex, "Chunk Access");
+//     std::unordered_map<glm::ivec3, Chunk> chunks;
+// };
 
-struct ChunkData {
-    glm::vec4 chunkPosition;
-    glm::vec2 _;
-    VkDeviceAddress chunkData; // ChunkSVOData[]
+// struct ChunkData {
+//     glm::vec4 chunkPosition;
+//     glm::vec2 _;
+//     VkDeviceAddress chunkData; // ChunkSVOData[]
+// };
+
+struct Brickmap {
+    uint64_t solidMask[8];
+    uint32_t colourPointer;
+    uint32_t lodColour;
 };
 
 struct VoxelPushConstants {
@@ -34,7 +40,7 @@ struct VoxelPushConstants {
     float aspectRatio;
 
     glm::vec3 cameraForward;
-    uint32_t chunkCount;
+    uint32_t _3;
 
     glm::vec3 cameraRight;
     uint32_t _1;
@@ -42,7 +48,7 @@ struct VoxelPushConstants {
     glm::vec3 cameraUp;
     uint32_t _2;
 
-    uint32_t dimension;
+    uint32_t _4;
     float size;
     uint32_t maxDepthShown = 5;
     uint32_t lod;
@@ -52,7 +58,7 @@ struct VoxelPushConstants {
     uint32_t maxIterations;
     uint32_t initialParent;
 
-    VkDeviceAddress chunks; // ChunkData[]
+    VkDeviceAddress brick;
 };
 
 class SceneManager : public EventReceiver
@@ -81,8 +87,10 @@ class SceneManager : public EventReceiver
     PaletteManager* m_PaletteManager;
     Camera* m_Camera;
 
-    std::thread m_ChunkGeneration;
-    Chunks m_Chunks;
+    Brickmap m_Brick;
+
+    // std::thread m_ChunkGeneration;
+    // Chunks m_Chunks;
 
     VkDevice m_Device;
     VmaAllocator m_Allocator;
@@ -90,7 +98,8 @@ class SceneManager : public EventReceiver
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    Buffer m_ChunkDataAddress;
+    Buffer m_BrickmapBuffer;
+    // Buffer m_ChunkDataAddress;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
     int m_ChunkRange = 2;
@@ -98,6 +107,6 @@ class SceneManager : public EventReceiver
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);
     void checkChunks();
-    void createBufferChunks();
+    // void createBufferChunks();
     void freeBuffers();
 };
