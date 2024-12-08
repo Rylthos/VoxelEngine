@@ -57,20 +57,50 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_Initialized = true;
     spdlog::info("Created Background Pipeline and Pipeline Layout");
 
-    m_BrickmapBuffer.create(m_Allocator, sizeof(Brickmap),
-                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                            VMA_MEMORY_USAGE_GPU_ONLY);
+    m_BrickGridBuffer.create(m_Allocator, sizeof(BrickGrid),
+                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                             VMA_MEMORY_USAGE_GPU_ONLY);
+
+    m_BricksBuffer.create(m_Allocator, sizeof(Brick),
+                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                          VMA_MEMORY_USAGE_GPU_ONLY);
 
     // 4 Corners
-    m_Brick.solidMask[0] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
-    m_Brick.solidMask[7] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
-    std::vector<Brickmap> temp{ m_Brick };
-    m_Staging.create(m_Allocator, sizeof(Brickmap), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     VMA_MEMORY_USAGE_CPU_TO_GPU);
-    m_Staging.copyFromData_CPUOnly<Brickmap>(temp);
-    m_BrickmapBuffer.copyFromBuffer(m_Staging, sizeof(Brickmap));
+    Brick testBrick{};
+    testBrick.solidMask[0] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
+    testBrick.solidMask[7] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
+    {
+        std::vector<Brick> temp{ testBrick };
+        m_Staging.create(m_Allocator, sizeof(Brick), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_Staging.copyFromData_CPUOnly<Brick>(temp);
+        m_BricksBuffer.copyFromBuffer(m_Staging, sizeof(Brick));
+
+        m_BrickGrid.bricks = m_BricksBuffer.getDeviceAddress(m_Device);
+    }
+
+    for (int i = 0; i < 16 * 16 * 16; i++)
+    {
+        // Full grid pointing to above grid
+        m_BrickGrid.data[i] = 0b00000000000000000000000000000001;
+    }
+
+    // m_BrickGrid.data[0] = 0b00000000000000000000000000000001;
+    // m_BrickGrid.data[1] = 0b00000000000000000000000000000001;
+    // m_BrickGrid.data[2] = 0b00000000000000000000000000000001;
+    // m_BrickGrid.data[3] = 0b00000000000000000000000000000001;
+
+    {
+        m_Staging.free();
+        m_Staging.create(m_Allocator, sizeof(BrickGrid), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VMA_MEMORY_USAGE_CPU_TO_GPU);
+        std::vector<BrickGrid> temp{ m_BrickGrid };
+        m_Staging.copyFromData_CPUOnly<BrickGrid>(temp);
+        m_BrickGridBuffer.copyFromBuffer(m_Staging, sizeof(BrickGrid));
+    }
 
     // checkChunks();
 
@@ -326,7 +356,7 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants()
     //     m_VoxelPushConstants.chunks = 0;
     // }
 
-    m_VoxelPushConstants.brick = m_BrickmapBuffer.getDeviceAddress(m_Device);
+    m_VoxelPushConstants.brickGrid = m_BrickGridBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
 }
@@ -438,6 +468,7 @@ void SceneManager::freeBuffers()
     //     chunkPair.second.getSVOBuffer()->free();
     // }
 
-    m_BrickmapBuffer.free();
+    m_BricksBuffer.free();
+    m_BrickGridBuffer.free();
     // m_ChunkDataAddress.free();
 }

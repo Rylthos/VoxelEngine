@@ -29,10 +29,16 @@ enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 //     VkDeviceAddress chunkData; // ChunkSVOData[]
 // };
 
-struct Brickmap {
+struct Brick {
     uint64_t solidMask[8];
-    uint32_t colourPointer;
-    uint32_t lodColour;
+    uint8_t colour;
+    uint8_t lodColour;
+    uint16_t _;
+};
+
+struct BrickGrid {
+    uint32_t data[16 * 16 * 16];
+    VkDeviceAddress bricks;
 };
 
 struct VoxelPushConstants {
@@ -58,7 +64,7 @@ struct VoxelPushConstants {
     uint32_t maxIterations;
     uint32_t initialParent;
 
-    VkDeviceAddress brick;
+    VkDeviceAddress brickGrid;
 };
 
 class SceneManager : public EventReceiver
@@ -87,7 +93,7 @@ class SceneManager : public EventReceiver
     PaletteManager* m_PaletteManager;
     Camera* m_Camera;
 
-    Brickmap m_Brick;
+    BrickGrid m_BrickGrid;
 
     // std::thread m_ChunkGeneration;
     // Chunks m_Chunks;
@@ -98,7 +104,8 @@ class SceneManager : public EventReceiver
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    Buffer m_BrickmapBuffer;
+    Buffer m_BrickGridBuffer;
+    Buffer m_BricksBuffer;
     // Buffer m_ChunkDataAddress;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
