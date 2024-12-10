@@ -30,8 +30,8 @@ Grid generateGrid(vec3 origin, uvec3 dimensions, float voxelSize, VoxelBuffer vo
 int indexFromGridPosition(Grid grid, uvec3 position)
 {
     return int(position.x
-               + position.z * grid.dimensions.x
-               + position.y * grid.dimensions.x * grid.dimensions.z);
+            + position.z * grid.dimensions.x
+            + position.y * grid.dimensions.x * grid.dimensions.z);
 }
 
 vec3 worldPositionFromIndex(Grid grid, uvec3 position)
@@ -56,9 +56,9 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
     const float viewportHalfHeight = viewportHeight / 2.0;
 
     const vec3 viewportTopLeft = position
-                            + front * viewportDepth
-                            - right * viewportHalfWidth
-                            + up * viewportHalfHeight;
+            + front * viewportDepth
+            - right * viewportHalfWidth
+            + up * viewportHalfHeight;
 
     const vec3 deltaRight = right * viewportWidth;
     const vec3 deltaDown = -up * viewportHeight;
@@ -76,7 +76,7 @@ Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up)
 }
 
 bool rayBoxIntersect(Ray ray, vec3 minBound, vec3 maxBound, float minT, float maxT,
-                     out float tMin, out float tMax)
+    out float tMin, out float tMax)
 {
     vec3 tbot = ray.invDir * (minBound - ray.origin);
     vec3 ttop = ray.invDir * (maxBound - ray.origin);
@@ -110,7 +110,7 @@ vec3 normalFromBounds(vec3 position, vec3 minBound, vec3 maxBound)
 }
 
 bool traverse(Ray ray, Grid grid,
-            out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons)
+    out ivec3 gridIndex, out Voxel voxel, out vec3 normal, out int comparisons)
 {
     comparisons = -1;
 
