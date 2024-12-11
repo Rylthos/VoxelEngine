@@ -129,13 +129,14 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     if (isinf(invDir.y)) invDir.y = 0.;
     if (isinf(invDir.z)) invDir.z = 0.;
 
-    vec3 rayStart = ray.origin + ray.direction * max(tMin, 0);
+    vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0.);
 
-    ivec3 brickIndex = max(ivec3(0), ivec3(floor((rayStart - minBound) / 1.)));
+    vec3 entryPos = (rayStart - minBound) / 1.;
+
+    ivec3 brickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
-    vec3 stepSize = 1. * abs(invDir);
-    vec3 nextDist = abs((max(stepDirection, ivec3(0)) + brickIndex * 1. - (rayStart - minBound)) * invDir);
-    // vec3 nextDist = abs(stepDirection * (vec3(brickIndex) - ray.origin) + (stepDirection * 0.5) + 0.5) * stepSize;
+    vec3 stepSize = invDir * stepDirection;
+    vec3 nextDist = (brickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
     int count = 0;
     for (; iterations < p_MaxIterations; iterations++)
@@ -189,13 +190,15 @@ HitRecord traverseBrickGrid(Ray ray)
     if (isinf(invDir.y)) invDir.y = 0.;
     if (isinf(invDir.z)) invDir.z = 0.;
 
-    vec3 rayStart = ray.origin + ray.direction * max(tMin, 0);
+    vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
     vec3 rayEnd = ray.origin + ray.direction * tMax;
 
-    ivec3 brickGridIndex = max(ivec3(0), ivec3(floor((rayStart - minBound) / BRICK_SIZE)));
+    vec3 entryPos = (rayStart - minBound) / BRICK_SIZE;
+
+    ivec3 brickGridIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
-    vec3 stepSize = BRICK_SIZE * invDir * stepDirection;
-    vec3 nextDist = abs((max(stepDirection, ivec3(0)) + brickGridIndex - (rayStart - minBound)) * invDir);
+    vec3 stepSize = invDir * stepDirection;
+    vec3 nextDist = (brickGridIndex - entryPos + max(stepDirection, 0)) * invDir;
 
     for (int iterations = 0; iterations < p_MaxIterations; iterations++)
     {

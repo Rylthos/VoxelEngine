@@ -85,14 +85,14 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     for (int i = 0; i < 16 * 16 * 16; i++)
     {
         // Full grid pointing to above grid
-        m_BrickGrid.data[i] = 0b00000000000000000000000000000000;
+        m_BrickGrid.data[i] = 0b00000000000000000000000000000001;
     }
 
-    m_BrickGrid.data[0] = 0b00000000000000000000000000000001;
-    m_BrickGrid.data[1] = 0b00000000000000000000000000000001;
-    m_BrickGrid.data[2] = 0b00000000000000000000000000000001;
-    m_BrickGrid.data[3] = 0b00000000000000000000000000000001;
-
+    // m_BrickGrid.data[0] = 0b00000000000000000000000000000001;
+    // m_BrickGrid.data[1] = 0b00000000000000000000000000000001;
+    // m_BrickGrid.data[2] = 0b00000000000000000000000000000001;
+    // m_BrickGrid.data[3] = 0b00000000000000000000000000000001;
+    //
     {
         m_Staging.free();
         m_Staging.create(m_Allocator, sizeof(BrickGrid), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
