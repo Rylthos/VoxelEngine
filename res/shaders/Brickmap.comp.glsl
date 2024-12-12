@@ -85,7 +85,7 @@ struct HitRecord {
     float t;
     ivec3 brickHitIndex;
     ivec3 gridHitIndex;
-    vec3 temp;
+    uint8_t colourPtr;
     int comparisons;
 };
 
@@ -151,8 +151,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
         if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
             hit.brickHitIndex = brickIndex;
-            hit.temp = brickIndex;
-            hit.t = 1;
+            hit.t = tMin;
             return;
         }
 
@@ -160,6 +159,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
         nextDist += stepSize * stepAxis;
+        tMin += dot(stepSize, stepAxis);
         brickIndex += stepDirection * stepAxis;
 
         bvec3 lower = lessThan(brickIndex, ivec3(0));
@@ -265,9 +265,38 @@ void main()
     HitRecord hit = traverseBrickGrid(ray);
 
     if (hit.t >= 0) {
+        // vec4 lookupColour = vec4(1.);
+        //
+        // const vec3 lightPosition = vec3(0, -100., 0);
+        // const vec4 lightColour = vec4(1.);
+        //
+        // const vec3 lightDir = normalize(lightPosition - hit.position);
+        //
+        // float diff = max(dot(hit.normal, lightDir), 0.);
+        // vec4 diffuse = lightColour * diff;
+        //
+        // Ray shadowRay;
+        // shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
+        // shadowRay.direction = lightPosition - shadowRay.origin;
+        //
+        // HitRecord shadow = castRay(p_ChunkCount, p_Tree, shadowRay,
+        //         p_Dimension, p_Size, p_MaxIterations, p_LOD);
+        //
+        // const float ambientStrength = 0.7;
+        // vec4 ambient = lightColour * ambientStrength;
+        //
+        // float diffStrength = 1.;
+        // if (shadow.t >= 0.)
+        //     diffStrength = 0.1;
+        //
+        // vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
+        //
+        vec3 hitPosition = calculatePosition(ray.origin, ray.direction, hit.t);
+
+        imageStore(o_Image, texelCoord, vec4(hitPosition, 1.));
         // imageStore(o_Image, texelCoord, vec4(hit.t));
         // imageStore(o_Image, texelCoord, vec4(1.));
-        imageStore(o_Image, texelCoord, vec4(hit.temp, hit.t));
+        // imageStore(o_Image, texelCoord, vec4(hit.temp, hit.t));
     }
 
     if (hit.comparisons >= 0) {
