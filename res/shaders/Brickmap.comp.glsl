@@ -6,7 +6,7 @@
 #extension GL_EXT_debug_printf : enable
 
 #define BRICK_SIZE 8
-#define BRICK_GRID_SIZE 16
+#define SUPER_BRICK_SIZE 16
 
 #include "Ray.other.glsl"
 
@@ -27,7 +27,7 @@ layout(buffer_reference, std430) readonly buffer BrickBuffer {
     Brick bricks[];
 };
 
-#define BRICK_GRID_IS_VALID_BIT 0x1
+#define SUPER_BRICK_IS_VALID_BIT 0x1
 
 #define LOADED_BRICK_FLAGS_OFFSET 0x1
 #define LOADED_BRICK_FLAGS_BITMASK 0x7
@@ -40,7 +40,7 @@ layout(buffer_reference, std430) readonly buffer BrickBuffer {
 #define LOADED_BRICK_LOD_OFFSET 0x10
 #define LOADED_BRICK_LOD_BITMASK 0xFF
 
-struct BrickGrid {
+struct SuperBrick {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
     // Flags: Rendered | Empty
 
@@ -51,8 +51,8 @@ struct BrickGrid {
     BrickBuffer bricksBuffer;
 };
 
-layout(buffer_reference, std430) readonly buffer BrickGridBuffer {
-    BrickGrid grid;
+layout(buffer_reference, std430) readonly buffer SuperBrickBuffer {
+    SuperBrick superBrick;
 };
 
 layout(push_constant) uniform constants {
@@ -78,7 +78,7 @@ layout(push_constant) uniform constants {
     uint32_t p_MaxIterations;
     uint32_t p_InitialParent;
 
-    BrickGridBuffer p_BrickGrid;
+    SuperBrickBuffer p_SuperBrick;
 };
 
 struct HitRecord {
@@ -86,7 +86,7 @@ struct HitRecord {
     bool hasHit;
     vec3 brickHitPosition;
     ivec3 brickHitIndex;
-    ivec3 gridHitIndex;
+    ivec3 superBrickHitIndex;
     vec3 normal;
     uint8_t colourPtr;
     int comparisons;
@@ -133,14 +133,14 @@ vec3 calculateNormalFromBounds(Ray ray, float t, vec3 minBound, vec3 maxBound) {
 
 void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
-    Brick brick = p_BrickGrid.grid.bricksBuffer.bricks[pointer];
+    Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[pointer];
 
     const vec3 maxBound = minBound + vec3(BRICK_SIZE);
 
     float tMin, tMax;
-    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
+    bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectGrid) {
+    if (!intersectBound) {
         hit.hasHit = false;
         return;
     }
@@ -201,16 +201,16 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     return;
 }
 
-HitRecord traverseBrickGrid(Ray ray)
+HitRecord traverseSuperBrick(Ray ray)
 {
     HitRecord hit = emptyHit();
 
     float tMin, tMax;
     const vec3 minBound = vec3(0);
-    const vec3 maxBound = minBound + vec3(BRICK_GRID_SIZE);
-    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound * BRICK_SIZE, 0.0, 1000000.0, tMin, tMax);
+    const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE);
+    bool intersectBound = rayBoxIntersect(ray, minBound, maxBound * BRICK_SIZE, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectGrid) return hit;
+    if (!intersectBound) return hit;
 
     hit.comparisons = 0;
 
@@ -224,38 +224,37 @@ HitRecord traverseBrickGrid(Ray ray)
 
     vec3 entryPos = (rayStart - minBound) / BRICK_SIZE;
 
-    ivec3 brickGridIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_GRID_SIZE));
+    ivec3 superBrickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(SUPER_BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
     vec3 stepSize = invDir * stepDirection;
-    vec3 nextDist = (brickGridIndex - entryPos + max(stepDirection, 0)) * invDir;
+    vec3 nextDist = (superBrickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
     for (int iterations = 0; iterations < p_MaxIterations; iterations++)
     {
         hit.comparisons++;
 
-        int brickIndex = brickGridIndex.y * BRICK_GRID_SIZE * BRICK_GRID_SIZE
-                + brickGridIndex.z * BRICK_GRID_SIZE
-                + brickGridIndex.x;
+        int index = superBrickIndex.y * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE
+                + superBrickIndex.z * SUPER_BRICK_SIZE
+                + superBrickIndex.x;
 
-        uint32_t brickData = p_BrickGrid.grid.data[brickIndex];
+        uint32_t data = p_SuperBrick.superBrick.data[index];
 
-        if ((brickData & BRICK_GRID_IS_VALID_BIT) != 1) {
+        if ((data & SUPER_BRICK_IS_VALID_BIT) != 1) {
             // Unloaded
             // Needs to be added to load queue
         } else { // Brick is already loaded
+            uint32_t flags = (data >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_FLAGS_BITMASK;
 
-            uint32_t flags = (brickData >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_FLAGS_BITMASK;
-
-            uint32_t pointer = (brickData >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
+            uint32_t pointer = (data >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
 
             if ((flags & LOADED_BRICK_FLAG_EMPTY) == 0) // Not Empty
             {
-                vec3 brickMinBound = brickGridIndex * BRICK_SIZE;
+                vec3 brickMinBound = superBrickIndex * BRICK_SIZE;
 
                 traverseBrick(ray, pointer, brickMinBound, iterations, hit);
 
                 if (hit.hasHit) {
-                    hit.gridHitIndex = brickGridIndex;
+                    hit.superBrickHitIndex = superBrickIndex;
                     return hit;
                 }
             }
@@ -264,11 +263,11 @@ HitRecord traverseBrickGrid(Ray ray)
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
-        brickGridIndex += stepDirection * stepAxis;
+        superBrickIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
 
-        bvec3 lower = lessThan(brickGridIndex, vec3(0));
-        bvec3 higher = greaterThanEqual(brickGridIndex, vec3(BRICK_GRID_SIZE));
+        bvec3 lower = lessThan(superBrickIndex, vec3(0));
+        bvec3 higher = greaterThanEqual(superBrickIndex, vec3(SUPER_BRICK_SIZE));
         if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
             break;
     }
@@ -278,7 +277,7 @@ HitRecord traverseBrickGrid(Ray ray)
 }
 
 vec3 calculateHitPosition(in HitRecord hit) {
-    return hit.gridHitIndex * BRICK_GRID_SIZE * BRICK_SIZE + hit.brickHitPosition;
+    return hit.superBrickHitIndex * SUPER_BRICK_SIZE * BRICK_SIZE + hit.brickHitPosition;
 }
 
 void main()
@@ -297,7 +296,7 @@ void main()
             vec3(p_CameraUp), p_AspectRatio);
 
     ivec3 brickIndex;
-    HitRecord hit = traverseBrickGrid(ray);
+    HitRecord hit = traverseSuperBrick(ray);
 
     if (hit.hasHit) {
         vec3 hitPosition = calculateHitPosition(hit);
@@ -315,7 +314,7 @@ void main()
         shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - 0.001);
         shadowRay.direction = lightPosition - shadowRay.origin;
 
-        HitRecord shadow = traverseBrickGrid(ray);
+        HitRecord shadow = traverseSuperBrick(ray);
 
         const float ambientStrength = 0.7;
         vec4 ambient = lightColour * ambientStrength;
@@ -326,9 +325,7 @@ void main()
 
         vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
 
-        // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.));
-        // imageStore(o_Image, texelCoord, colour);
-        imageStore(o_Image, texelCoord, vec4(hitPosition, 1.));
+        imageStore(o_Image, texelCoord, colour);
     }
 
     if (hit.comparisons >= 0) {
@@ -336,7 +333,6 @@ void main()
         vec4 highestHitColour = vec4(1., 1., 0., 1.0);
         float mixAmount = hit.comparisons / float(p_MaxHeatShown);
 
-        // imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
-        imageStore(o_ComparisonImage, texelCoord, vec4(hit.comparisons));
+        imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
     }
 }
