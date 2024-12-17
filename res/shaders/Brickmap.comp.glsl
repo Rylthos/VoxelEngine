@@ -83,8 +83,11 @@ layout(push_constant) uniform constants {
 
 struct HitRecord {
     float t;
+    bool hasHit;
+    vec3 brickHitPosition;
     ivec3 brickHitIndex;
     ivec3 gridHitIndex;
+    vec3 normal;
     uint8_t colourPtr;
     int comparisons;
 };
@@ -92,6 +95,7 @@ struct HitRecord {
 HitRecord emptyHit()
 {
     HitRecord hit;
+    hit.hasHit = false;
     hit.t = -1;
     hit.comparisons = -1;
     return hit;
@@ -110,6 +114,23 @@ ivec3 dir_sign(vec3 v)
     return ivec3(getsign(v.x), getsign(v.y), getsign(v.z));
 }
 
+vec3 calculateNormalFromBounds(Ray ray, float t, vec3 minBound, vec3 maxBound) {
+    vec3 position = calculatePosition(ray.origin, ray.direction, t);
+
+    bvec3 minBoundHit = lessThanEqual(position - minBound, vec3(0.0001));
+    bvec3 maxBoundHit = greaterThanEqual(position - maxBound, vec3(0.0001));
+
+    if (minBoundHit.x) return vec3(-1, 0, 0);
+    if (minBoundHit.y) return vec3(0, -1, 0);
+    if (minBoundHit.z) return vec3(0, 0, -1);
+
+    if (maxBoundHit.x) return vec3(1, 0, 0);
+    if (maxBoundHit.y) return vec3(0, 1, 0);
+    if (maxBoundHit.z) return vec3(0, 0, 1);
+
+    return vec3(0.);
+}
+
 void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     Brick brick = p_BrickGrid.grid.bricksBuffer.bricks[pointer];
@@ -120,7 +141,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
     if (!intersectGrid) {
-        hit.t = -1;
+        hit.hasHit = false;
         return;
     }
 
@@ -137,6 +158,10 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     ivec3 stepDirection = dir_sign(ray.direction);
     vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (brickIndex - entryPos + max(stepDirection, 0)) * invDir;
+    ivec3 stepAxis = ivec3(1, 0, 0);
+
+    vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin) - minBound;
+    vec3 normal = calculateNormalFromBounds(ray, tMin, minBound, maxBound);
 
     int count = 0;
     for (; iterations < p_MaxIterations; iterations++)
@@ -150,17 +175,21 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
 
         if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
+            hit.t = tMin + (tMax - dot(stepSize, vec3(stepAxis))) / BRICK_SIZE;
+            hit.brickHitPosition = totalDistTraveled;
             hit.brickHitIndex = brickIndex;
-            hit.t = tMin;
+            hit.hasHit = true;
+            hit.normal = normal;
             return;
         }
 
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
-        ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
+        stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
+        totalDistTraveled += stepSize * stepAxis;
         nextDist += stepSize * stepAxis;
-        tMin += dot(stepSize, stepAxis);
         brickIndex += stepDirection * stepAxis;
+        normal = -stepAxis;
 
         bvec3 lower = lessThan(brickIndex, ivec3(0));
         bvec3 higher = greaterThanEqual(brickIndex, ivec3(BRICK_SIZE));
@@ -168,7 +197,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
             break;
     }
 
-    hit.t = -1;
+    hit.hasHit = false;
     return;
 }
 
@@ -214,6 +243,7 @@ HitRecord traverseBrickGrid(Ray ray)
                 + brickGridIndex.x;
 
         uint32_t brickData = p_BrickGrid.grid.data[brickIndex];
+
         if ((brickData & BRICK_GRID_IS_VALID_BIT) != 1) {
             // Unloaded
             // Needs to be added to load queue
@@ -228,7 +258,7 @@ HitRecord traverseBrickGrid(Ray ray)
 
                 traverseBrick(ray, pointer, brickMinBound, iterations, hit);
 
-                if (hit.t >= 0) {
+                if (hit.hasHit) {
                     hit.gridHitIndex = brickGridIndex;
                     return hit;
                 }
@@ -244,6 +274,10 @@ HitRecord traverseBrickGrid(Ray ray)
 
     hit.t = -1;
     return hit;
+}
+
+vec3 calculateHitPosition(in HitRecord hit) {
+    return hit.gridHitIndex * BRICK_GRID_SIZE * BRICK_SIZE + hit.brickHitPosition;
 }
 
 void main()
@@ -264,36 +298,35 @@ void main()
     ivec3 brickIndex;
     HitRecord hit = traverseBrickGrid(ray);
 
-    if (hit.t >= 0) {
-        // vec4 lookupColour = vec4(1.);
-        //
-        // const vec3 lightPosition = vec3(0, -100., 0);
-        // const vec4 lightColour = vec4(1.);
-        //
-        // const vec3 lightDir = normalize(lightPosition - hit.position);
-        //
-        // float diff = max(dot(hit.normal, lightDir), 0.);
-        // vec4 diffuse = lightColour * diff;
-        //
-        // Ray shadowRay;
-        // shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - MIN_T);
-        // shadowRay.direction = lightPosition - shadowRay.origin;
-        //
-        // HitRecord shadow = castRay(p_ChunkCount, p_Tree, shadowRay,
-        //         p_Dimension, p_Size, p_MaxIterations, p_LOD);
-        //
-        // const float ambientStrength = 0.7;
-        // vec4 ambient = lightColour * ambientStrength;
-        //
-        // float diffStrength = 1.;
-        // if (shadow.t >= 0.)
-        //     diffStrength = 0.1;
-        //
-        // vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
-        //
-        vec3 hitPosition = calculatePosition(ray.origin, ray.direction, hit.t);
+    if (hit.hasHit) {
+        vec3 hitPosition = calculateHitPosition(hit);
+        vec4 lookupColour = vec4(1.);
 
-        imageStore(o_Image, texelCoord, vec4(hitPosition, 1.));
+        const vec3 lightPosition = vec3(0, -100., 0);
+        const vec4 lightColour = vec4(1.);
+
+        const vec3 lightDir = normalize(lightPosition - hitPosition);
+
+        float diff = max(dot(hit.normal, lightDir), 0.);
+        vec4 diffuse = lightColour * diff;
+
+        Ray shadowRay;
+        shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - 0.001);
+        shadowRay.direction = lightPosition - shadowRay.origin;
+
+        HitRecord shadow = traverseBrickGrid(ray);
+
+        const float ambientStrength = 0.7;
+        vec4 ambient = lightColour * ambientStrength;
+
+        float diffStrength = 1.;
+        if (shadow.hasHit)
+            diffStrength = 0.1;
+
+        vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
+
+        // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.));
+        imageStore(o_Image, texelCoord, colour);
         // imageStore(o_Image, texelCoord, vec4(hit.t));
         // imageStore(o_Image, texelCoord, vec4(1.));
         // imageStore(o_Image, texelCoord, vec4(hit.temp, hit.t));
