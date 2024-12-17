@@ -207,8 +207,8 @@ HitRecord traverseBrickGrid(Ray ray)
 
     float tMin, tMax;
     const vec3 minBound = vec3(0);
-    const vec3 maxBound = vec3(BRICK_GRID_SIZE * BRICK_SIZE);
-    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
+    const vec3 maxBound = minBound + vec3(BRICK_GRID_SIZE);
+    bool intersectGrid = rayBoxIntersect(ray, minBound, maxBound * BRICK_SIZE, 0.0, 1000000.0, tMin, tMax);
 
     if (!intersectGrid) return hit;
 
@@ -224,7 +224,7 @@ HitRecord traverseBrickGrid(Ray ray)
 
     vec3 entryPos = (rayStart - minBound) / BRICK_SIZE;
 
-    ivec3 brickGridIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
+    ivec3 brickGridIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_GRID_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
     vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (brickGridIndex - entryPos + max(stepDirection, 0)) * invDir;
@@ -232,11 +232,6 @@ HitRecord traverseBrickGrid(Ray ray)
     for (int iterations = 0; iterations < p_MaxIterations; iterations++)
     {
         hit.comparisons++;
-
-        bvec3 lower = lessThan(brickGridIndex, vec3(0));
-        bvec3 higher = greaterThanEqual(brickGridIndex, vec3(BRICK_GRID_SIZE));
-        if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
-            break;
 
         int brickIndex = brickGridIndex.y * BRICK_GRID_SIZE * BRICK_GRID_SIZE
                 + brickGridIndex.z * BRICK_GRID_SIZE
@@ -248,6 +243,7 @@ HitRecord traverseBrickGrid(Ray ray)
             // Unloaded
             // Needs to be added to load queue
         } else { // Brick is already loaded
+
             uint32_t flags = (brickData >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_FLAGS_BITMASK;
 
             uint32_t pointer = (brickData >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
@@ -270,6 +266,11 @@ HitRecord traverseBrickGrid(Ray ray)
 
         brickGridIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
+
+        bvec3 lower = lessThan(brickGridIndex, vec3(0));
+        bvec3 higher = greaterThanEqual(brickGridIndex, vec3(BRICK_GRID_SIZE));
+        if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
+            break;
     }
 
     hit.t = -1;
@@ -326,10 +327,8 @@ void main()
         vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
 
         // imageStore(o_Image, texelCoord, vec4(abs(hit.normal), 1.));
-        imageStore(o_Image, texelCoord, colour);
-        // imageStore(o_Image, texelCoord, vec4(hit.t));
-        // imageStore(o_Image, texelCoord, vec4(1.));
-        // imageStore(o_Image, texelCoord, vec4(hit.temp, hit.t));
+        // imageStore(o_Image, texelCoord, colour);
+        imageStore(o_Image, texelCoord, vec4(hitPosition, 1.));
     }
 
     if (hit.comparisons >= 0) {
@@ -337,6 +336,7 @@ void main()
         vec4 highestHitColour = vec4(1., 1., 0., 1.0);
         float mixAmount = hit.comparisons / float(p_MaxHeatShown);
 
-        imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
+        // imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
+        imageStore(o_ComparisonImage, texelCoord, vec4(hit.comparisons));
     }
 }
