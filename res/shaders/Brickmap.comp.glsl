@@ -29,16 +29,23 @@ layout(buffer_reference, std430) readonly buffer BrickBuffer {
 
 #define SUPER_BRICK_IS_VALID_BIT 0x1
 
-#define LOADED_BRICK_FLAGS_OFFSET 0x1
-#define LOADED_BRICK_FLAGS_BITMASK 0x7
+#define SUPER_BRICK_FLAGS_OFFSET 0x1
+#define SUPER_BRICK_FLAGS_BITMASK 0x7
 
 #define LOADED_BRICK_FLAG_EMPTY 0x1
+#define UNLOADED_BRICK_FLAG_REQUESTED 0x1
 
 #define LOADED_BRICK_POINTER_OFFSET 0x4
 #define LOADED_BRICK_POINTER_BITMASK 0xFFF
 
 #define LOADED_BRICK_LOD_OFFSET 0x10
 #define LOADED_BRICK_LOD_BITMASK 0xFF
+
+layout(buffer_reference, std430) buffer ToBeLoadedBuffer {
+    uint32_t maxSize;
+    uint32_t currentPointer;
+    uint32_t toBeLoaded[];
+};
 
 struct SuperBrick {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
@@ -51,7 +58,7 @@ struct SuperBrick {
     BrickBuffer bricksBuffer;
 };
 
-layout(buffer_reference, std430) readonly buffer SuperBrickBuffer {
+layout(buffer_reference, std430) buffer SuperBrickBuffer {
     SuperBrick superBrick;
 };
 
@@ -78,6 +85,7 @@ layout(push_constant) uniform constants {
     uint32_t p_MaxIterations;
     uint32_t p_InitialParent;
 
+    ToBeLoadedBuffer p_ToBeLoaded;
     SuperBrickBuffer p_SuperBrick;
 };
 
@@ -233,19 +241,29 @@ HitRecord traverseSuperBrick(Ray ray)
     {
         hit.comparisons++;
 
-        int index = superBrickIndex.y * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE
+        uint32_t index = superBrickIndex.y * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE
                 + superBrickIndex.z * SUPER_BRICK_SIZE
                 + superBrickIndex.x;
 
         uint32_t data = p_SuperBrick.superBrick.data[index];
+        uint32_t flags = (data >> SUPER_BRICK_FLAGS_OFFSET) & SUPER_BRICK_FLAGS_BITMASK;
 
         if ((data & SUPER_BRICK_IS_VALID_BIT) != 1) {
-            // Unloaded
-            // Needs to be added to load queue
-        } else { // Brick is already loaded
-            uint32_t flags = (data >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_FLAGS_BITMASK;
+            if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+                break;
+            }
 
-            uint32_t pointer = (data >> LOADED_BRICK_FLAGS_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
+            uint32_t new_data = data | (UNLOADED_BRICK_FLAG_REQUESTED << SUPER_BRICK_FLAGS_OFFSET);
+            uint32_t previous = atomicExchange(p_SuperBrick.superBrick.data[index], new_data);
+
+            if ((previous & (UNLOADED_BRICK_FLAG_REQUESTED << SUPER_BRICK_FLAGS_OFFSET)) == 0) {
+                uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
+                if (writePointer < p_ToBeLoaded.maxSize) {
+                    p_ToBeLoaded.toBeLoaded[writePointer] = index;
+                }
+            }
+        } else { // Brick is already loaded
+            uint32_t pointer = (data >> LOADED_BRICK_POINTER_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
 
             if ((flags & LOADED_BRICK_FLAG_EMPTY) == 0) // Not Empty
             {

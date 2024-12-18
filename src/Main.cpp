@@ -1,5 +1,7 @@
 #define VMA_IMPLEMENTATION
 
+#include <memory>
+
 #include "Engine.hpp"
 
 int main()
