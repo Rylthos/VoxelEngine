@@ -5,6 +5,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Buffer.hpp"
+#include "Constants.hpp"
 #include "tracy/Tracy.hpp"
 
 #include "imgui.h"
@@ -15,6 +16,7 @@
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
     : m_Dimension(1 << 8), m_PaletteManager(paletteManager), m_Camera(camera)
+
 {
     m_VoxelPushConstants.maxIterations = 1024;
     m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
@@ -88,15 +90,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     for (int i = 0; i < 16 * 16 * 16; i++)
     {
         m_SuperBrick.data[i] = 0;
-        // Full grid pointing to above grid
-        // m_SuperBrick.data[i] = 0b00000000000000000000000000000001;
     }
 
-    // m_BrickGrid.data[0] = 0b00000000000000000000000000000001;
-    // m_BrickGrid.data[1] = 0b00000000000000000000000000000001;
-    // m_BrickGrid.data[2] = 0b00000000000000000000000000000001;
-    // m_BrickGrid.data[3] = 0b00000000000000000000000000000001;
-    //
     {
         m_Staging.free();
         m_Staging.create(m_Allocator, sizeof(SuperBrick), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
@@ -106,21 +101,21 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
         m_BrickGridBuffer.copyFromBuffer(m_Staging, sizeof(SuperBrick));
     }
 
-    m_MaxLoaded = 32;
-    m_ToBeLoaded.create(m_Allocator, sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded,
-                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                            VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                        VMA_MEMORY_USAGE_GPU_TO_CPU);
+    m_MaxLoaded = 64;
+    for (uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++)
+    {
+        m_ToBeLoaded[i].create(
+            m_Allocator, sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            VMA_MEMORY_USAGE_GPU_TO_CPU);
+    }
 }
 
 void SceneManager::freeResources()
 {
     if (!m_Initialized) return;
-    // ChunkGenerator::getInstance().stopRunning();
-    // m_ChunkGeneration.join();
 
-    // ChunkGenerator::getInstance().free();
     freeBuffers();
     m_Initialized = false;
 }
@@ -130,38 +125,12 @@ void SceneManager::receive(const Event* event)
     static float currentT = 0.0;
 
     static float previousState = m_AnimateCutoff;
-    // static float previousCutoff = m_GenerationPushConstants.cutoff;
 
     switch (event->getType())
     {
     case EventType::GameUpdate:
         {
             const GameUpdate* gu = static_cast<const GameUpdate*>(event);
-
-            checkChunks();
-
-            if (!previousState && m_AnimateCutoff) // Started
-            {
-                // previousCutoff = m_GenerationPushConstants.cutoff;
-            }
-            else if (previousState && !m_AnimateCutoff) // Ended
-            {
-                // m_GenerationPushConstants.cutoff = previousCutoff;
-                // generateWorld();
-            }
-
-            if (m_AnimateCutoff)
-            {
-                currentT += gu->frameDelta / 10.0f;
-                // m_GenerationPushConstants.cutoff = -1.0f + (2.f * currentT);
-                // generateWorld();
-            }
-            else
-                currentT = 0.f;
-
-            previousState = m_AnimateCutoff;
-
-            if (currentT >= 1.0f) m_AnimateCutoff = false;
 
             break;
         }
@@ -199,18 +168,12 @@ void SceneManager::receive(const Event* event)
                         switch (currentGeneration)
                         {
                         case WorldGeneration:
-                            // setDimensions(1 << powerOf2);
-                            // generateWorld();
                             break;
                         case ModelLoading:
                             {
-                                // VoxLoader loader(&m_Chunk, m_PaletteManager);
-                                // loader.loadModel(currentModel);
                                 break;
                             }
                         }
-
-                        // m_HasUpdated = true;
                     }
 
                     ImGui::EndCombo();
@@ -261,47 +224,22 @@ void SceneManager::receive(const Event* event)
     }
 }
 
-VoxelPushConstants& SceneManager::getVoxelPushConstants()
+VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 {
     PROF_ZONE_SCOPED;
 
     if (m_PauseRegeneration) return m_VoxelPushConstants;
+
+    checkChunks(currentFrame);
 
     // m_VoxelPushConstants.dimension = m_Dimension;
     m_VoxelPushConstants.size = Voxel::VOXEL_SIZE;
 
     std::vector<uint32_t> data = { m_MaxLoaded, 0 };
     m_Staging.copyFromData_CPUOnly<uint32_t>(data);
-    m_ToBeLoaded.copyFromBuffer(m_Staging, sizeof(uint32_t) * 2, 0);
+    m_ToBeLoaded[currentFrame].copyFromBuffer(m_Staging, sizeof(uint32_t) * 2, 0);
 
-    // createBufferChunks();
-
-    // std::vector<ChunkData> chunkData;
-    // for (auto& chunkPair : m_Chunks.chunks)
-    // {
-    //     if (!chunkPair.second.isGenerated() || chunkPair.second.getSVOBuffer() ==
-    //     VK_NULL_HANDLE)
-    //         continue;
-    //
-    //     chunkData.push_back({ .chunkPosition = glm::vec4(chunkPair.second.getPosition(),
-    //     0),
-    //                           .chunkData = chunkPair.second.getBufferAddress(m_Device) });
-    // }
-    // m_VoxelPushConstants.chunkCount = chunkData.size();
-
-    // if (chunkData.size() > 0)
-    // {
-    //     m_Staging.copyFromData_CPUOnly<ChunkData>(chunkData);
-    //     m_ChunkDataAddress.copyFromBuffer(m_Staging, chunkData.size() * sizeof(ChunkData));
-    //
-    //     m_VoxelPushConstants.chunks = m_ChunkDataAddress.getDeviceAddress(m_Device);
-    // }
-    // else
-    // {
-    //     m_VoxelPushConstants.chunks = 0;
-    // }
-
-    m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded.getDeviceAddress(m_Device);
+    m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
     m_VoxelPushConstants.brickGrid = m_BrickGridBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
@@ -316,13 +254,13 @@ glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
     return chunkIndex;
 }
 
-void SceneManager::checkChunks()
+void SceneManager::checkChunks(uint32_t currentFrame)
 {
     ZoneScoped;
     if (m_PauseRegeneration) return;
 
     std::vector<uint32_t> return_data;
-    m_ToBeLoaded.copyToVector<uint32_t>(return_data);
+    m_ToBeLoaded[currentFrame].copyToVector<uint32_t>(return_data);
 
     uint32_t length = std::min((uint32_t)return_data.size(), return_data[1] + 2);
     if (return_data[1] != 0)
@@ -340,107 +278,22 @@ void SceneManager::checkChunks()
                 m_Staging.create(m_Allocator, sizeof(SuperBrick), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                  VMA_MEMORY_USAGE_CPU_TO_GPU);
             }
+
             std::vector<SuperBrick> temp{ m_SuperBrick };
             m_Staging.copyFromData_CPUOnly<SuperBrick>(temp);
             m_BrickGridBuffer.copyFromBuffer(m_Staging, sizeof(SuperBrick));
         }
     }
-
-    // glm::ivec3 chunkPosition = worldToChunkPos(m_Camera->getPosition());
-    // glm::vec3 newPos = { chunkPosition.x, chunkPosition.y + 1, chunkPosition.z };
-    // glm::vec3 oldPos = { m_CurrentChunk.x, m_CurrentChunk.y, m_CurrentChunk.z };
-    //
-    // if (newPos == oldPos) return;
-    // spdlog::info("Current camera chunk position: {}", glm::to_string(newPos));
-    //
-    // glm::ivec3 previousChunk = m_CurrentChunk;
-    // m_CurrentChunk = newPos;
-
-    // std::unordered_set<glm::ivec3> toRemove;
-    // std::unordered_set<glm::ivec3> kept;
-    // for (auto& pair : m_Chunks.chunks)
-    // {
-    //     glm::ivec3 currentPos = pair.first;
-    //     glm::ivec3 diff = glm::abs(currentPos - m_CurrentChunk);
-    //
-    //     if (diff.x > m_ChunkRange || diff.y > m_ChunkRange || diff.z > m_ChunkRange)
-    //     {
-    //         toRemove.emplace(pair.first);
-    //     }
-    //     else
-    //     {
-    //         kept.emplace(pair.first);
-    //     }
-    // }
-
-    {
-        // for (glm::ivec3 pos : toRemove)
-        // {
-        //     ChunkGenerator::getInstance().removeChunk(pos);
-        // }
-
-        // std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
-        // for (const glm::ivec3& pos : toRemove)
-        // {
-        //     m_Chunks.chunks.at(pos).getSVOBuffer()->free();
-        //     m_Chunks.chunks.erase(pos);
-        // }
-
-        // for (int x = -m_ChunkRange; x <= m_ChunkRange; x++)
-        // {
-        //     for (int y = -1; y <= 1; y++)
-        //     {
-        //         for (int z = -m_ChunkRange; z <= m_ChunkRange; z++)
-        //         {
-        //             glm::ivec3 pos = { newPos.x + x, newPos.y + y, newPos.z + z };
-        //
-        //             if (!kept.contains(pos))
-        //             {
-        //                 m_Chunks.chunks.emplace(pos, Chunk{ pos, m_Dimension });
-        //                 ChunkGenerator::getInstance().addChunkToQueue(pos);
-        //             }
-        //         }
-        //     }
-        // }
-    }
 }
-
-// void SceneManager::createBufferChunks()
-// {
-//     PROF_ZONE_SCOPED;
-//     size_t size = m_Chunks.chunks.size() * sizeof(ChunkData);
-//
-//     if (m_Staging.getSize() < size)
-//     {
-//         m_Staging.free();
-//         m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-//                          VMA_MEMORY_USAGE_CPU_TO_GPU);
-//     }
-
-// if (m_ChunkDataAddress.getSize() < size)
-// {
-//     m_ChunkDataAddress.free();
-//     m_ChunkDataAddress.create(m_Allocator, size,
-//                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-//                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-//                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-//                               VMA_MEMORY_USAGE_GPU_ONLY);
-// }
-// }
 
 void SceneManager::freeBuffers()
 {
-    // std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lk(m_Chunks.mutex);
-
     m_Staging.free();
-
-    // for (auto& chunkPair : m_Chunks.chunks)
-    // {
-    //     chunkPair.second.getSVOBuffer()->free();
-    // }
 
     m_BricksBuffer.free();
     m_BrickGridBuffer.free();
-    m_ToBeLoaded.free();
-    // m_ChunkDataAddress.free();
+    for (int i = 0; i < FRAMES_IN_FLIGHT; i++)
+    {
+        m_ToBeLoaded[i].free();
+    }
 }

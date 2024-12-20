@@ -33,6 +33,7 @@ layout(buffer_reference, std430) readonly buffer BrickBuffer {
 #define SUPER_BRICK_FLAGS_BITMASK 0x7
 
 #define LOADED_BRICK_FLAG_EMPTY 0x1
+
 #define UNLOADED_BRICK_FLAG_REQUESTED 0x1
 
 #define LOADED_BRICK_POINTER_OFFSET 0x4
@@ -49,10 +50,10 @@ layout(buffer_reference, std430) buffer ToBeLoadedBuffer {
 
 struct SuperBrick {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
-    // Flags: Rendered | Empty
+    // Flags: Empty
 
     // Unloaded:     LOD: 8 | LOD: 8 | LOD:     12 | Flags: 3 | 0
-    // Flags: NOT_LOADED | REQUESTED
+    // Flags: REQUESTED
 
     uint32_t data[16 * 16 * 16];
     BrickBuffer bricksBuffer;
@@ -209,6 +210,8 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     return;
 }
 
+ivec2 texelCoord;
+
 HitRecord traverseSuperBrick(Ray ray)
 {
     HitRecord hit = emptyHit();
@@ -248,20 +251,24 @@ HitRecord traverseSuperBrick(Ray ray)
         uint32_t data = p_SuperBrick.superBrick.data[index];
         uint32_t flags = (data >> SUPER_BRICK_FLAGS_OFFSET) & SUPER_BRICK_FLAGS_BITMASK;
 
-        if ((data & SUPER_BRICK_IS_VALID_BIT) != 1) {
+        if ((data & SUPER_BRICK_IS_VALID_BIT) == 0) {
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 break;
             }
 
             uint32_t new_data = data | (UNLOADED_BRICK_FLAG_REQUESTED << SUPER_BRICK_FLAGS_OFFSET);
             uint32_t previous = atomicExchange(p_SuperBrick.superBrick.data[index], new_data);
+            // debugPrintfEXT("%v3d, data: %d, new_data: %d, previous: %d", superBrickIndex, data, new_data, previous);
 
-            if ((previous & (UNLOADED_BRICK_FLAG_REQUESTED << SUPER_BRICK_FLAGS_OFFSET)) == 0) {
+            if (((previous >> SUPER_BRICK_FLAGS_OFFSET) & UNLOADED_BRICK_FLAG_REQUESTED) == 0) {
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
                     p_ToBeLoaded.toBeLoaded[writePointer] = index;
+                } else {
+                    atomicExchange(p_SuperBrick.superBrick.data[index], previous);
                 }
             }
+            break;
         } else { // Brick is already loaded
             uint32_t pointer = (data >> LOADED_BRICK_POINTER_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
 
@@ -300,7 +307,7 @@ vec3 calculateHitPosition(in HitRecord hit) {
 
 void main()
 {
-    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    /* ivec2 */ texelCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(o_Image);
     vec2 uv = vec2(texelCoord) / vec2(size);
 

@@ -7,6 +7,7 @@
 
 #include <spdlog/fmt/ranges.h>
 
+#include "Constants.hpp"
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
 #include "Profilling.hpp"
@@ -18,6 +19,7 @@
 #include "Events.hpp"
 
 #include <cmath>
+#include <vulkan/vulkan_core.h>
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -27,7 +29,7 @@ void Engine::init()
     spdlog::set_level(spdlog::level::trace);
     m_Window.create("Voxel Engine", 960, 960);
 
-    m_Camera = Camera(glm::vec3(0.0f, 0.0f, 2.0f), -45.0f, -45.f);
+    m_Camera = Camera(glm::vec3(0.0f, -2.0f, 0.0f), -45.0f, -45.f);
 
     m_PaletteManager.defaultPalette();
     m_SceneManager = SceneManager(&m_PaletteManager, &m_Camera);
@@ -757,7 +759,7 @@ void Engine::render(float frameDelta)
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                                 m_VoxelPipelineLayout, 0, 1, &m_VoxelDescriptorSet, 0, nullptr);
 
-        VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants();
+        VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants(frameIndex);
         pushConstants.cameraPosition = m_Camera.getPosition();
         glm::uvec2 windowSize = m_Window.getSize();
         pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
@@ -794,6 +796,16 @@ void Engine::render(float frameDelta)
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        // VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        //                             .pNext = nullptr,
+        //                             .srcAccessMask =
+        //                                 VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        //                             .dstAccessMask =
+        //                                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT };
+        //
+        // vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        //                      VK_PIPELINE_STAGE_NONE, 0, 1, &barrier, 0, nullptr, 0, nullptr);
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 

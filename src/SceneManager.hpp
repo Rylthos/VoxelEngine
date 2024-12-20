@@ -10,6 +10,7 @@
 
 #include "Buffer.hpp"
 #include "Camera.hpp"
+#include "Constants.hpp"
 #include "PaletteManager.hpp"
 #include "Profilling.hpp"
 #include "Queue.hpp"
@@ -72,7 +73,7 @@ class SceneManager : public EventReceiver
 
     void receive(const Event* event);
 
-    VoxelPushConstants& getVoxelPushConstants();
+    VoxelPushConstants& getVoxelPushConstants(uint32_t currentFrame);
 
   private:
     bool m_Initialized = false;
@@ -90,7 +91,7 @@ class SceneManager : public EventReceiver
     Buffer m_Staging;
 
     uint32_t m_MaxLoaded = 0;
-    Buffer m_ToBeLoaded;
+    std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoaded;
 
     VoxelPushConstants m_VoxelPushConstants;
 
@@ -103,7 +104,7 @@ class SceneManager : public EventReceiver
 
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);
-    void checkChunks();
+    void checkChunks(uint32_t currentFrame);
     // void createBufferChunks();
     void freeBuffers();
 };

@@ -43,8 +43,6 @@ class Engine : EventReceiver
     void receive(const Event* event) override;
 
   private:
-    const uint32_t FRAMES_IN_FLIGHT = 2;
-
     Camera m_Camera;
 
     Window m_Window;
