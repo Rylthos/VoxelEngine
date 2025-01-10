@@ -21,13 +21,14 @@ enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct Brick {
     uint64_t solidMask[8];
-    uint8_t colour;
-    uint8_t lodColour;
-    uint16_t _;
+    uint8_t colourPtr;
+    uint8_t lodR;
+    uint8_t lodG;
+    uint8_t lodB;
 };
 
 struct SuperBrick {
-    uint32_t data[16 * 16 * 16];
+    std::array<uint32_t, 16 * 16 * 16> data;
     VkDeviceAddress bricks;
 };
 
@@ -88,16 +89,18 @@ class SceneManager : public EventReceiver
 
     VkDevice m_Device;
     VmaAllocator m_Allocator;
-    Buffer m_Staging;
+
+    std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridStaging;
+    std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoadedStaging;
+    Buffer m_BricksStaging;
 
     uint32_t m_MaxLoaded = 0;
     std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoaded;
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    Buffer m_BrickGridBuffer;
+    std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridBuffer;
     Buffer m_BricksBuffer;
-    // Buffer m_ChunkDataAddress;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
     int m_ChunkRange = 2;
@@ -105,6 +108,6 @@ class SceneManager : public EventReceiver
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);
     void checkChunks(uint32_t currentFrame);
-    // void createBufferChunks();
+    void createBrickGridStaging(Buffer& stagingBuffer, size_t size);
     void freeBuffers();
 };

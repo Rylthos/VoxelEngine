@@ -3,13 +3,14 @@
 #include "VkCheck.hpp"
 
 #include <spdlog/spdlog.h>
+#include <vulkan/vulkan_core.h>
 
 Buffer::Buffer() {}
 
 Buffer::~Buffer() {}
 
 void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage,
-                    VmaMemoryUsage memoryUsage)
+                    VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags)
 {
     assert(m_Buffer == 0 && "Buffer already initialized");
 
@@ -24,9 +25,8 @@ void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlag
 
     VmaAllocationCreateInfo vmaACI{};
     vmaACI.usage = memoryUsage;
-    vmaACI.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    vmaACI.flags = flags;
 
-    // VK_CHECK(vkCreateBuffer(m_Device, &bufferCI, nullptr, &m_Buffer));
     VK_CHECK(vmaCreateBuffer(m_Allocator, &bufferCI, &vmaACI, &m_Buffer, &m_Allocation,
                              &m_AllocationInfo));
 

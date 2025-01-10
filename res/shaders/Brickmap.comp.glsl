@@ -5,63 +5,14 @@
 #extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_debug_printf : enable
 
-#define BRICK_SIZE 8
-#define SUPER_BRICK_SIZE 16
-
 #include "Ray.other.glsl"
+#include "BrickmapData.other.glsl"
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba16f, set = 0, binding = 0) uniform image2D o_Image;
 layout(rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
 layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
-
-struct Brick {
-    uint64_t solidMask[8];
-    uint8_t colourPointer;
-    uint8_t lodColour;
-    uint16_t _;
-};
-
-layout(buffer_reference, std430) readonly buffer BrickBuffer {
-    Brick bricks[];
-};
-
-#define SUPER_BRICK_IS_VALID_BIT 0x1
-
-#define SUPER_BRICK_FLAGS_OFFSET 0x1
-#define SUPER_BRICK_FLAGS_BITMASK 0x7
-
-#define LOADED_BRICK_FLAG_EMPTY 0x1
-
-#define UNLOADED_BRICK_FLAG_REQUESTED 0x1
-
-#define LOADED_BRICK_POINTER_OFFSET 0x4
-#define LOADED_BRICK_POINTER_BITMASK 0xFFF
-
-#define LOADED_BRICK_LOD_OFFSET 0x10
-#define LOADED_BRICK_LOD_BITMASK 0xFF
-
-layout(buffer_reference, std430) buffer ToBeLoadedBuffer {
-    uint32_t maxSize;
-    uint32_t currentPointer;
-    uint32_t toBeLoaded[];
-};
-
-struct SuperBrick {
-    // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
-    // Flags: Empty
-
-    // Unloaded:     LOD: 8 | LOD: 8 | LOD:     12 | Flags: 3 | 0
-    // Flags: REQUESTED
-
-    uint32_t data[16 * 16 * 16];
-    BrickBuffer bricksBuffer;
-};
-
-layout(buffer_reference, std430) buffer SuperBrickBuffer {
-    SuperBrick superBrick;
-};
 
 layout(push_constant) uniform constants {
     vec3 p_CameraPosition;
@@ -97,7 +48,7 @@ struct HitRecord {
     ivec3 brickHitIndex;
     ivec3 superBrickHitIndex;
     vec3 normal;
-    uint8_t colourPtr;
+    vec3 colour;
     int comparisons;
 };
 
@@ -107,6 +58,7 @@ HitRecord emptyHit()
     hit.hasHit = false;
     hit.t = -1;
     hit.comparisons = -1;
+    hit.colour = vec3(0., 1., 1.);
     return hit;
 }
 
@@ -248,10 +200,21 @@ HitRecord traverseSuperBrick(Ray ray)
                 + superBrickIndex.z * SUPER_BRICK_SIZE
                 + superBrickIndex.x;
 
+        if (index >= SUPER_BRICK_SIZE * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE) {
+            break;
+        }
+
         uint32_t data = p_SuperBrick.superBrick.data[index];
         uint32_t flags = (data >> SUPER_BRICK_FLAGS_OFFSET) & SUPER_BRICK_FLAGS_BITMASK;
 
+        uint32_t brickPointer = (data >> LOADED_BRICK_POINTER_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
+
         if ((data & SUPER_BRICK_IS_VALID_BIT) == 0) {
+            Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
+
+            hit.colour = vec3(brick.lodR / 255., brick.lodG / 255., brick.lodB);
+            hit.hasHit = true;
+
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 break;
             }
@@ -268,15 +231,14 @@ HitRecord traverseSuperBrick(Ray ray)
                     atomicExchange(p_SuperBrick.superBrick.data[index], previous);
                 }
             }
-            break;
-        } else { // Brick is already loaded
-            uint32_t pointer = (data >> LOADED_BRICK_POINTER_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
 
+            return hit;
+        } else { // Brick is already loaded
             if ((flags & LOADED_BRICK_FLAG_EMPTY) == 0) // Not Empty
             {
                 vec3 brickMinBound = superBrickIndex * BRICK_SIZE;
 
-                traverseBrick(ray, pointer, brickMinBound, iterations, hit);
+                traverseBrick(ray, brickPointer, brickMinBound, iterations, hit);
 
                 if (hit.hasHit) {
                     hit.superBrickHitIndex = superBrickIndex;
@@ -298,6 +260,7 @@ HitRecord traverseSuperBrick(Ray ray)
     }
 
     hit.t = -1;
+    hit.hasHit = false;
     return hit;
 }
 
@@ -325,7 +288,7 @@ void main()
 
     if (hit.hasHit) {
         vec3 hitPosition = calculateHitPosition(hit);
-        vec4 lookupColour = vec4(1.);
+        vec4 lookupColour = vec4(hit.colour, 1.);
 
         const vec3 lightPosition = vec3(0, -100., 0);
         const vec4 lightColour = vec4(1.);
@@ -335,20 +298,23 @@ void main()
         float diff = max(dot(hit.normal, lightDir), 0.);
         vec4 diffuse = lightColour * diff;
 
-        Ray shadowRay;
-        shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - 0.001);
-        shadowRay.direction = lightPosition - shadowRay.origin;
+        vec4 colour = lookupColour;
+        if (hit.t > 0.) {
+            Ray shadowRay;
+            shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - 0.001);
+            shadowRay.direction = lightPosition - shadowRay.origin;
 
-        HitRecord shadow = traverseSuperBrick(ray);
+            HitRecord shadow = traverseSuperBrick(ray);
 
-        const float ambientStrength = 0.7;
-        vec4 ambient = lightColour * ambientStrength;
+            const float ambientStrength = 0.7;
+            vec4 ambient = lightColour * ambientStrength;
 
-        float diffStrength = 1.;
-        if (shadow.hasHit)
-            diffStrength = 0.1;
+            float diffStrength = 1.;
+            if (shadow.hasHit)
+                diffStrength = 0.1;
 
-        vec4 colour = (ambient + diffuse * diffStrength) * lookupColour;
+            colour = (ambient + diffuse * diffStrength) * colour;
+        }
 
         imageStore(o_Image, texelCoord, colour);
     }

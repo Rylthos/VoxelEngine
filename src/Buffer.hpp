@@ -5,13 +5,13 @@
 
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <span>
 
 #include "ImmediateSubmit.hpp"
 
 class Buffer
 {
-
   public:
     Buffer();
     Buffer(Buffer&) = delete;
@@ -20,7 +20,8 @@ class Buffer
     ~Buffer();
 
     void create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage,
-                VmaMemoryUsage properties);
+                VmaMemoryUsage properties,
+                VmaAllocationCreateFlags flags = VMA_ALLOCATION_CREATE_MAPPED_BIT);
     void free();
 
     VkBuffer getBuffer() const { return m_Buffer; }
@@ -57,13 +58,6 @@ class Buffer
         size_t elements = m_Size / sizeof(T);
         data.resize(elements);
         std::memcpy(data.data(), getAllocationInfo().pMappedData, m_Size);
-        // Buffer stagingBuffer;
-        // stagingBuffer.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        //                      VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-        // std::memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
-
-        // copyFromBuffer(stagingBuffer, size);
     }
 
     template<typename T>
