@@ -48,7 +48,7 @@ struct HitRecord {
     ivec3 brickHitIndex;
     ivec3 superBrickHitIndex;
     vec3 normal;
-    vec3 colour;
+    vec4 colour;
     int comparisons;
 };
 
@@ -58,7 +58,7 @@ HitRecord emptyHit()
     hit.hasHit = false;
     hit.t = -1;
     hit.comparisons = -1;
-    hit.colour = vec3(0., 1., 1.);
+    hit.colour = vec4(0., 1., 1., 1.);
     return hit;
 }
 
@@ -90,6 +90,28 @@ vec3 calculateNormalFromBounds(Ray ray, float t, vec3 minBound, vec3 maxBound) {
     if (maxBoundHit.z) return vec3(0, 0, 1);
 
     return vec3(0.);
+}
+
+vec4 calculateColour(in Brick brick, in ivec3 brickIndex) {
+    uint index = 0;
+    for (int i = 0; i < brickIndex.y; i++)
+    {
+        index += bitCount(uint(brick.solidMask[i] & 0xFFFFFFFF));
+        index += bitCount(uint((brick.solidMask[i] >> 32) & 0xFFFFFFFF));
+    }
+    uint bitMask = brickIndex.z * BRICK_SIZE
+            + brickIndex.x;
+    uint64_t data = brick.solidMask[brickIndex.y];
+    uint lower = uint(data & 0xFFFFFFFF);
+    uint higher = uint((data >> 32) & 0xFFFFFFFF);
+    if (bitMask >= 32) {
+        uint higherBitMask = bitMask - 32;
+        index += bitCount(lower) + bitCount(((higher >> higherBitMask) << higherBitMask) ^ higher);
+    } else {
+        index += bitCount(((lower >> bitMask) << bitMask) ^ lower);
+    }
+
+    return p_SuperBrick.superBrick.colourBuffer.colours[index];
 }
 
 void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iterations, inout HitRecord hit)
@@ -136,6 +158,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
 
         if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
+            hit.colour = calculateColour(brick, brickIndex);
             hit.t = tMin + (tMax - dot(stepSize, vec3(stepAxis))) / BRICK_SIZE;
             hit.brickHitPosition = totalDistTraveled;
             hit.brickHitIndex = brickIndex;
@@ -212,7 +235,7 @@ HitRecord traverseSuperBrick(Ray ray)
         if ((data & SUPER_BRICK_IS_VALID_BIT) == 0) {
             Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
 
-            hit.colour = vec3(brick.lodR / 255., brick.lodG / 255., brick.lodB);
+            hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB, 1.);
             hit.hasHit = true;
 
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
@@ -221,7 +244,6 @@ HitRecord traverseSuperBrick(Ray ray)
 
             uint32_t new_data = data | (UNLOADED_BRICK_FLAG_REQUESTED << SUPER_BRICK_FLAGS_OFFSET);
             uint32_t previous = atomicExchange(p_SuperBrick.superBrick.data[index], new_data);
-            // debugPrintfEXT("%v3d, data: %d, new_data: %d, previous: %d", superBrickIndex, data, new_data, previous);
 
             if (((previous >> SUPER_BRICK_FLAGS_OFFSET) & UNLOADED_BRICK_FLAG_REQUESTED) == 0) {
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
@@ -288,7 +310,7 @@ void main()
 
     if (hit.hasHit) {
         vec3 hitPosition = calculateHitPosition(hit);
-        vec4 lookupColour = vec4(hit.colour, 1.);
+        vec4 lookupColour = hit.colour;
 
         const vec3 lightPosition = vec3(0, -100., 0);
         const vec4 lightColour = vec4(1.);

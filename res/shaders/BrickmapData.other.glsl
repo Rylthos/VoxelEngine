@@ -18,14 +18,19 @@
 
 struct Brick {
     uint64_t solidMask[8];
-    uint8_t colourPointer;
+    uint32_t colourPointer;
     uint8_t lodR;
     uint8_t lodG;
     uint8_t lodB;
+    uint8_t _;
 };
 
 layout(buffer_reference, std430) readonly buffer BrickBuffer {
     Brick bricks[];
+};
+
+layout(buffer_reference, std430) readonly buffer ColourBuffer {
+    vec4 colours[];
 };
 
 struct SuperBrick {
@@ -37,6 +42,7 @@ struct SuperBrick {
 
     uint32_t data[16 * 16 * 16];
     BrickBuffer bricksBuffer;
+    ColourBuffer colourBuffer;
 };
 
 layout(buffer_reference, std430) buffer ToBeLoadedBuffer {

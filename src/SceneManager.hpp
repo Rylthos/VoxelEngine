@@ -21,15 +21,17 @@ enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct Brick {
     uint64_t solidMask[8];
-    uint8_t colourPtr;
+    uint32_t colourPtr;
     uint8_t lodR;
     uint8_t lodG;
     uint8_t lodB;
+    uint8_t _;
 };
 
 struct SuperBrick {
     std::array<uint32_t, 16 * 16 * 16> data;
     VkDeviceAddress bricks;
+    VkDeviceAddress colour;
 };
 
 struct VoxelPushConstants {
@@ -90,17 +92,20 @@ class SceneManager : public EventReceiver
     VkDevice m_Device;
     VmaAllocator m_Allocator;
 
-    std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridStaging;
-    std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoadedStaging;
-    Buffer m_BricksStaging;
+    Buffer m_Colour;
+    Buffer m_ColourStaging;
 
     uint32_t m_MaxLoaded = 0;
     std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoaded;
+    std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoadedStaging;
 
     VoxelPushConstants m_VoxelPushConstants;
 
     std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridBuffer;
+    std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridStaging;
+
     Buffer m_BricksBuffer;
+    Buffer m_BricksStaging;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
     int m_ChunkRange = 2;
