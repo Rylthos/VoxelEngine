@@ -15,18 +15,13 @@
 #include "Profilling.hpp"
 #include "Queue.hpp"
 
+#include "Brickmap.hpp"
+
 #include "Chunk.hpp"
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
-struct Brick {
-    uint64_t solidMask[8];
-    uint32_t colourPtr;
-    uint8_t lodR;
-    uint8_t lodG;
-    uint8_t lodB;
-    uint8_t _;
-};
+#define SUPERBRICK_SIZE 16
 
 struct SuperBrick {
     std::array<uint32_t, 16 * 16 * 16> data;
@@ -92,7 +87,11 @@ class SceneManager : public EventReceiver
     VkDevice m_Device;
     VmaAllocator m_Allocator;
 
-    Buffer m_Colour;
+    Brickmap m_Brick1;
+    Brickmap m_Brick2;
+
+    std::vector<Buffer> m_Colours;
+    Buffer m_ColourMapping;
     Buffer m_ColourStaging;
 
     uint32_t m_MaxLoaded = 0;
@@ -101,8 +100,8 @@ class SceneManager : public EventReceiver
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridBuffer;
-    std::array<Buffer, FRAMES_IN_FLIGHT> m_BrickGridStaging;
+    Buffer m_BrickGridBuffer;
+    Buffer m_BrickGridStaging;
 
     Buffer m_BricksBuffer;
     Buffer m_BricksStaging;

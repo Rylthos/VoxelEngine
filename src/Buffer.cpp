@@ -9,6 +9,17 @@ Buffer::Buffer() {}
 
 Buffer::~Buffer() {}
 
+Buffer::Buffer(Buffer&& other)
+{
+    m_Buffer = other.m_Buffer;
+    m_Allocation = other.m_Allocation;
+    m_AllocationInfo = other.m_AllocationInfo;
+    m_Allocator = other.m_Allocator;
+    m_Size = other.m_Size;
+
+    other.m_Buffer = 0;
+}
+
 void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage,
                     VmaMemoryUsage memoryUsage, VmaAllocationCreateFlags flags)
 {

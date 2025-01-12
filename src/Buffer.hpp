@@ -15,7 +15,7 @@ class Buffer
   public:
     Buffer();
     Buffer(Buffer&) = delete;
-    Buffer(Buffer&&) = delete;
+    Buffer(Buffer&&);
 
     ~Buffer();
 

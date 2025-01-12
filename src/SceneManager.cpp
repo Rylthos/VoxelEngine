@@ -57,65 +57,114 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_Allocator = allocator;
 
     m_Initialized = true;
-    spdlog::info("Created Background Pipeline and Pipeline Layout");
+    spdlog::info("Initliazing Scene Manager");
 
-    for (size_t i = 0; i < m_BrickGridBuffer.size(); i++)
+    m_BrickGridBuffer.create(m_Allocator, sizeof(SuperBrick),
+                             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                             VMA_MEMORY_USAGE_GPU_ONLY);
+
+    m_Brick1.setVoxel({ 0, 0, 0 }, { 0., 0., 0., 1. });
+    m_Brick1.setVoxel({ 7, 0, 0 }, { 1., 0., 0., 1. });
+    m_Brick1.setVoxel({ 0, 0, 7 }, { 0., 1., 0., 1. });
+    m_Brick1.setVoxel({ 7, 0, 7 }, { 0., 0., 1., 1. });
+    m_Brick1.setVoxel({ 0, 7, 0 }, { 1., 1., 0., 1. });
+    m_Brick1.setVoxel({ 7, 7, 0 }, { 1., 0., 1., 1. });
+    m_Brick1.setVoxel({ 0, 7, 7 }, { 0., 1., 1., 1. });
+    m_Brick1.setVoxel({ 7, 7, 7 }, { 1., 1., 1., 1. });
+
     {
-        m_BrickGridBuffer[i].create(m_Allocator, sizeof(SuperBrick),
-                                    VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                    VMA_MEMORY_USAGE_GPU_ONLY);
+        for (int x = 0; x < 8; x++)
+        {
+            for (int y = 0; y < 8; y++)
+            {
+                for (int z = 0; z < 8; z++)
+                {
+                    if (!(x == 0 || x == 7 || y == 0 || y == 7 || z == 0 || z == 7))
+                    {
+                        continue;
+                    }
+
+                    m_Brick2.setVoxel({ x, y, z }, { 0., 1., 1., 1. });
+                }
+            }
+        }
     }
 
-    m_BricksBuffer.create(m_Allocator, sizeof(Brick),
-                          VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                          VMA_MEMORY_USAGE_GPU_ONLY);
-
-    m_Colour.create(m_Allocator, sizeof(glm::vec4) * 8,
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                    VMA_MEMORY_USAGE_GPU_ONLY);
-
-    m_ColourStaging.create(
-        m_Allocator, m_Colour.getSize(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-    std::vector<glm::vec4> colours = {
-        { 0., 0., 0., 1. },
-        { 1., 0., 0., 1. },
-        { 0., 1., 0., 1. },
-        { 0., 0., 1., 1. },
-        { 1., 1., 0., 1. },
-        { 1., 0., 1., 1. },
-        { 0., 1., 1., 1. },
-        { 1., 1., 1., 1. },
-    };
-
-    m_ColourStaging.copyFromData_CPUOnly<glm::vec4>(colours);
-    m_Colour.copyFromBuffer(m_ColourStaging, colours.size() * sizeof(glm::vec4));
-
-    // 4 Corners
-    Brick testBrick{};
-    testBrick.solidMask[0] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
-    testBrick.solidMask[7] |= (1 << 0) | (1 << 7) | (1l << 56) | (1l << 63);
-
-    testBrick.lodR = 255;
-    testBrick.lodG = 255;
-    testBrick.lodB = 255;
-
     {
-        std::vector<Brick> temp{ testBrick };
-        m_BricksStaging.create(m_Allocator, sizeof(Brick), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                               VMA_MEMORY_USAGE_AUTO,
+        std::vector<Brick> temp;
+        auto t = m_Brick1.getStruct();
+        if (t.has_value())
+        {
+            t->colourPtr = 0;
+            temp.push_back(t.value());
+        }
+
+        t = m_Brick2.getStruct();
+        if (t.has_value())
+        {
+            t->colourPtr = 1;
+            temp.push_back(t.value());
+        }
+
+        m_BricksStaging.create(m_Allocator, sizeof(Brick) * temp.size(),
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
                                VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                                    VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        m_BricksBuffer.create(
+            m_Allocator, temp.size() * sizeof(Brick),
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            VMA_MEMORY_USAGE_AUTO,
+            VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
         m_BricksStaging.copyFromData_CPUOnly<Brick>(temp);
-        m_BricksBuffer.copyFromBuffer(m_BricksStaging, sizeof(Brick));
+        m_BricksBuffer.copyFromBuffer(m_BricksStaging, m_BricksStaging.getSize());
+
+        size_t staging_size = std::max(m_Brick1.getColours().size(), m_Brick2.getColours().size());
+        // size_t size = m_Brick1.getColours().size() + m_Brick2.getColours().size();
+        m_ColourStaging.create(m_Allocator, sizeof(glm::vec4) * staging_size,
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
+                               VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                   VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+        m_Colours.resize(2);
+        m_Colours[0].create(m_Allocator, sizeof(glm::vec4) * m_Brick1.getColours().size(),
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                            VMA_MEMORY_USAGE_GPU_ONLY);
+        m_Colours[1].create(m_Allocator, sizeof(glm::vec4) * m_Brick2.getColours().size(),
+                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                            VMA_MEMORY_USAGE_GPU_ONLY);
+
+        size_t size1 = m_Brick1.getColours().size() * sizeof(glm::vec4);
+        auto colours = m_Brick1.getColours();
+        m_ColourStaging.copyFromData_CPUOnly<glm::vec4>(colours);
+        m_Colours[0].copyFromBuffer(m_ColourStaging, size1, 0);
+
+        size_t size2 = m_Brick2.getColours().size() * sizeof(glm::vec4);
+        colours = m_Brick2.getColours();
+        m_ColourStaging.copyFromData_CPUOnly<glm::vec4>(colours);
+        m_Colours[1].copyFromBuffer(m_ColourStaging, size2);
+
+        m_ColourMapping.create(m_Allocator, sizeof(VkDeviceAddress) * m_Colours.size(),
+                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                   VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                   VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                               VMA_MEMORY_USAGE_GPU_ONLY);
+
+        std::vector<VkDeviceAddress> address;
+        address.reserve(m_Colours.size());
+        for (size_t i = 0; i < m_Colours.size(); i++)
+        {
+            address.push_back(m_Colours[i].getDeviceAddress(m_Device));
+        }
+        m_ColourStaging.copyFromData_CPUOnly<VkDeviceAddress>(address);
+        m_ColourMapping.copyFromBuffer(m_ColourStaging, address.size() * sizeof(VkDeviceAddress));
 
         m_SuperBrick.bricks = m_BricksBuffer.getDeviceAddress(m_Device);
-        m_SuperBrick.colour = m_Colour.getDeviceAddress(m_Device);
+        m_SuperBrick.colour = m_ColourMapping.getDeviceAddress(m_Device);
     }
 
     for (int i = 0; i < 16 * 16 * 16; i++)
@@ -126,23 +175,20 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     {
         std::vector<SuperBrick> temp{ m_SuperBrick };
 
-        for (size_t i = 0; i < m_BrickGridBuffer.size(); i++)
-        {
-            m_BrickGridStaging[i].create(m_Allocator, sizeof(SuperBrick),
-                                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
-                                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-                                             VMA_ALLOCATION_CREATE_MAPPED_BIT);
-            m_BrickGridStaging[i].copyFromData_CPUOnly<SuperBrick>(temp);
-            m_BrickGridBuffer[i].copyFromBuffer(m_BrickGridStaging[i], sizeof(SuperBrick));
-        }
+        m_BrickGridStaging.create(m_Allocator, sizeof(SuperBrick), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VMA_MEMORY_USAGE_AUTO,
+                                  VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+                                      VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        m_BrickGridStaging.copyFromData_CPUOnly<SuperBrick>(temp);
+        m_BrickGridBuffer.copyFromBuffer(m_BrickGridStaging, sizeof(SuperBrick));
     }
 
     m_MaxLoaded = 64;
     size_t loadedSize = sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded;
-    for (uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++)
+    for (int i = 0; i < FRAMES_IN_FLIGHT; i++)
     {
-        m_ToBeLoadedStaging[i].create(m_Allocator, sizeof(loadedSize),
-                                      VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
+        m_ToBeLoadedStaging[i].create(m_Allocator, loadedSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                      VMA_MEMORY_USAGE_AUTO,
                                       VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                                           VMA_ALLOCATION_CREATE_MAPPED_BIT);
 
@@ -283,7 +329,7 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
                                               sizeof(uint32_t) * 2, 0);
 
     m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
-    m_VoxelPushConstants.brickGrid = m_BrickGridBuffer[currentFrame].getDeviceAddress(m_Device);
+    m_VoxelPushConstants.brickGrid = m_BrickGridBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
 }
@@ -313,15 +359,26 @@ void SceneManager::checkChunks(uint32_t currentFrame)
             uint32_t index = data[i];
             if (index < m_SuperBrick.data.size())
             {
-                m_SuperBrick.data[index] = 1;
+                uint64_t value = 1;
+                uint64_t chosenIndex = 0;
+                glm::ivec3 position;
+                position.x = index % SUPERBRICK_SIZE;
+                position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
+                position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
+                int sum = position.x + position.y + position.z;
+                if (sum % 2 == 1)
+                {
+                    chosenIndex = 1;
+                }
+                value |= (chosenIndex << 4);
+                m_SuperBrick.data[index] = value;
             }
         }
 
         {
             std::vector<SuperBrick> temp{ m_SuperBrick };
-            m_BrickGridStaging[currentFrame].copyFromData_CPUOnly<SuperBrick>(temp);
-            m_BrickGridBuffer[currentFrame].copyFromBuffer(m_BrickGridStaging[currentFrame],
-                                                           sizeof(SuperBrick));
+            m_BrickGridStaging.copyFromData_CPUOnly<SuperBrick>(temp);
+            m_BrickGridBuffer.copyFromBuffer(m_BrickGridStaging, sizeof(SuperBrick));
         }
     }
 }
@@ -331,14 +388,18 @@ void SceneManager::freeBuffers()
     m_BricksBuffer.free();
     m_BricksStaging.free();
 
+    m_BrickGridStaging.free();
+    m_BrickGridBuffer.free();
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++)
     {
-        m_BrickGridStaging[i].free();
-        m_BrickGridBuffer[i].free();
         m_ToBeLoadedStaging[i].free();
         m_ToBeLoaded[i].free();
     }
 
-    m_Colour.free();
+    for (size_t i = 0; i < m_Colours.size(); i++)
+    {
+        m_Colours[i].free();
+    }
     m_ColourStaging.free();
+    m_ColourMapping.free();
 }

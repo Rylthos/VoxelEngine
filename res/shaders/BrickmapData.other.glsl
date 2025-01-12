@@ -33,6 +33,10 @@ layout(buffer_reference, std430) readonly buffer ColourBuffer {
     vec4 colours[];
 };
 
+layout(buffer_reference, std430) readonly buffer ColourBuffers {
+    ColourBuffer colour[];
+};
+
 struct SuperBrick {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
     // Flags: Empty
@@ -42,7 +46,7 @@ struct SuperBrick {
 
     uint32_t data[16 * 16 * 16];
     BrickBuffer bricksBuffer;
-    ColourBuffer colourBuffer;
+    ColourBuffers colourBuffers;
 };
 
 layout(buffer_reference, std430) buffer ToBeLoadedBuffer {

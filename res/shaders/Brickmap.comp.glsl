@@ -58,7 +58,7 @@ HitRecord emptyHit()
     hit.hasHit = false;
     hit.t = -1;
     hit.comparisons = -1;
-    hit.colour = vec4(0., 1., 1., 1.);
+    hit.colour = vec4(1., 0., 1., 1.);
     return hit;
 }
 
@@ -111,7 +111,8 @@ vec4 calculateColour(in Brick brick, in ivec3 brickIndex) {
         index += bitCount(((lower >> bitMask) << bitMask) ^ lower);
     }
 
-    return p_SuperBrick.superBrick.colourBuffer.colours[index];
+    // return vec4(index, vec3(brickIndex));
+    return p_SuperBrick.superBrick.colourBuffers.colour[brick.colourPointer].colours[index];
 }
 
 void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iterations, inout HitRecord hit)
@@ -144,7 +145,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     ivec3 stepAxis = ivec3(1, 0, 0);
 
     vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin) - minBound;
-    vec3 normal = calculateNormalFromBounds(ray, tMin, minBound, maxBound);
+    vec3 normal = hit.normal;
 
     int count = 0;
     for (; iterations < p_MaxIterations; iterations++)
@@ -185,8 +186,6 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     return;
 }
 
-ivec2 texelCoord;
-
 HitRecord traverseSuperBrick(Ray ray)
 {
     HitRecord hit = emptyHit();
@@ -215,6 +214,8 @@ HitRecord traverseSuperBrick(Ray ray)
     vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (superBrickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
+    vec3 normal = calculateNormalFromBounds(ray, tMin, minBound, maxBound);
+
     for (int iterations = 0; iterations < p_MaxIterations; iterations++)
     {
         hit.comparisons++;
@@ -235,7 +236,7 @@ HitRecord traverseSuperBrick(Ray ray)
         if ((data & SUPER_BRICK_IS_VALID_BIT) == 0) {
             Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
 
-            hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB, 1.);
+            hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
             hit.hasHit = true;
 
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
@@ -260,6 +261,7 @@ HitRecord traverseSuperBrick(Ray ray)
             {
                 vec3 brickMinBound = superBrickIndex * BRICK_SIZE;
 
+                hit.normal = normal;
                 traverseBrick(ray, brickPointer, brickMinBound, iterations, hit);
 
                 if (hit.hasHit) {
@@ -274,6 +276,8 @@ HitRecord traverseSuperBrick(Ray ray)
 
         superBrickIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
+
+        normal = -stepAxis;
 
         bvec3 lower = lessThan(superBrickIndex, vec3(0));
         bvec3 higher = greaterThanEqual(superBrickIndex, vec3(SUPER_BRICK_SIZE));
@@ -292,7 +296,7 @@ vec3 calculateHitPosition(in HitRecord hit) {
 
 void main()
 {
-    /* ivec2 */ texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(o_Image);
     vec2 uv = vec2(texelCoord) / vec2(size);
 
@@ -326,19 +330,21 @@ void main()
             shadowRay.origin = calculatePosition(ray.origin, ray.direction, hit.t - 0.001);
             shadowRay.direction = lightPosition - shadowRay.origin;
 
-            HitRecord shadow = traverseSuperBrick(ray);
+            // HitRecord shadow = traverseSuperBrick(ray);
 
             const float ambientStrength = 0.7;
             vec4 ambient = lightColour * ambientStrength;
 
             float diffStrength = 1.;
-            if (shadow.hasHit)
-                diffStrength = 0.1;
+            // if (shadow.hasHit)
+            //     diffStrength = 0.1;
 
             colour = (ambient + diffuse * diffStrength) * colour;
         }
 
-        imageStore(o_Image, texelCoord, colour);
+        imageStore(o_Image, texelCoord, vec4(hitPosition, 1.));
+        // imageStore(o_Image, texelCoord, colour);
+        // imageStore(o_Image, texelCoord, hit.colour);
     }
 
     if (hit.comparisons >= 0) {
