@@ -3,7 +3,10 @@
 bin/*
 build/*
 .envrc
+
 *.sh
+*.bat
+
 res/shaders/*.spv
 imgui.ini
 *.xopp

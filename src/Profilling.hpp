@@ -1,7 +1,5 @@
 #pragma once
 
-#define PROF_TRACY
-
 #ifdef PROF_TRACY
 
 #include <vulkan/vulkan.h>

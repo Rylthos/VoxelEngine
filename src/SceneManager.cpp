@@ -7,7 +7,6 @@
 
 #include "Buffer.hpp"
 #include "Constants.hpp"
-#include "tracy/Tracy.hpp"
 
 #include "imgui.h"
 #include <GLFW/glfw3.h>
@@ -164,7 +163,7 @@ glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
 
 void SceneManager::checkChunks(uint32_t currentFrame)
 {
-    ZoneScoped;
+    PROF_ZONE_SCOPED;
     if (m_PauseRegeneration) return;
 
     const uint32_t* data =

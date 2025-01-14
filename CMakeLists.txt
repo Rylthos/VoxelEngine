@@ -7,6 +7,8 @@ find_package(Vulkan REQUIRED)
 
 find_package(glfw3 REQUIRED)
 
+option(INCLUDE_TRACY "Include Tracy in compilation" ON)
+
 # Set C++ Standard
 set(CMAKE_CXX_STANDARD 20)
 
@@ -18,6 +20,10 @@ endif()
 # Change the output directory
 set(binaryDir "/bin")
 set(outputDirectory "${PROJECT_SOURCE_DIR}${binaryDir}")
+
+if(WIN32)
+  set(linker "-lws2_32")
+endif(WIN32)
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   message("Debug Build")
@@ -32,7 +38,7 @@ elseif(CMAKE_BUILD_TYPE MATCHES Release)
 endif()
 
 add_compile_definitions(GLM_FORCE_RADIANS GLM_FORCE_DEPTH_ZERO_TO_ONE
-  GLFW_INCLUDE_VULKAN GLM_ENABLE_EXPERIMENTAL PROF_)
+                        GLFW_INCLUDE_VULKAN GLM_ENABLE_EXPERIMENTAL PROF_)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${outputDirectory})
 
@@ -42,10 +48,17 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++2a -Wall -Wextra -Wpedantic \
 
 add_subdirectory(vendor)
 
+set(tracy_filepath "")
+set(tracy_library "")
+if(INCLUDE_TRACY)
+  add_compile_definitions(PROF_TRACY)
+  set(tracy_filepath "vendor/tracy/public/TracyClient.cpp")
+  set(tracy_library "Tracy::TracyClient")
+endif(INCLUDE_TRACY)
+
 # Add all files
 file(GLOB_RECURSE projectFiles CONFIGURE_DEPENDS "src/*.cpp" "src/*.hpp")
-add_executable(${PROJECT_NAME} ${projectFiles}
-                               vendor/tracy/public/TracyClient.cpp)
+add_executable(${PROJECT_NAME} ${projectFiles} ${tracy_filepath})
 
 target_include_directories(
   ${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIR}
@@ -62,7 +75,7 @@ target_link_libraries(
          GPUOpen::VulkanMemoryAllocator
          spdlog
          Imgui
-         Tracy::TracyClient)
+         ${tracy_library})
 
 set(InputRes "${PROJECT_SOURCE_DIR}/res")
 set(OutputRes "${outputDirectory}/res")
