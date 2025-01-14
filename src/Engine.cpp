@@ -136,6 +136,8 @@ void Engine::cleanup()
     TracyVkDestroy(g_TracyVkCtx);
 #endif
 
+    m_SceneManager.freeResources();
+
     ImmediateSubmit::free();
 
     vkDestroyQueryPool(m_Device, m_QueryPool, nullptr);
@@ -237,6 +239,7 @@ void Engine::initVulkan()
 
     VkPhysicalDeviceVulkan12Features features12{};
     features12.bufferDeviceAddress = true;
+    features12.shaderBufferInt64Atomics = true;
     features12.descriptorIndexing = true;
     features12.hostQueryReset = true;
     features12.shaderInt8 = true;

@@ -1,17 +1,21 @@
-#include "Brickmap.hpp"
+#include "Brick.hpp"
 
 #include <cstdlib>
 #include <cstring>
 
-Brickmap::Brickmap()
+Brick::Brick()
 {
     for (int i = 0; i < BRICK_SIZE; i++)
     {
         m_Brick.solidMask[i] = 0;
     }
+    m_Brick.colourPtr = 0;
+    m_Brick.lodR = 0;
+    m_Brick.lodG = 0;
+    m_Brick.lodB = 0;
 }
 
-void Brickmap::setAir(glm::ivec3 position)
+void Brick::setAir(glm::ivec3 position)
 {
     if (!validPosition(position))
     {
@@ -22,7 +26,7 @@ void Brickmap::setAir(glm::ivec3 position)
     m_Brick.solidMask[position.y] &= ~(1 << mask);
 }
 
-void Brickmap::setVoxel(glm::ivec3 position, glm::vec4 colour)
+void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour)
 {
     auto previous = getVoxel(position);
 
@@ -32,7 +36,7 @@ void Brickmap::setVoxel(glm::ivec3 position, glm::vec4 colour)
     m_Colours[getColourIndex(position)] = colour;
 }
 
-std::optional<glm::vec4> Brickmap::getVoxel(glm::ivec3 position)
+std::optional<glm::vec4> Brick::getVoxel(glm::ivec3 position)
 {
     if (!validPosition(position))
     {
@@ -51,7 +55,7 @@ std::optional<glm::vec4> Brickmap::getVoxel(glm::ivec3 position)
     }
 }
 
-std::optional<Brick> Brickmap::getStruct()
+std::optional<BrickStruct> Brick::getStruct()
 {
     bool isAir = true;
     for (int i = 0; i < BRICK_SIZE; i++)
@@ -71,7 +75,7 @@ std::optional<Brick> Brickmap::getStruct()
     return std::optional(m_Brick);
 }
 
-std::vector<glm::vec4> Brickmap::getColours()
+std::vector<glm::vec4> Brick::getColours()
 {
     std::vector<glm::vec4> colours;
     colours.reserve(m_Colours.size());
@@ -83,13 +87,13 @@ std::vector<glm::vec4> Brickmap::getColours()
     return colours;
 }
 
-bool Brickmap::validPosition(glm::ivec3 pos)
+bool Brick::validPosition(glm::ivec3 pos)
 {
     return !(pos.x < 0 || pos.x >= BRICK_SIZE || pos.y < 0 || pos.y >= BRICK_SIZE || pos.z < 0 ||
              pos.z >= BRICK_SIZE);
 }
 
-uint64_t Brickmap::getColourIndex(glm::ivec3 position)
+uint64_t Brick::getColourIndex(glm::ivec3 position)
 {
     return position.x + position.z * BRICK_SIZE + position.y * BRICK_SIZE * BRICK_SIZE;
 }

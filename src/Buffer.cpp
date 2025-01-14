@@ -73,6 +73,11 @@ VkDeviceAddress Buffer::getDeviceAddress(VkDevice device) const
 void Buffer::copyFromBuffer(VkCommandBuffer cmd, const Buffer& buffer, size_t size,
                             size_t srcOffset, size_t dstOffset)
 {
+    if (size == 0)
+    {
+        return;
+    }
+
     VkBufferCopy copy{};
     copy.srcOffset = srcOffset;
     copy.dstOffset = dstOffset;

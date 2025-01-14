@@ -229,11 +229,15 @@ HitRecord traverseSuperBrick(Ray ray)
         }
 
         uint32_t data = p_SuperBrick.superBrick.data[index];
-        uint32_t flags = (data >> SUPER_BRICK_FLAGS_OFFSET) & SUPER_BRICK_FLAGS_BITMASK;
+        uint32_t flags = bitfieldExtract(data, 1, 3);
+
+        uint32_t is_valid = bitfieldExtract(data, 0, 1);
+        uint32_t unused = bitfieldExtract(data, 16, 16);
+        debugPrintfEXT("valid: %i, flags: %i, unused: %i", is_valid, flags, unused);
 
         uint32_t brickPointer = (data >> LOADED_BRICK_POINTER_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
 
-        if ((data & SUPER_BRICK_IS_VALID_BIT) == 0) {
+        if (is_valid == 0) {
             Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
 
             hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
@@ -243,10 +247,11 @@ HitRecord traverseSuperBrick(Ray ray)
                 break;
             }
 
-            uint32_t new_data = data | (UNLOADED_BRICK_FLAG_REQUESTED << SUPER_BRICK_FLAGS_OFFSET);
+            uint32_t new_data = bitfieldInsert(data, 1, 1, 1);
             uint32_t previous = atomicExchange(p_SuperBrick.superBrick.data[index], new_data);
 
-            if (((previous >> SUPER_BRICK_FLAGS_OFFSET) & UNLOADED_BRICK_FLAG_REQUESTED) == 0) {
+            uint32_t previously_requested = bitfieldExtract(previous, 1, 1);
+            if (previously_requested == 0) {
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
                     p_ToBeLoaded.toBeLoaded[writePointer] = index;

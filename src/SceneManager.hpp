@@ -15,19 +15,11 @@
 #include "Profilling.hpp"
 #include "Queue.hpp"
 
-#include "Brickmap.hpp"
+#include "SuperBrick.hpp"
 
 #include "Chunk.hpp"
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
-
-#define SUPERBRICK_SIZE 16
-
-struct SuperBrick {
-    std::array<uint32_t, 16 * 16 * 16> data;
-    VkDeviceAddress bricks;
-    VkDeviceAddress colour;
-};
 
 struct VoxelPushConstants {
     glm::vec3 cameraPosition;
@@ -53,14 +45,14 @@ struct VoxelPushConstants {
     uint32_t initialParent;
 
     VkDeviceAddress toBeLoaded;
-    VkDeviceAddress brickGrid;
+    VkDeviceAddress superBrick;
 };
 
 class SceneManager : public EventReceiver
 {
   public:
     SceneManager() {}
-    ~SceneManager() { freeBuffers(); }
+    ~SceneManager() { freeResources(); }
     SceneManager(PaletteManager* paletteManager, Camera* camera);
     SceneManager(SceneManager& other);
 
@@ -82,29 +74,17 @@ class SceneManager : public EventReceiver
     PaletteManager* m_PaletteManager;
     Camera* m_Camera;
 
-    SuperBrick m_SuperBrick;
-
     VkDevice m_Device;
     VmaAllocator m_Allocator;
 
-    Brickmap m_Brick1;
-    Brickmap m_Brick2;
-
-    std::vector<Buffer> m_Colours;
-    Buffer m_ColourMapping;
-    Buffer m_ColourStaging;
-
     uint32_t m_MaxLoaded = 0;
     std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoaded;
-    std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoadedStaging;
+    Buffer m_Staging;
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    Buffer m_BrickGridBuffer;
-    Buffer m_BrickGridStaging;
-
-    Buffer m_BricksBuffer;
-    Buffer m_BricksStaging;
+    SuperBrick m_SuperBrick;
+    Buffer m_SuperBrickBuffer;
 
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
     int m_ChunkRange = 2;
@@ -112,6 +92,7 @@ class SceneManager : public EventReceiver
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);
     void checkChunks(uint32_t currentFrame);
-    void createBrickGridStaging(Buffer& stagingBuffer, size_t size);
     void freeBuffers();
+
+    void createStaging(size_t size);
 };

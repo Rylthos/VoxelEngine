@@ -10,7 +10,7 @@
 
 #define BRICK_SIZE 8
 
-struct Brick {
+struct BrickStruct {
     uint64_t solidMask[8];
     uint32_t colourPtr;
     uint8_t lodR;
@@ -19,20 +19,20 @@ struct Brick {
     uint8_t _;
 };
 
-class Brickmap
+class Brick
 {
   public:
-    Brickmap();
+    Brick();
 
     void setAir(glm::ivec3 position);
     void setVoxel(glm::ivec3 position, glm::vec4 colour);
     std::optional<glm::vec4> getVoxel(glm::ivec3 position);
 
-    std::optional<Brick> getStruct();
+    std::optional<BrickStruct> getStruct();
     std::vector<glm::vec4> getColours();
 
   private:
-    Brick m_Brick;
+    BrickStruct m_Brick;
     std::map<int, glm::vec4> m_Colours;
 
   private:
