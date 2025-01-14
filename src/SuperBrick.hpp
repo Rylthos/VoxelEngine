@@ -3,7 +3,10 @@
 #include <vulkan/vulkan.h>
 
 #include <array>
+#include <condition_variable>
+#include <deque>
 #include <glm/gtx/hash.hpp>
+#include <unordered_set>
 
 #include "Brick.hpp"
 #include "Buffer.hpp"
@@ -41,11 +44,14 @@ class SuperBrick
     void init(VkDevice device, VmaAllocator allocator, Queue* computeQueue);
     void free();
 
-    void generateBrick(glm::ivec3 position);
-    void generateBrickFromIndex(uint32_t index);
+    void addBrickToQueue(glm::ivec3 position);
+    void addBrickToQueue(uint32_t index);
     VkDeviceAddress getBrickmap() { return m_Brickmap.getDeviceAddress(m_Device); }
 
     SuperBrickStruct getStruct();
+
+    size_t getBricksSize() { return m_Bricks.size(); }
+    size_t getQueued() { return m_ToBeGenerated.size(); }
 
   private:
     bool m_Initialized = false;
@@ -73,6 +79,17 @@ class SuperBrick
     VkCommandPool m_CommandPool;
     VkCommandBuffer m_CommandBuffer;
 
+    bool m_Running = false;
+    std::thread m_GenerationThread;
+    std::condition_variable_any m_CanGenerate;
+    std::mutex m_QueueLock;
+    std::mutex m_BufferLock;
+    std::deque<glm::ivec3> m_ToBeGenerated;
+    std::unordered_set<glm::ivec3> m_Enqueued;
+    std::unordered_set<glm::ivec3> m_Generated;
+
   private:
     void generateStaging(size_t size);
+
+    void generateBrickLoop();
 };

@@ -61,7 +61,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
 
     m_SuperBrick.init(device, allocator, computeQueue);
 
-    m_SuperBrick.generateBrick({ 0, 0, 0 });
+    m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
 
     m_MaxLoaded = 64;
     size_t loadedSize = sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded;
@@ -111,11 +111,14 @@ void SceneManager::receive(const Event* event)
         {
             if (ImGui::Begin("Scene"))
             {
-                if (ImGui::Button("Generate Next"))
-                {
-                    static uint32_t nextIndex = 1;
-                    m_SuperBrick.generateBrickFromIndex(nextIndex++);
-                }
+                // if (ImGui::Button("Generate Next"))
+                // {
+                //     static uint32_t nextIndex = 1;
+                //     m_SuperBrick.addBrickToQueue(nextIndex++);
+                // }
+
+                ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
+                ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
             }
             ImGui::End();
             break;
@@ -175,7 +178,7 @@ void SceneManager::checkChunks(uint32_t currentFrame)
         for (uint32_t i = 2; i < length; i++)
         {
             uint32_t index = data[i];
-            m_SuperBrick.generateBrickFromIndex(index);
+            m_SuperBrick.addBrickToQueue(index);
         }
     }
 }

@@ -7,6 +7,7 @@
 #include "SceneManager.hpp"
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
+#include "imgui.h"
 
 SuperBrick::SuperBrick() {}
 
@@ -102,15 +103,19 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
         VK_CHECK(vkCreateFence(m_Device, &fenceCI, nullptr, &m_GenerationFence));
     }
 
+    m_Running = true;
+    m_GenerationThread = std::thread(&SuperBrick::generateBrickLoop, this);
+
     m_Initialized = true;
 }
 
 void SuperBrick::free()
 {
-    if (!m_Initialized)
-    {
-        return;
-    }
+    if (!m_Initialized) return;
+
+    m_Running = false;
+    m_CanGenerate.notify_one();
+    m_GenerationThread.join();
 
     m_Brickmap.free();
     m_Staging.free();
@@ -130,92 +135,37 @@ void SuperBrick::free()
     vkDestroyPipelineLayout(m_Device, m_GeneratePipelineLayout, nullptr);
 }
 
-void SuperBrick::generateBrick(glm::ivec3 position)
+void SuperBrick::addBrickToQueue(glm::ivec3 position)
 {
-    m_HasChanged = true;
-    VK_CHECK(vkResetFences(m_Device, 1, &m_GenerationFence));
-    VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
+    std::lock_guard<std::mutex> m_Lock(m_QueueLock);
 
-    VkCommandBufferBeginInfo commandBufferBI{};
-    commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    commandBufferBI.pNext = nullptr;
-    commandBufferBI.pInheritanceInfo = nullptr;
-    commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    if (m_Enqueued.contains(position)) return;
 
-    VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &commandBufferBI));
-    {
-        vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_GeneratePipeline);
+    if (m_Generated.contains(position)) return;
 
-        GenerationPushConstants pushConstants;
-        pushConstants.worldPosition = position * BRICK_SIZE;
-        pushConstants.data = m_GeneratedData.getDeviceAddress(m_Device);
-        pushConstants.colours = m_GeneratedColourData.getDeviceAddress(m_Device);
+    m_Enqueued.insert(position);
+    m_Generated.insert(position);
+    m_ToBeGenerated.push_back(position);
 
-        vkCmdPushConstants(m_CommandBuffer, m_GeneratePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
-                           0, sizeof(pushConstants), &pushConstants);
-
-        vkCmdDispatch(m_CommandBuffer, 1, 1, 1);
-    }
-    VK_CHECK(vkEndCommandBuffer(m_CommandBuffer));
-
-    VkCommandBufferSubmitInfo commandBufferSI{};
-    commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    commandBufferSI.pNext = nullptr;
-    commandBufferSI.commandBuffer = m_CommandBuffer;
-    commandBufferSI.deviceMask = 0;
-
-    VkSubmitInfo2 submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-    submitInfo.pNext = nullptr;
-    submitInfo.commandBufferInfoCount = 1;
-    submitInfo.pCommandBufferInfos = &commandBufferSI;
-
-    VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_GenerationFence));
-    VK_CHECK(vkWaitForFences(m_Device, 1, &m_GenerationFence, true, 1e10));
-
-    const uint32_t* data = (const uint32_t*)(m_GeneratedData.getAllocationInfo().pMappedData);
-    const uint32_t solidVoxels = *data;
-    const uint64_t* mask = (const uint64_t*)(data + 1);
-
-    const glm::vec4* colour_data =
-        (const glm::vec4*)(m_GeneratedColourData.getAllocationInfo().pMappedData);
-
-    Brick brick;
-    if (solidVoxels != 0)
-    {
-        for (int y = 0; y < BRICK_SIZE; y++)
-        {
-            for (int z = 0; z < BRICK_SIZE; z++)
-            {
-                for (int x = 0; x < BRICK_SIZE; x++)
-                {
-                    uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
-                    if (colour_data[index].a >= 0)
-                    {
-                        brick.setVoxel({ x, y, z }, colour_data[index]);
-                    }
-                }
-            }
-        }
-    }
-
-    m_Bricks[position] = brick;
+    m_CanGenerate.notify_one();
 }
 
-void SuperBrick::generateBrickFromIndex(uint32_t index)
+void SuperBrick::addBrickToQueue(uint32_t index)
 {
     glm::ivec3 position{ 0 };
     position.x = index % SUPERBRICK_SIZE;
     position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
     position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
 
-    generateBrick(position);
+    addBrickToQueue(position);
 }
 
 SuperBrickStruct SuperBrick::getStruct()
 {
-    if (m_HasChanged)
+    if (m_HasChanged && m_Enqueued.size() == 0)
     {
+        std::unique_lock<std::mutex> lock(m_BufferLock);
+
         m_HasChanged = false;
 
         for (auto& c : m_Colours)
@@ -317,4 +267,104 @@ void SuperBrick::generateStaging(size_t size)
     m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
                      VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
                          VMA_ALLOCATION_CREATE_MAPPED_BIT);
+}
+
+void SuperBrick::generateBrickLoop()
+{
+    while (m_Running)
+    {
+        glm::ivec3 position;
+        {
+            std::unique_lock<std::mutex> lock(m_QueueLock);
+            if (m_ToBeGenerated.size() == 0)
+            {
+                spdlog::info("Thread waiting");
+                m_CanGenerate.wait(lock, [this] { return !m_ToBeGenerated.empty() || !m_Running; });
+            }
+            spdlog::info("Thread running");
+
+            position = m_ToBeGenerated.front();
+        }
+
+        if (!m_Running) return;
+
+        m_HasChanged = true;
+        VK_CHECK(vkResetFences(m_Device, 1, &m_GenerationFence));
+        VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
+
+        VkCommandBufferBeginInfo commandBufferBI{};
+        commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        commandBufferBI.pNext = nullptr;
+        commandBufferBI.pInheritanceInfo = nullptr;
+        commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &commandBufferBI));
+        {
+            vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_GeneratePipeline);
+
+            GenerationPushConstants pushConstants;
+            pushConstants.worldPosition = position * BRICK_SIZE;
+            pushConstants.data = m_GeneratedData.getDeviceAddress(m_Device);
+            pushConstants.colours = m_GeneratedColourData.getDeviceAddress(m_Device);
+
+            vkCmdPushConstants(m_CommandBuffer, m_GeneratePipelineLayout,
+                               VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
+                               &pushConstants);
+
+            vkCmdDispatch(m_CommandBuffer, 1, 1, 1);
+        }
+        VK_CHECK(vkEndCommandBuffer(m_CommandBuffer));
+
+        VkCommandBufferSubmitInfo commandBufferSI{};
+        commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        commandBufferSI.pNext = nullptr;
+        commandBufferSI.commandBuffer = m_CommandBuffer;
+        commandBufferSI.deviceMask = 0;
+
+        VkSubmitInfo2 submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submitInfo.pNext = nullptr;
+        submitInfo.commandBufferInfoCount = 1;
+        submitInfo.pCommandBufferInfos = &commandBufferSI;
+
+        VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_GenerationFence));
+        VK_CHECK(vkWaitForFences(m_Device, 1, &m_GenerationFence, true, 1e10));
+
+        const uint32_t* data = (const uint32_t*)(m_GeneratedData.getAllocationInfo().pMappedData);
+        const uint32_t solidVoxels = *data;
+        const uint64_t* mask = (const uint64_t*)(data + 1);
+
+        const glm::vec4* colour_data =
+            (const glm::vec4*)(m_GeneratedColourData.getAllocationInfo().pMappedData);
+
+        Brick brick;
+        if (solidVoxels != 0)
+        {
+            for (int y = 0; y < BRICK_SIZE; y++)
+            {
+                for (int z = 0; z < BRICK_SIZE; z++)
+                {
+                    for (int x = 0; x < BRICK_SIZE; x++)
+                    {
+                        uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
+                        if (colour_data[index].a >= 0)
+                        {
+                            brick.setVoxel({ x, y, z }, colour_data[index]);
+                        }
+                    }
+                }
+            }
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_BufferLock);
+            m_Bricks[position] = brick;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_QueueLock);
+            m_ToBeGenerated.pop_front();
+            m_Enqueued.erase(position);
+        }
+    }
 }
