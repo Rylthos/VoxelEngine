@@ -19,8 +19,8 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
     for (size_t i = 0; i < m_Struct.data.size(); i++)
     {
         m_Struct.data[i] = {
-            .loaded = 1,
-            .empty_flag = 1,
+            .loaded = 0,
+            .empty_flag = 0,
         };
     }
 
@@ -147,7 +147,7 @@ void SuperBrick::generateBrick(glm::ivec3 position)
         vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_GeneratePipeline);
 
         GenerationPushConstants pushConstants;
-        pushConstants.worldPosition = position;
+        pushConstants.worldPosition = position * BRICK_SIZE;
         pushConstants.data = m_GeneratedData.getDeviceAddress(m_Device);
         pushConstants.colours = m_GeneratedColourData.getDeviceAddress(m_Device);
 
@@ -243,23 +243,25 @@ SuperBrickStruct SuperBrick::getStruct()
                 m_Struct.data[index].pointer = bricks.size();
                 m_Struct.data[index].loaded = 1;
                 m_Struct.data[index].empty_flag = 0;
-                bricks.push_back(brick.value());
 
-                brick->colourPtr = m_Colours.size();
+                size_t colourIndex = m_Colours.size();
+                brick->colourPtr = colourIndex;
+
+                bricks.push_back(brick.value());
 
                 auto c = p.second.getColours();
                 size_t size = sizeof(glm::vec4) * c.size();
                 m_Colours.emplace_back();
-                m_Colours[m_Colours.size() - 1].create(
-                    m_Allocator, size,
-                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                    VMA_MEMORY_USAGE_GPU_ONLY);
+                m_Colours[colourIndex].create(m_Allocator, size,
+                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                                  VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                                  VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                                              VMA_MEMORY_USAGE_GPU_ONLY);
                 generateStaging(size);
                 m_Staging.copyFromData_CPUOnly<glm::vec4>(c);
-                m_Colours[m_Colours.size() - 1].copyFromBuffer(m_Staging, size);
+                m_Colours[colourIndex].copyFromBuffer(m_Staging, size);
 
-                colours.push_back(m_Colours[m_Colours.size() - 1].getDeviceAddress(m_Device));
+                colours.push_back(m_Colours[colourIndex].getDeviceAddress(m_Device));
             }
             else
             {

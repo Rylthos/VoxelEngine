@@ -176,25 +176,7 @@ void SceneManager::checkChunks(uint32_t currentFrame)
         for (uint32_t i = 2; i < length; i++)
         {
             uint32_t index = data[i];
-            spdlog::info("Loading: {}", index);
-            // m_SuperBrick.generateBrickFromIndex(index);
-
-            // if (index < m_SuperBrick.data.size())
-            // {
-            //     uint64_t value = 1;
-            //     uint64_t chosenIndex = 0;
-            //     glm::ivec3 position;
-            //     position.x = index % SUPERBRICK_SIZE;
-            //     position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
-            //     position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
-            //     int sum = position.x + position.y + position.z;
-            //     if (sum % 2 == 1)
-            //     {
-            //         chosenIndex = 1;
-            //     }
-            //     value |= (chosenIndex << 4);
-            //     m_SuperBrick.data[index] = value;
-            // }
+            m_SuperBrick.generateBrickFromIndex(index);
         }
     }
 }

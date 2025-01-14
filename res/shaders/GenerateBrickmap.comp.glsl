@@ -44,10 +44,13 @@ void main() {
 
     vec3 worldPosition = p_WorldPosition + currentIndex;
 
-    vec3 colour = vec3(0.);
-    colour.r = currentIndex.x / 8.;
-    colour.g = currentIndex.y / 8.;
-    colour.b = currentIndex.z / 8.;
+    vec3 center = vec3(63.5);
+    vec3 dir = worldPosition - center;
+
+    vec3 colour = abs(dir / 63.5);
+    // colour.r = currentIndex.x / 8.;
+    // colour.g = currentIndex.y / 8.;
+    // colour.b = currentIndex.z / 8.;
 
     setVoxel(currentIndex, colour);
 }

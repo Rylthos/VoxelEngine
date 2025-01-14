@@ -346,7 +346,8 @@ void main()
 
             colour = (ambient + diffuse * diffStrength) * colour;
         }
-        imageStore(o_Image, texelCoord, colour);
+        imageStore(o_Image, texelCoord, hit.colour);
+        // imageStore(o_Image, texelCoord, colour);
     }
 
     if (hit.comparisons >= 0) {
