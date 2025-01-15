@@ -118,6 +118,8 @@ void SceneManager::receive(const Event* event)
 
                 ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
                 ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
+
+                ImGui::SliderInt("Heat: %d", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
             }
             ImGui::End();
             break;

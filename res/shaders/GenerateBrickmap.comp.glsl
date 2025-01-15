@@ -2,6 +2,7 @@
 
 #extension GL_EXT_shader_explicit_arithmetic_types : enable
 #extension GL_EXT_buffer_reference : enable
+#extension GL_EXT_debug_printf : enable
 #extension GL_EXT_shader_atomic_int64 : enable
 #extension GL_GOOGLE_include_directive : require
 
@@ -18,8 +19,10 @@ layout(buffer_reference, std430) buffer GenerationData {
 
 layout(push_constant) uniform constants {
     // uint32_t p_Seed;
+    ivec3 p_BrickIndex;
+    int _1;
     ivec3 p_WorldPosition;
-    int _;
+    int _2;
     GenerationData p_Data;
     ColourBuffer p_Colours;
 };
@@ -35,22 +38,23 @@ void setVoxel(in uvec3 position, in vec3 colour) {
     atomicAdd(p_Data.numSolidVoxels, 1);
 }
 
-void setAir(in ivec3 position) {
+void setAir(in uvec3 position) {
     p_Colours.colours[getIndex(position)] = vec4(0., 0., 0., -1.);
 }
 
 void main() {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
 
-    vec3 worldPosition = p_WorldPosition + currentIndex;
+    ivec3 worldPosition = p_WorldPosition + ivec3(currentIndex);
 
-    vec3 center = vec3(63.5);
-    vec3 dir = worldPosition - center;
-
-    vec3 colour = abs(dir / 63.5);
-    // colour.r = currentIndex.x / 8.;
-    // colour.g = currentIndex.y / 8.;
-    // colour.b = currentIndex.z / 8.;
-
-    setVoxel(currentIndex, colour);
+    if (p_BrickIndex.x % 2 == 0 && p_BrickIndex.z % 4 == 0 && p_BrickIndex.y % 4 == 0) {
+        uint sum = currentIndex.x + currentIndex.y + currentIndex.z;
+        if (sum % 4 == 0) {
+            setVoxel(currentIndex, vec3(1.));
+        } else {
+            setAir(currentIndex);
+        }
+    } else {
+        setAir(currentIndex);
+    }
 }

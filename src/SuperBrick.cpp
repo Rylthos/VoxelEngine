@@ -347,6 +347,7 @@ void SuperBrick::generateBrickLoop()
                                   m_GeneratePipeline);
 
                 GenerationPushConstants pushConstants;
+                pushConstants.brickIndex = position;
                 pushConstants.worldPosition = position * BRICK_SIZE;
                 pushConstants.data = m_GeneratedData.getDeviceAddress(m_Device);
                 pushConstants.colours = m_GeneratedColourData.getDeviceAddress(m_Device);

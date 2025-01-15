@@ -29,9 +29,10 @@ struct SuperBrickStruct {
 };
 
 struct GenerationPushConstants {
-    // uint32_t seed;
+    glm::ivec3 brickIndex;
+    int _1;
     glm::ivec3 worldPosition;
-    int _;
+    int _2;
     VkDeviceAddress data;
     VkDeviceAddress colours;
 };
