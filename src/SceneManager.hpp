@@ -27,7 +27,9 @@ struct Feedback {
     glm::ivec3 brickIndex;
     int hasHitVoxel;
     glm::ivec3 voxelIndex;
-    int _3;
+    int _1;
+    glm::vec3 voxelNormal;
+    int _2;
 };
 
 struct VoxelPushConstants {

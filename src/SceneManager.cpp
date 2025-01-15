@@ -138,6 +138,7 @@ void SceneManager::receive(const Event* event)
                             glm::to_string(m_Feedback.superBrickIndex).c_str());
                 ImGui::Text("Brick Index: %s", glm::to_string(m_Feedback.brickIndex).c_str());
                 ImGui::Text("Voxel Index: %s", glm::to_string(m_Feedback.voxelIndex).c_str());
+                ImGui::Text("Voxel Normal: %s", glm::to_string(m_Feedback.voxelNormal).c_str());
             }
             ImGui::End();
             break;

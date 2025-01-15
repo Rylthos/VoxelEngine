@@ -21,6 +21,8 @@ layout(buffer_reference, std430) buffer FeedbackBuffer {
     int hasHitVoxel;
     ivec3 voxelIndex;
     int _3;
+    vec3 voxelNormal;
+    int _4;
 };
 
 layout(push_constant) uniform constants {
@@ -61,6 +63,9 @@ struct HitRecord {
     vec4 colour;
     int comparisons;
 };
+
+const vec4 cursorColour = vec4(vec3(0.3), 1.);
+const float cursorWidth = 20.;
 
 HitRecord emptyHit()
 {
@@ -307,6 +312,46 @@ vec3 calculateHitPosition(in HitRecord hit) {
     return hit.brickHitIndex * SUPER_BRICK_SIZE * BRICK_SIZE + hit.voxelHitPosition;
 }
 
+bool shouldColourCursor(vec2 uv, vec2 pixelSize) {
+    uv = abs(uv - vec2(0.5));
+
+    vec2 pixelConversion = vec2(uv / pixelSize);
+    bool canRender = true;
+
+    bvec2 outsideBounds = greaterThan(abs(pixelConversion), ivec2(cursorWidth));
+    if (outsideBounds.x || outsideBounds.y) {
+        canRender = false;
+    }
+
+    bool outsideOuterCircle = length(vec2(pixelConversion)) > float(cursorWidth);
+    if (outsideOuterCircle)
+        canRender = false;
+
+    bool insideOuterCircle = length(vec2(pixelConversion)) < float(cursorWidth * 0.8);
+    if (insideOuterCircle)
+        canRender = false;
+
+    float seperation = 0.4;
+    if (pixelConversion.x < cursorWidth * seperation || pixelConversion.y < cursorWidth * seperation)
+    {
+        canRender = false;
+    }
+
+    float middlePointerWidth = 0.055;
+    float middlePointerHeight = 0.60;
+    if (pixelConversion.x < cursorWidth * middlePointerWidth && pixelConversion.y < cursorWidth * middlePointerHeight)
+    {
+        canRender = true;
+    }
+
+    if (pixelConversion.y < cursorWidth * middlePointerWidth && pixelConversion.x < cursorWidth * middlePointerHeight)
+    {
+        canRender = true;
+    }
+
+    return canRender;
+}
+
 void main()
 {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -330,11 +375,12 @@ void main()
     ivec3 brickIndex;
     HitRecord hit = traverseSuperBrick(ray);
 
+    vec4 colour = vec4(clearColour, 0.);
     if (hit.hasHitBrick) {
         vec3 hitPosition = calculateHitPosition(hit);
         vec4 lookupColour = hit.colour;
 
-        vec4 colour = lookupColour;
+        colour = lookupColour;
         if (hit.hasHitVoxel) {
             const vec3 lightPosition = vec3(0, -100., 0);
             const vec4 lightColour = vec4(1.);
@@ -371,11 +417,16 @@ void main()
         imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
     }
 
+    if (shouldColourCursor(uv, vec2(1.) / vec2(size))) {
+        imageStore(o_Image, texelCoord, mix(colour, cursorColour, 0.7));
+    }
+
     if (middle) {
+        p_Feedback.hasHitBrick = int(hit.hasHitBrick);
+        p_Feedback.hasHitVoxel = int(hit.hasHitVoxel);
         p_Feedback.superBrickIndex = ivec3(0);
         p_Feedback.brickIndex = hit.brickHitIndex;
         p_Feedback.voxelIndex = hit.voxelHitIndex;
-        p_Feedback.hasHitBrick = int(hit.hasHitBrick);
-        p_Feedback.hasHitVoxel = int(hit.hasHitVoxel);
+        p_Feedback.voxelNormal = hit.normal;
     }
 }
