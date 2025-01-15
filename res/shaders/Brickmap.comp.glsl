@@ -233,9 +233,8 @@ HitRecord traverseSuperBrick(Ray ray)
 
         uint32_t is_valid = bitfieldExtract(data, 0, 1);
         uint32_t unused = bitfieldExtract(data, 16, 16);
-        debugPrintfEXT("valid: %i, flags: %i, unused: %i", is_valid, flags, unused);
 
-        uint32_t brickPointer = (data >> LOADED_BRICK_POINTER_OFFSET) & LOADED_BRICK_POINTER_BITMASK;
+        uint32_t brickPointer = bitfieldExtract(data, 4, 12);
 
         if (is_valid == 0) {
             Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
@@ -244,7 +243,7 @@ HitRecord traverseSuperBrick(Ray ray)
             hit.hasHit = true;
 
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
-                break;
+                return hit;
             }
 
             uint32_t new_data = bitfieldInsert(data, 1, 1, 1);
@@ -317,7 +316,6 @@ void main()
     HitRecord hit = traverseSuperBrick(ray);
 
     if (hit.hasHit) {
-        // vec3 hitPosition = hit.brickHitPosition;
         vec3 hitPosition = calculateHitPosition(hit);
         vec4 lookupColour = hit.colour;
 
@@ -346,8 +344,8 @@ void main()
 
             colour = (ambient + diffuse * diffStrength) * colour;
         }
-        imageStore(o_Image, texelCoord, hit.colour);
-        // imageStore(o_Image, texelCoord, colour);
+        // imageStore(o_Image, texelCoord, hit.colour);
+        imageStore(o_Image, texelCoord, colour);
     }
 
     if (hit.comparisons >= 0) {

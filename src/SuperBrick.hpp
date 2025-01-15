@@ -46,17 +46,24 @@ class SuperBrick
 
     void addBrickToQueue(glm::ivec3 position);
     void addBrickToQueue(uint32_t index);
-    VkDeviceAddress getBrickmap() { return m_Brickmap.getDeviceAddress(m_Device); }
+    VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
 
     SuperBrickStruct getStruct();
 
-    size_t getBricksSize() { return m_Bricks.size(); }
+    void reset();
+
+    size_t getBricksSize() { return m_GeneratedBricks.size(); }
     size_t getQueued() { return m_ToBeGenerated.size(); }
 
   private:
     bool m_Initialized = false;
     std::unordered_map<glm::ivec3, Brick> m_Bricks;
-    Buffer m_Brickmap;
+    std::deque<glm::ivec3> m_ToBeLoaded;
+    std::unordered_map<glm::ivec3, uint16_t> m_GeneratedBricks;
+    size_t m_CurrentPoolSize;
+    size_t m_CurrentPoolAllocation;
+
+    Buffer m_BrickPool;
     Buffer m_Staging;
 
     std::vector<Buffer> m_Colours;
@@ -86,7 +93,6 @@ class SuperBrick
     std::mutex m_BufferLock;
     std::deque<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_Enqueued;
-    std::unordered_set<glm::ivec3> m_Generated;
 
   private:
     void generateStaging(size_t size);

@@ -587,6 +587,10 @@ void Engine::initQueryPool()
 void Engine::resizeWindow()
 {
     spdlog::info("Resizing | W: {} H: {}", m_Window.getSize().x, m_Window.getSize().y);
+
+    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
+    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_GraphicsQueue.queueMutex);
+
     vkDeviceWaitIdle(m_Device);
 
     destroySwapchain();
