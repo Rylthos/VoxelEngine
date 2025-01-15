@@ -21,6 +21,15 @@
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
+struct Feedback {
+    glm::ivec3 superBrickIndex;
+    int hasHitBrick;
+    glm::ivec3 brickIndex;
+    int hasHitVoxel;
+    glm::ivec3 voxelIndex;
+    int _3;
+};
+
 struct VoxelPushConstants {
     glm::vec3 cameraPosition;
     float aspectRatio;
@@ -46,6 +55,7 @@ struct VoxelPushConstants {
 
     VkDeviceAddress toBeLoaded;
     VkDeviceAddress superBrick;
+    VkDeviceAddress feedbackBuffer;
 };
 
 class SceneManager : public EventReceiver
@@ -86,6 +96,9 @@ class SceneManager : public EventReceiver
     SuperBrick m_SuperBrick;
     Buffer m_SuperBrickBuffer;
 
+    Buffer m_FeedbackBuffer;
+    Feedback m_Feedback;
+
     glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
     int m_ChunkRange = 2;
 
@@ -93,6 +106,8 @@ class SceneManager : public EventReceiver
     glm::ivec3 worldToChunkPos(glm::vec3 position);
     void checkChunks(uint32_t currentFrame);
     void freeBuffers();
+
+    void reedbackFeedback();
 
     void createStaging(size_t size);
 };

@@ -83,6 +83,13 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
             VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+
+    m_FeedbackBuffer.create(
+        m_Allocator, sizeof(Feedback),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_AUTO,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 }
 
 void SceneManager::freeResources()
@@ -105,6 +112,8 @@ void SceneManager::receive(const Event* event)
         {
             const GameUpdate* gu = static_cast<const GameUpdate*>(event);
 
+            reedbackFeedback();
+
             break;
         }
     case EventType::ImGuiRender:
@@ -119,7 +128,16 @@ void SceneManager::receive(const Event* event)
                 ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
                 ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
 
-                ImGui::SliderInt("Heat: %d", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
+                ImGui::Text("Max Heat");
+                ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
+
+                ImGui::Text("Hit Data");
+                ImGui::Text("Hitting Brick: %d", m_Feedback.hasHitBrick);
+                ImGui::Text("Hitting Voxel: %d", m_Feedback.hasHitVoxel);
+                ImGui::Text("Super brick Index: %s",
+                            glm::to_string(m_Feedback.superBrickIndex).c_str());
+                ImGui::Text("Brick Index: %s", glm::to_string(m_Feedback.brickIndex).c_str());
+                ImGui::Text("Voxel Index: %s", glm::to_string(m_Feedback.voxelIndex).c_str());
             }
             ImGui::End();
             break;
@@ -152,6 +170,7 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
     m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
     m_VoxelPushConstants.superBrick = m_SuperBrickBuffer.getDeviceAddress(m_Device);
+    m_VoxelPushConstants.feedbackBuffer = m_FeedbackBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
 }
@@ -188,6 +207,7 @@ void SceneManager::freeBuffers()
 {
     m_SuperBrickBuffer.free();
     m_SuperBrick.free();
+    m_FeedbackBuffer.free();
 
     m_Staging.free();
 
@@ -195,6 +215,12 @@ void SceneManager::freeBuffers()
     {
         m_ToBeLoaded[i].free();
     }
+}
+
+void SceneManager::reedbackFeedback()
+{
+    Feedback* data = (Feedback*)m_FeedbackBuffer.getAllocationInfo().pMappedData;
+    m_Feedback = *data;
 }
 
 void SceneManager::createStaging(size_t size)
