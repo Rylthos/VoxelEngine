@@ -2,8 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
-class ShaderModule
-{
+class ShaderModule {
   private:
     VkShaderModule m_Module = 0;
 

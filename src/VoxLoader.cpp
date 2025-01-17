@@ -9,7 +9,8 @@
 typedef std::array<char, 5> VoxID;
 
 VoxLoader::VoxLoader(Chunk* chunk, PaletteManager* paletteManager)
-    : m_Chunk{ chunk }, m_PaletteManager{ paletteManager }
+    : m_Chunk { chunk }
+    , m_PaletteManager { paletteManager }
 {
 }
 
@@ -18,15 +19,13 @@ bool VoxLoader::loadModel(const char* name)
     spdlog::info("Loading Model: {}", name);
 
     std::ifstream inputFile(name, std::ios::in | std::ios::binary);
-    if (!inputFile.is_open())
-    {
+    if (!inputFile.is_open()) {
         spdlog::error("Failed to open {}", name);
         return false;
     }
 
     VoxID mainID = readID(inputFile);
-    if (strcmp(mainID.data(), "VOX ") != 0)
-    {
+    if (strcmp(mainID.data(), "VOX ") != 0) {
         spdlog::error("Unexpected File Format: EXPECTED \"VOX \" GOT {}", mainID.data());
         return false;
     }
@@ -42,48 +41,43 @@ bool VoxLoader::readChunk(std::ifstream& file)
     uint32_t numBytesChunk = readU32(file);
     uint32_t numBytesChildren = readU32(file);
 
-    if (strcmp(chunkID.data(), "MAIN") == 0)
-    {
+    if (strcmp(chunkID.data(), "MAIN") == 0) {
         spdlog::info("Main | Chunk {} | Children {}", numBytesChunk, numBytesChildren);
 
-        if (!readChunk(file)) return false; // Size
-        if (!readChunk(file)) return false; // XYZI
+        if (!readChunk(file))
+            return false; // Size
+        if (!readChunk(file))
+            return false; // XYZI
 
-        if (!file.eof()) return readChunk(file);
+        if (!file.eof())
+            return readChunk(file);
         return true;
-    }
-    else if (strcmp(chunkID.data(), "SIZE") == 0)
-    {
+    } else if (strcmp(chunkID.data(), "SIZE") == 0) {
         uint32_t x = readU32(file);
         uint32_t y = readU32(file);
         uint32_t z = readU32(file);
 
         uint32_t size = std::max(std::max(x, y), z);
         uint32_t closestLog = std::ceil(std::log2((float)size));
-        if (closestLog > MAX_LOG)
-        {
+        if (closestLog > MAX_LOG) {
             spdlog::error("Model Too large");
             return false;
         }
         size = 1 << closestLog;
 
-        if (m_Chunk->getDimensions() < size)
-        {
+        if (m_Chunk->getDimensions() < size) {
             spdlog::error("Chunk size too small for model");
             return false;
         }
 
         spdlog::info("SIZE | X: {} | Y: {} | Z: {}", x, y, z);
         return true;
-    }
-    else if (strcmp(chunkID.data(), "XYZI") == 0)
-    {
+    } else if (strcmp(chunkID.data(), "XYZI") == 0) {
         uint32_t numVoxels = readU32(file);
 
         spdlog::info("XYZI | Reading {} voxels", numVoxels);
 
-        for (size_t i = 0; i < numVoxels; i++)
-        {
+        for (size_t i = 0; i < numVoxels; i++) {
             uint8_t x = readU8(file);
             uint8_t z = readU8(file);
             uint8_t y = m_Chunk->getDimensions() - readU8(file) - 1;
@@ -95,11 +89,8 @@ bool VoxLoader::readChunk(std::ifstream& file)
                 m_Chunk->setVoxel({ x, y, z }, { .colourIndex = (int16_t)(255 - c) });
         }
         return true;
-    }
-    else if (strcmp(chunkID.data(), "RGBA") == 0)
-    {
-        for (int i = 0; i < 255; i++)
-        {
+    } else if (strcmp(chunkID.data(), "RGBA") == 0) {
+        for (int i = 0; i < 255; i++) {
             uint8_t R = readU8(file);
             uint8_t G = readU8(file);
             uint8_t B = readU8(file);
@@ -113,14 +104,10 @@ bool VoxLoader::readChunk(std::ifstream& file)
             m_PaletteManager->setColourIndex(i, { r, g, b, a });
         }
         return true;
-    }
-    else if (strcmp(chunkID.data(), "PACK") == 0)
-    {
+    } else if (strcmp(chunkID.data(), "PACK") == 0) {
         spdlog::error("Vox models with PAX not supported");
         return false;
-    }
-    else
-    {
+    } else {
         spdlog::error("Unexpected ID : GOT {}", chunkID.data());
     }
     return false;
@@ -141,8 +128,7 @@ uint32_t VoxLoader::readU32(std::ifstream& file)
 {
     std::array<uint8_t, 4> bytes = readBytes<4>(file);
     uint32_t data = 0;
-    for (size_t i = 0; i < 4; i++)
-    {
+    for (size_t i = 0; i < 4; i++) {
         data |= bytes[i] << (8u * i);
     }
 

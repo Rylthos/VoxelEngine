@@ -1,5 +1,5 @@
 #include "Events.hpp"
 
-EventReceiver::~EventReceiver() {}
+EventReceiver::~EventReceiver() { }
 
-void EventReceiver::receive(const Event* event) {}
+void EventReceiver::receive(const Event* event) { }

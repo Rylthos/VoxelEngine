@@ -60,10 +60,9 @@ struct VoxelPushConstants {
     VkDeviceAddress feedbackBuffer;
 };
 
-class SceneManager : public EventReceiver
-{
+class SceneManager : public EventReceiver {
   public:
-    SceneManager() {}
+    SceneManager() { }
     ~SceneManager() { freeResources(); }
     SceneManager(PaletteManager* paletteManager, Camera* camera);
     SceneManager(SceneManager& other);
@@ -101,7 +100,7 @@ class SceneManager : public EventReceiver
     Buffer m_FeedbackBuffer;
     Feedback m_Feedback;
 
-    glm::ivec3 m_CurrentChunk{ -10, -10, -10 };
+    glm::ivec3 m_CurrentChunk { -10, -10, -10 };
     int m_ChunkRange = 2;
 
   private:

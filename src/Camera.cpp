@@ -9,15 +9,26 @@
 
 #include <imgui.h>
 
-Camera::Camera() : m_Position{ 0.f, 0.f, 0.f }, m_Yaw{ 0.f }, m_Pitch{ 0.f } { updateAxis(); }
+Camera::Camera()
+    : m_Position { 0.f, 0.f, 0.f }
+    , m_Yaw { 0.f }
+    , m_Pitch { 0.f }
+{
+    updateAxis();
+}
 
-Camera::Camera(glm::vec3 position) : m_Position{ position }, m_Yaw{ 0.f }, m_Pitch{ 0.f }
+Camera::Camera(glm::vec3 position)
+    : m_Position { position }
+    , m_Yaw { 0.f }
+    , m_Pitch { 0.f }
 {
     updateAxis();
 }
 
 Camera::Camera(glm::vec3 position, float yaw, float pitch)
-    : m_Position{ position }, m_Yaw{ yaw }, m_Pitch{ pitch }
+    : m_Position { position }
+    , m_Yaw { yaw }
+    , m_Pitch { pitch }
 {
     updateAxis();
 }
@@ -35,84 +46,85 @@ void Camera::receive(const Event* event)
 {
     static std::map<uint32_t, bool> m_PressedKeys;
 
-    switch (event->getType())
-    {
-    case EventType::KeyboardInput:
-        {
-            const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
+    switch (event->getType()) {
+    case EventType::KeyboardInput: {
+        const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
 
-            m_PressedKeys[ki->key] = (ki->action != GLFW_RELEASE);
+        m_PressedKeys[ki->key] = (ki->action != GLFW_RELEASE);
 
+        break;
+    }
+    case EventType::MouseMove: {
+        const MouseMove* mi = reinterpret_cast<const MouseMove*>(event);
+        if (!mi->captured)
             break;
+
+        const float mouseSensitivity = 0.5;
+        m_Yaw -= mi->delta.x * mouseSensitivity;
+        m_Pitch += mi->delta.y * mouseSensitivity;
+        m_Pitch = std::clamp(m_Pitch, -89.9f, 89.9f);
+
+        updateAxis();
+
+        break;
+    }
+    case EventType::GameUpdate: {
+        const GameUpdate* gu = reinterpret_cast<const GameUpdate*>(event);
+
+        glm::vec3 direction { 0.f };
+        float speed = m_MovementSpeed;
+
+        glm::vec3 forward = m_Forward;
+        glm::vec3 right = m_Right;
+        if (m_LockXZPlaneMovement) {
+            forward.y = 0.;
+            forward = glm::normalize(forward);
         }
-    case EventType::MouseMove:
-        {
-            const MouseMove* mi = reinterpret_cast<const MouseMove*>(event);
-            if (!mi->captured) break;
 
-            const float mouseSensitivity = 0.5;
-            m_Yaw -= mi->delta.x * mouseSensitivity;
-            m_Pitch += mi->delta.y * mouseSensitivity;
-            m_Pitch = std::clamp(m_Pitch, -89.9f, 89.9f);
+        if (m_PressedKeys[GLFW_KEY_W])
+            direction += forward;
+        if (m_PressedKeys[GLFW_KEY_S])
+            direction -= forward;
+        if (m_PressedKeys[GLFW_KEY_A])
+            direction -= right;
+        if (m_PressedKeys[GLFW_KEY_D])
+            direction += right;
+        if (m_PressedKeys[GLFW_KEY_SPACE])
+            direction += m_WorldUp;
+        if (m_PressedKeys[GLFW_KEY_LEFT_CONTROL])
+            direction -= m_WorldUp;
+        if (m_PressedKeys[GLFW_KEY_LEFT_SHIFT])
+            speed *= m_Speedup;
 
-            updateAxis();
+        m_Position += direction * speed * gu->frameDelta;
 
-            break;
+        break;
+    }
+    case EventType::ImGuiRender: {
+        if (ImGui::Begin("Camera")) {
+            glm::vec3 camPos = getPosition();
+            ImGui::Text("Camera Position");
+            ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camPos.x, camPos.y, camPos.z);
+
+            glm::vec3 camForward = getForward();
+            ImGui::Text("Camera Forward");
+            ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camForward.x, camForward.y, camForward.z);
+
+            glm::vec3 camRight = getRight();
+            ImGui::Text("Camera Right");
+            ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camRight.x, camRight.y, camRight.z);
+
+            glm::vec3 camUp = getUp();
+            ImGui::Text("Camera Up");
+            ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
+
+            ImGui::Checkbox("Lock XZ Movement", &m_LockXZPlaneMovement);
+
+            ImGui::Text("Speedup Movement Speed");
+            ImGui::SliderFloat("##MovementSpeed", &m_Speedup, 0.5f, 15.0f);
         }
-    case EventType::GameUpdate:
-        {
-            const GameUpdate* gu = reinterpret_cast<const GameUpdate*>(event);
-
-            glm::vec3 direction{ 0.f };
-            float speed = m_MovementSpeed;
-
-            glm::vec3 forward = m_Forward;
-            glm::vec3 right = m_Right;
-            if (m_LockXZPlaneMovement)
-            {
-                forward.y = 0.;
-                forward = glm::normalize(forward);
-            }
-
-            if (m_PressedKeys[GLFW_KEY_W]) direction += forward;
-            if (m_PressedKeys[GLFW_KEY_S]) direction -= forward;
-            if (m_PressedKeys[GLFW_KEY_A]) direction -= right;
-            if (m_PressedKeys[GLFW_KEY_D]) direction += right;
-            if (m_PressedKeys[GLFW_KEY_SPACE]) direction += m_WorldUp;
-            if (m_PressedKeys[GLFW_KEY_LEFT_CONTROL]) direction -= m_WorldUp;
-            if (m_PressedKeys[GLFW_KEY_LEFT_SHIFT]) speed *= m_Speedup;
-
-            m_Position += direction * speed * gu->frameDelta;
-
-            break;
-        }
-    case EventType::ImGuiRender:
-        {
-            if (ImGui::Begin("Camera"))
-            {
-                glm::vec3 camPos = getPosition();
-                ImGui::Text("Camera Position");
-                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camPos.x, camPos.y, camPos.z);
-
-                glm::vec3 camForward = getForward();
-                ImGui::Text("Camera Forward");
-                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camForward.x, camForward.y, camForward.z);
-
-                glm::vec3 camRight = getRight();
-                ImGui::Text("Camera Right");
-                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camRight.x, camRight.y, camRight.z);
-
-                glm::vec3 camUp = getUp();
-                ImGui::Text("Camera Up");
-                ImGui::Text("X: %.3f Y: %.3f Z: %.3f", camUp.x, camUp.y, camUp.z);
-
-                ImGui::Checkbox("Lock XZ Movement", &m_LockXZPlaneMovement);
-
-                ImGui::Text("Speedup Movement Speed");
-                ImGui::SliderFloat("##MovementSpeed", &m_Speedup, 0.5f, 15.0f);
-            }
-            ImGui::End();
-        }
+        ImGui::End();
+    }
     default:
         break;
     }

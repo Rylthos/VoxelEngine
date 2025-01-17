@@ -9,11 +9,11 @@ void EventHandler::dispatchEvent(const Event* event)
     EventType type = event->getType();
     auto it = s_Receivers.find(type);
 
-    if (it == s_Receivers.end()) return;
+    if (it == s_Receivers.end())
+        return;
 
     std::set<EventReceiver*>& receivers = it->second;
-    for (EventReceiver* receiver : receivers)
-    {
+    for (EventReceiver* receiver : receivers) {
         receiver->receive(event);
     }
 }
@@ -26,8 +26,7 @@ void EventHandler::subscribe(EventType event, EventReceiver* receiver)
 
 void EventHandler::subscribe(std::initializer_list<EventType> events, EventReceiver* receiver)
 {
-    for (EventType event : events)
-    {
+    for (EventType event : events) {
         subscribe(event, receiver);
     }
 }

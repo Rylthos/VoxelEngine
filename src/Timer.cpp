@@ -11,8 +11,7 @@ std::unordered_map<std::string, TimeObject> Timer::s_TrackedTimes;
 void Timer::startTimer(const std::string& name)
 {
     TimeObject time;
-    if (s_TrackedTimes.contains(name))
-    {
+    if (s_TrackedTimes.contains(name)) {
         time = s_TrackedTimes.at(name);
     }
     time.start = std::chrono::steady_clock::now();
@@ -41,15 +40,12 @@ void Timer::stopTimer(const std::string& name)
 void Timer::ImGuiRender()
 {
     std::map<std::string, int64_t> times;
-    for (auto& pair : s_TrackedTimes)
-    {
+    for (auto& pair : s_TrackedTimes) {
         times.emplace(pair.first, pair.second.duration.count());
     }
 
-    if (ImGui::Begin("Timings"))
-    {
-        for (auto pair : times)
-        {
+    if (ImGui::Begin("Timings")) {
+        for (auto pair : times) {
             ImGui::Text("%s", std::format("{}: {}ms", pair.first, pair.second).c_str());
         }
     }

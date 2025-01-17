@@ -4,8 +4,7 @@
 
 #include <functional>
 
-class ImmediateSubmit
-{
+class ImmediateSubmit {
   public:
     static void init(VkDevice device, VkQueue graphicsQueue, uint32_t graphicsQueueFamily);
     static void submit(std::function<void(VkCommandBuffer cmd)>&& function);

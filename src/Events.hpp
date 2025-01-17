@@ -71,8 +71,7 @@ struct WindowResize : public Event {
     int newHeight;
 };
 
-class EventReceiver
-{
+class EventReceiver {
   public:
     virtual ~EventReceiver();
 

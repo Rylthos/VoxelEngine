@@ -14,7 +14,7 @@ void ImmediateSubmit::init(VkDevice device, VkQueue graphicsQueue, uint32_t grap
     m_Device = device;
     m_GraphicsQueue = graphicsQueue;
 
-    VkCommandPoolCreateInfo commandPoolCI{};
+    VkCommandPoolCreateInfo commandPoolCI {};
     commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolCI.pNext = nullptr;
     commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -22,7 +22,7 @@ void ImmediateSubmit::init(VkDevice device, VkQueue graphicsQueue, uint32_t grap
 
     VK_CHECK(vkCreateCommandPool(device, &commandPoolCI, nullptr, &m_CommandPool));
 
-    VkCommandBufferAllocateInfo commandBufferAI{};
+    VkCommandBufferAllocateInfo commandBufferAI {};
     commandBufferAI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     commandBufferAI.pNext = nullptr;
     commandBufferAI.commandPool = m_CommandPool;
@@ -31,7 +31,7 @@ void ImmediateSubmit::init(VkDevice device, VkQueue graphicsQueue, uint32_t grap
 
     VK_CHECK(vkAllocateCommandBuffers(m_Device, &commandBufferAI, &m_CommandBuffer));
 
-    VkFenceCreateInfo fenceCI{};
+    VkFenceCreateInfo fenceCI {};
     fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceCI.pNext = nullptr;
     fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -44,7 +44,7 @@ void ImmediateSubmit::submit(std::function<void(VkCommandBuffer cmd)>&& function
     VK_CHECK(vkResetFences(m_Device, 1, &m_Fence));
     VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
 
-    VkCommandBufferBeginInfo commandBufferBI{};
+    VkCommandBufferBeginInfo commandBufferBI {};
     commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     commandBufferBI.pNext = nullptr;
     commandBufferBI.pInheritanceInfo = nullptr;
@@ -56,13 +56,13 @@ void ImmediateSubmit::submit(std::function<void(VkCommandBuffer cmd)>&& function
 
     VK_CHECK(vkEndCommandBuffer(m_CommandBuffer));
 
-    VkCommandBufferSubmitInfo commandBufferSI{};
+    VkCommandBufferSubmitInfo commandBufferSI {};
     commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
     commandBufferSI.pNext = nullptr;
     commandBufferSI.commandBuffer = m_CommandBuffer;
     commandBufferSI.deviceMask = 0;
 
-    VkSubmitInfo2 submitInfo{};
+    VkSubmitInfo2 submitInfo {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
     submitInfo.pNext = nullptr;
     submitInfo.commandBufferInfoCount = 1;

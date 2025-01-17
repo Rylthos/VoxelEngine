@@ -10,8 +10,7 @@ enum class EventType;
 struct Event;
 class EventReceiver;
 
-class EventHandler
-{
+class EventHandler {
   public:
     static void dispatchEvent(const Event* event);
 
@@ -19,7 +18,7 @@ class EventHandler
     static void subscribe(std::initializer_list<EventType> events, EventReceiver* receiver);
 
   private:
-    EventHandler() {}
+    EventHandler() { }
 
   private:
     static std::map<EventType, std::set<EventReceiver*>> s_Receivers;

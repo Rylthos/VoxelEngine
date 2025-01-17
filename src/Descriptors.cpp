@@ -4,17 +4,17 @@
 
 DescriptorLayoutBuilder DescriptorLayoutBuilder::start(VkDevice device)
 {
-    DescriptorLayoutBuilder builder{ device };
+    DescriptorLayoutBuilder builder { device };
 
     return builder;
 }
 
 DescriptorLayoutBuilder& DescriptorLayoutBuilder::addBinding(uint32_t binding,
-                                                             VkDescriptorType descriptorType,
-                                                             VkShaderStageFlags shaderStages,
-                                                             uint32_t count)
+    VkDescriptorType descriptorType,
+    VkShaderStageFlags shaderStages,
+    uint32_t count)
 {
-    VkDescriptorSetLayoutBinding layoutBinding{};
+    VkDescriptorSetLayoutBinding layoutBinding {};
     layoutBinding.binding = binding;
     layoutBinding.descriptorCount = count;
     layoutBinding.descriptorType = descriptorType;
@@ -27,7 +27,7 @@ DescriptorLayoutBuilder& DescriptorLayoutBuilder::addBinding(uint32_t binding,
 }
 
 DescriptorLayoutBuilder& DescriptorLayoutBuilder::addStorageBuffer(uint32_t binding,
-                                                                   VkShaderStageFlags shaderStages)
+    VkShaderStageFlags shaderStages)
 {
     addBinding(binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, shaderStages);
 
@@ -35,7 +35,7 @@ DescriptorLayoutBuilder& DescriptorLayoutBuilder::addStorageBuffer(uint32_t bind
 }
 
 DescriptorLayoutBuilder& DescriptorLayoutBuilder::addStorageImage(uint32_t binding,
-                                                                  VkShaderStageFlags shaderStages)
+    VkShaderStageFlags shaderStages)
 {
     addBinding(binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, shaderStages);
 
@@ -44,7 +44,7 @@ DescriptorLayoutBuilder& DescriptorLayoutBuilder::addStorageImage(uint32_t bindi
 
 DescriptorLayoutBuilder&
 DescriptorLayoutBuilder::addStorageImageArray(uint32_t binding, int count,
-                                              VkShaderStageFlags shaderStages)
+    VkShaderStageFlags shaderStages)
 {
     addBinding(binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, shaderStages, count);
 
@@ -61,7 +61,7 @@ DescriptorLayoutBuilder::addCombinedImageSampler(uint32_t binding, VkShaderStage
 
 VkDescriptorSetLayout DescriptorLayoutBuilder::build()
 {
-    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI {};
     descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(m_Bindings.size());
     descriptorSetLayoutCI.pBindings = m_Bindings.data();
@@ -75,168 +75,165 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build()
 DescriptorLayoutBuilder::DescriptorLayoutBuilder(VkDevice device) { m_Device = device; }
 
 DescriptorSetBuilder DescriptorSetBuilder::start(VkDevice device, VkDescriptorPool pool,
-                                                 size_t setCount, VkDescriptorSetLayout layout)
+    size_t setCount, VkDescriptorSetLayout layout)
 {
-    DescriptorSetBuilder builder{ device, pool, setCount, layout };
+    DescriptorSetBuilder builder { device, pool, setCount, layout };
     return builder;
 }
 
 DescriptorSetBuilder DescriptorSetBuilder::start(VkDevice device, VkDescriptorPool pool,
-                                                 VkDescriptorSetLayout layout)
+    VkDescriptorSetLayout layout)
 {
-    DescriptorSetBuilder builder{ device, pool, 1, layout };
+    DescriptorSetBuilder builder { device, pool, 1, layout };
     return builder;
 }
 
 DescriptorSetBuilder&
 DescriptorSetBuilder::addWriteDescriptorSet(uint32_t binding, VkDescriptorType type,
-                                            VkDescriptorImageInfo* imageInfo,
-                                            VkDescriptorBufferInfo* bufferInfo)
+    VkDescriptorImageInfo* imageInfo,
+    VkDescriptorBufferInfo* bufferInfo)
 {
     m_DescriptorWrites[-1].push_back(
-        VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                              .dstBinding = binding,
-                              .dstArrayElement = 0,
-                              .descriptorCount = 1,
-                              .descriptorType = type,
-                              .pImageInfo = imageInfo,
-                              .pBufferInfo = bufferInfo,
-                              .pTexelBufferView = nullptr });
+        VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = type,
+            .pImageInfo = imageInfo,
+            .pBufferInfo = bufferInfo,
+            .pTexelBufferView = nullptr });
     return *this;
 }
 
 DescriptorSetBuilder& DescriptorSetBuilder::addCombinedImageSampler(uint32_t binding,
-                                                                    VkImageLayout imageLayout,
-                                                                    VkImageView imageView,
-                                                                    VkSampler sampler)
+    VkImageLayout imageLayout,
+    VkImageView imageView,
+    VkSampler sampler)
 {
-    m_ImageInfos.push_back(VkDescriptorImageInfo{
+    m_ImageInfos.push_back(VkDescriptorImageInfo {
         .sampler = sampler,
         .imageView = imageView,
         .imageLayout = imageLayout,
     });
 
     m_DescriptorWrites[-1].push_back(
-        VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                              .dstBinding = binding,
-                              .dstArrayElement = 0,
-                              .descriptorCount = 1,
-                              .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                              .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
-                              .pBufferInfo = nullptr,
-                              .pTexelBufferView = nullptr });
+        VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
+            .pBufferInfo = nullptr,
+            .pTexelBufferView = nullptr });
 
     return *this;
 }
 
 DescriptorSetBuilder& DescriptorSetBuilder::addStorageImage(uint32_t binding,
-                                                            VkImageLayout imageLayout,
-                                                            VkImageView imageView)
+    VkImageLayout imageLayout,
+    VkImageView imageView)
 {
-    m_ImageInfos.push_back(VkDescriptorImageInfo{
+    m_ImageInfos.push_back(VkDescriptorImageInfo {
         .sampler = 0,
         .imageView = imageView,
         .imageLayout = imageLayout,
     });
 
     m_DescriptorWrites[-1].push_back(
-        VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                              .dstBinding = binding,
-                              .dstArrayElement = 0,
-                              .descriptorCount = 1,
-                              .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                              .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
-                              .pBufferInfo = nullptr,
-                              .pTexelBufferView = nullptr });
+        VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
+            .pBufferInfo = nullptr,
+            .pTexelBufferView = nullptr });
 
     return *this;
 }
 
 DescriptorSetBuilder&
 DescriptorSetBuilder::addStorageImageArray(uint32_t binding, VkImageLayout imageLayout,
-                                           std::vector<VkImageView> imageViews)
+    std::vector<VkImageView> imageViews)
 {
-    for (size_t i = 0; i < imageViews.size(); i++)
-    {
-        m_ImageInfos.push_back(VkDescriptorImageInfo{
+    for (size_t i = 0; i < imageViews.size(); i++) {
+        m_ImageInfos.push_back(VkDescriptorImageInfo {
             .sampler = 0,
             .imageView = imageViews.at(i),
             .imageLayout = imageLayout,
         });
 
         m_DescriptorWrites[-1].push_back(
-            VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                  .dstBinding = binding,
-                                  .dstArrayElement = (uint32_t)i,
-                                  .descriptorCount = 1,
-                                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                  .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
-                                  .pBufferInfo = nullptr,
-                                  .pTexelBufferView = nullptr });
+            VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstBinding = binding,
+                .dstArrayElement = (uint32_t)i,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = (VkDescriptorImageInfo*)m_ImageInfos.size(),
+                .pBufferInfo = nullptr,
+                .pTexelBufferView = nullptr });
     }
 
     return *this;
 }
 
 DescriptorSetBuilder& DescriptorSetBuilder::addStorageBuffer(uint32_t binding, VkBuffer buffer,
-                                                             uint32_t offset, size_t range)
+    uint32_t offset, size_t range)
 {
     m_BufferInfos.push_back(
-        VkDescriptorBufferInfo{ .buffer = buffer, .offset = offset, .range = range });
+        VkDescriptorBufferInfo { .buffer = buffer, .offset = offset, .range = range });
 
     m_DescriptorWrites[-1].push_back(
-        VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                              .dstBinding = binding,
-                              .dstArrayElement = 0,
-                              .descriptorCount = 1,
-                              .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                              .pImageInfo = nullptr,
-                              .pBufferInfo = (VkDescriptorBufferInfo*)m_BufferInfos.size(),
-                              .pTexelBufferView = nullptr });
+        VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = binding,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pImageInfo = nullptr,
+            .pBufferInfo = (VkDescriptorBufferInfo*)m_BufferInfos.size(),
+            .pTexelBufferView = nullptr });
     return *this;
 }
 
 DescriptorSetBuilder& DescriptorSetBuilder::addStorageBuffers(uint32_t binding,
-                                                              const std::span<VkBuffer>& buffers,
-                                                              uint32_t offset, size_t range)
+    const std::span<VkBuffer>& buffers,
+    uint32_t offset, size_t range)
 {
-    for (size_t i = 0; i < buffers.size(); i++)
-    {
+    for (size_t i = 0; i < buffers.size(); i++) {
         m_BufferInfos.push_back(
-            VkDescriptorBufferInfo{ .buffer = buffers[i], .offset = offset, .range = range });
+            VkDescriptorBufferInfo { .buffer = buffers[i], .offset = offset, .range = range });
 
         m_DescriptorWrites[i].push_back(
-            VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                  .dstBinding = binding,
-                                  .dstArrayElement = 0,
-                                  .descriptorCount = 1,
-                                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                  .pImageInfo = nullptr,
-                                  .pBufferInfo = (VkDescriptorBufferInfo*)m_BufferInfos.size(),
-                                  .pTexelBufferView = nullptr });
+            VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstBinding = binding,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pImageInfo = nullptr,
+                .pBufferInfo = (VkDescriptorBufferInfo*)m_BufferInfos.size(),
+                .pTexelBufferView = nullptr });
     }
 
     return *this;
 }
 
 DescriptorSetBuilder& DescriptorSetBuilder::addStorageBuffers(uint32_t binding,
-                                                              const std::span<Buffer>& buffers,
-                                                              uint32_t offset, size_t range)
+    const std::span<Buffer>& buffers,
+    uint32_t offset, size_t range)
 {
-    for (size_t i = 0; i < buffers.size(); i++)
-    {
-        m_BufferInfos.push_back(VkDescriptorBufferInfo{
+    for (size_t i = 0; i < buffers.size(); i++) {
+        m_BufferInfos.push_back(VkDescriptorBufferInfo {
             .buffer = buffers[i].getBuffer(), .offset = offset, .range = range });
 
         m_DescriptorWrites[i].push_back(
-            VkWriteDescriptorSet{ .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                  .dstBinding = binding,
-                                  .dstArrayElement = 0,
-                                  .descriptorCount = 1,
-                                  .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                                  .pImageInfo = nullptr,
-                                  .pBufferInfo = (VkDescriptorBufferInfo*)m_BufferInfos.size(),
-                                  .pTexelBufferView = nullptr });
+            VkWriteDescriptorSet { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstBinding = binding,
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pImageInfo = nullptr,
+                .pBufferInfo = (VkDescriptorBufferInfo*)m_BufferInfos.size(),
+                .pTexelBufferView = nullptr });
     }
 
     return *this;
@@ -244,14 +241,12 @@ DescriptorSetBuilder& DescriptorSetBuilder::addStorageBuffers(uint32_t binding,
 
 std::vector<VkDescriptorSet> DescriptorSetBuilder::build()
 {
-    for (size_t i = 0; i < m_Sets; i++)
-    {
+    for (size_t i = 0; i < m_Sets; i++) {
         std::vector<VkWriteDescriptorSet> sets = m_DescriptorWrites[-1];
 
         sets.insert(sets.end(), m_DescriptorWrites[i].begin(), m_DescriptorWrites[i].end());
 
-        for (VkWriteDescriptorSet& set : sets)
-        {
+        for (VkWriteDescriptorSet& set : sets) {
             set.dstSet = m_DescriptorSets.at(i);
             if (set.pBufferInfo != nullptr)
                 set.pBufferInfo = &m_BufferInfos[(size_t)(set.pBufferInfo) - 1];
@@ -261,7 +256,7 @@ std::vector<VkDescriptorSet> DescriptorSetBuilder::build()
         }
 
         vkUpdateDescriptorSets(m_Device, static_cast<uint32_t>(sets.size()), sets.data(), 0,
-                               nullptr);
+            nullptr);
     }
 
     spdlog::info("Built Descriptor Set");
@@ -270,8 +265,10 @@ std::vector<VkDescriptorSet> DescriptorSetBuilder::build()
 }
 
 DescriptorSetBuilder::DescriptorSetBuilder(VkDevice device, VkDescriptorPool pool, size_t setCount,
-                                           VkDescriptorSetLayout layout)
-    : m_Device{ device }, m_Sets{ setCount }, m_Layout{ layout }
+    VkDescriptorSetLayout layout)
+    : m_Device { device }
+    , m_Sets { setCount }
+    , m_Layout { layout }
 {
     allocate(pool);
 }
@@ -279,7 +276,7 @@ DescriptorSetBuilder::DescriptorSetBuilder(VkDevice device, VkDescriptorPool poo
 void DescriptorSetBuilder::allocate(VkDescriptorPool pool)
 {
     std::vector<VkDescriptorSetLayout> layouts(m_Sets, m_Layout);
-    VkDescriptorSetAllocateInfo descriptorSetAI{};
+    VkDescriptorSetAllocateInfo descriptorSetAI {};
     descriptorSetAI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     descriptorSetAI.descriptorPool = pool;
     descriptorSetAI.descriptorSetCount = static_cast<uint32_t>(layouts.size());

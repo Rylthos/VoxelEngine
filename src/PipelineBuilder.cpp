@@ -26,8 +26,7 @@ PipelineBuilder&
 PipelineBuilder::setShaders(std::span<std::pair<VkShaderStageFlagBits, VkShaderModule>> shaders)
 {
     m_ShaderStages.clear();
-    for (auto pair : shaders)
-    {
+    for (auto pair : shaders) {
         addShader(pair.first, pair.second);
     }
 
@@ -38,8 +37,7 @@ PipelineBuilder& PipelineBuilder::setShaders(
     std::initializer_list<std::pair<VkShaderStageFlagBits, VkShaderModule>> shaders)
 {
     m_ShaderStages.clear();
-    for (auto pair : shaders)
-    {
+    for (auto pair : shaders) {
         addShader(pair.first, pair.second);
     }
 
@@ -59,7 +57,7 @@ PipelineBuilder& PipelineBuilder::inputAssembly(VkPrimitiveTopology topology)
 }
 
 PipelineBuilder& PipelineBuilder::rasterizer(VkPolygonMode mode, VkCullModeFlags cullMode,
-                                             VkFrontFace frontFace)
+    VkFrontFace frontFace)
 {
     m_RasterizerCI = {};
     m_RasterizerCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -96,8 +94,7 @@ PipelineBuilder& PipelineBuilder::disableBlending()
 {
     m_ColourBlendAttachment = {};
     m_ColourBlendAttachment.blendEnable = VK_FALSE;
-    m_ColourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    m_ColourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 
     return *this;
 }
@@ -106,8 +103,7 @@ PipelineBuilder& PipelineBuilder::enableBlendingAdditive()
 {
     m_ColourBlendAttachment = {};
     m_ColourBlendAttachment.blendEnable = VK_TRUE;
-    m_ColourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    m_ColourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     m_ColourBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
     m_ColourBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
     m_ColourBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
@@ -122,8 +118,7 @@ PipelineBuilder& PipelineBuilder::enableBlendingAlphablend()
 {
     m_ColourBlendAttachment = {};
     m_ColourBlendAttachment.blendEnable = VK_TRUE;
-    m_ColourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-                                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    m_ColourBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     m_ColourBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
     m_ColourBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
     m_ColourBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
@@ -192,13 +187,13 @@ PipelineBuilder& PipelineBuilder::enableDepthTest(bool depthWriteEnable, VkCompa
 
 VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 {
-    VkPipelineViewportStateCreateInfo viewportCI{};
+    VkPipelineViewportStateCreateInfo viewportCI {};
     viewportCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewportCI.pNext = nullptr;
     viewportCI.viewportCount = 1;
     viewportCI.scissorCount = 1;
 
-    VkPipelineColorBlendStateCreateInfo colourBlendingCI{};
+    VkPipelineColorBlendStateCreateInfo colourBlendingCI {};
     colourBlendingCI.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colourBlendingCI.pNext = nullptr;
     colourBlendingCI.logicOpEnable = VK_FALSE;
@@ -206,18 +201,18 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
     colourBlendingCI.attachmentCount = 1;
     colourBlendingCI.pAttachments = &m_ColourBlendAttachment;
 
-    VkPipelineVertexInputStateCreateInfo vertexInputCI{};
+    VkPipelineVertexInputStateCreateInfo vertexInputCI {};
     vertexInputCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputCI.pNext = nullptr;
 
     VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-    VkPipelineDynamicStateCreateInfo dynamicStateCI{};
+    VkPipelineDynamicStateCreateInfo dynamicStateCI {};
     dynamicStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
     dynamicStateCI.pNext = nullptr;
     dynamicStateCI.dynamicStateCount = 2;
     dynamicStateCI.pDynamicStates = dynamicStates;
 
-    VkGraphicsPipelineCreateInfo graphicsPipelineCI{};
+    VkGraphicsPipelineCreateInfo graphicsPipelineCI {};
     graphicsPipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
     graphicsPipelineCI.pNext = &m_RenderCI;
     graphicsPipelineCI.stageCount = static_cast<uint32_t>(m_ShaderStages.size());
@@ -234,7 +229,7 @@ VkPipeline PipelineBuilder::buildPipeline(VkDevice device)
 
     VkPipeline newPipeline;
     VK_CHECK(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphicsPipelineCI, nullptr,
-                                       &newPipeline));
+        &newPipeline));
 
     return newPipeline;
 }
@@ -254,7 +249,7 @@ void PipelineBuilder::clear()
 
 void PipelineBuilder::addShader(VkShaderStageFlagBits stage, VkShaderModule module)
 {
-    VkPipelineShaderStageCreateInfo shaderCI{};
+    VkPipelineShaderStageCreateInfo shaderCI {};
     shaderCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shaderCI.pNext = nullptr;
     shaderCI.flags = 0;

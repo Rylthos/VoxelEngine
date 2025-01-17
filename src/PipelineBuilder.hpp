@@ -5,8 +5,7 @@
 #include <span>
 #include <vector>
 
-class PipelineBuilder
-{
+class PipelineBuilder {
   private:
     std::vector<VkPipelineShaderStageCreateInfo> m_ShaderStages;
 
@@ -33,7 +32,7 @@ class PipelineBuilder
 
     PipelineBuilder& inputAssembly(VkPrimitiveTopology topology);
     PipelineBuilder& rasterizer(VkPolygonMode mode, VkCullModeFlags cullMode,
-                                VkFrontFace frontFace);
+        VkFrontFace frontFace);
     PipelineBuilder& setMultisampleNone();
 
     PipelineBuilder& disableBlending();

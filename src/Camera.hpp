@@ -4,8 +4,7 @@
 
 #include "Events.hpp"
 
-class Camera : public EventReceiver
-{
+class Camera : public EventReceiver {
   public:
     Camera();
     Camera(glm::vec3 position);

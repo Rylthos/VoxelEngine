@@ -3,13 +3,12 @@
 #include <deque>
 #include <functional>
 
-class DeletionQueue
-{
+class DeletionQueue {
   private:
     std::deque<std::function<void()>> m_Deletors;
 
   public:
-    DeletionQueue() {}
+    DeletionQueue() { }
     ~DeletionQueue() { flush(); }
     DeletionQueue(DeletionQueue&) = delete;
     DeletionQueue(DeletionQueue&&) = delete;
@@ -18,8 +17,7 @@ class DeletionQueue
 
     void flush()
     {
-        for (auto it = m_Deletors.rbegin(); it != m_Deletors.rend(); it++)
-        {
+        for (auto it = m_Deletors.rbegin(); it != m_Deletors.rend(); it++) {
             (*it)();
         }
         m_Deletors.clear();

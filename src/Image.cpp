@@ -2,20 +2,20 @@
 
 #include "VkCheck.hpp"
 
-Image::Image() {}
+Image::Image() { }
 
 Image::~Image() { free(); }
 
 void Image::create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, VkImageType type,
-                   VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
-                   VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels)
+    VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
+    VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels)
 {
     m_Allocator = allocator;
     m_Format = format;
     m_Extent = extent;
     m_MipLevels = mipLevels;
 
-    VkImageCreateInfo imageCI{};
+    VkImageCreateInfo imageCI {};
     imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageCI.pNext = nullptr;
     imageCI.imageType = type;
@@ -27,7 +27,7 @@ void Image::create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, V
     imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageCI.usage = usage;
 
-    VmaAllocationCreateInfo vmaImageCI{};
+    VmaAllocationCreateInfo vmaImageCI {};
     vmaImageCI.usage = memoryUsage;
     vmaImageCI.requiredFlags = memoryProperties;
     VK_CHECK(vmaCreateImage(m_Allocator, &imageCI, &vmaImageCI, &m_Image, &m_Allocation, nullptr));
@@ -36,7 +36,7 @@ void Image::create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, V
 void Image::createImageView(VkDevice device, VkImageViewType viewType)
 {
     m_Device = device;
-    VkImageViewCreateInfo imageViewCI{};
+    VkImageViewCreateInfo imageViewCI {};
     imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     imageViewCI.pNext = nullptr;
     imageViewCI.viewType = viewType;
@@ -53,14 +53,12 @@ void Image::createImageView(VkDevice device, VkImageViewType viewType)
 
 void Image::free()
 {
-    if (m_ImageView != 0)
-    {
+    if (m_ImageView != 0) {
         vkDestroyImageView(m_Device, m_ImageView, nullptr);
         m_ImageView = 0;
     }
 
-    if (m_Image != 0)
-    {
+    if (m_Image != 0) {
         vmaDestroyImage(m_Allocator, m_Image, m_Allocation);
         m_Image = 0;
     }
@@ -72,9 +70,9 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImageLayout current, VkI
 }
 
 void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current,
-                       VkImageLayout target)
+    VkImageLayout target)
 {
-    VkImageMemoryBarrier2 imageBarrier{};
+    VkImageMemoryBarrier2 imageBarrier {};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
     imageBarrier.pNext = nullptr;
     imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -86,8 +84,8 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayo
     imageBarrier.newLayout = target;
 
     VkImageAspectFlags aspectMask = (target == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
-                                        ? VK_IMAGE_ASPECT_DEPTH_BIT
-                                        : VK_IMAGE_ASPECT_COLOR_BIT;
+        ? VK_IMAGE_ASPECT_DEPTH_BIT
+        : VK_IMAGE_ASPECT_COLOR_BIT;
     imageBarrier.subresourceRange.aspectMask = aspectMask;
     imageBarrier.subresourceRange.baseMipLevel = 0;
     imageBarrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
@@ -95,7 +93,7 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayo
     imageBarrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     imageBarrier.image = image;
 
-    VkDependencyInfo dependencyInfo{};
+    VkDependencyInfo dependencyInfo {};
     dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
     dependencyInfo.pNext = nullptr;
     dependencyInfo.imageMemoryBarrierCount = 1;
@@ -107,9 +105,9 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayo
 void Image::copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer)
 {
     transition(commandBuffer, m_Image, VK_IMAGE_LAYOUT_UNDEFINED,
-               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-    VkBufferImageCopy copyRegion{};
+    VkBufferImageCopy copyRegion {};
     copyRegion.bufferOffset = 0;
     copyRegion.bufferRowLength = 0;
     copyRegion.bufferImageHeight = 0;
@@ -120,10 +118,10 @@ void Image::copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer)
     copyRegion.imageExtent = m_Extent;
 
     vkCmdCopyBufferToImage(commandBuffer, buffer.getBuffer(), m_Image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
     transition(commandBuffer, m_Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-               VK_IMAGE_LAYOUT_GENERAL);
+        VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void Image::copyToImage(VkCommandBuffer commandBuffer, const Image& image)
@@ -136,9 +134,9 @@ void Image::copyFromImage(VkCommandBuffer commandBuffer, const Image& image)
 }
 
 void Image::copyFromTo(VkCommandBuffer commandBuffer, VkImage src, VkImage dst, VkExtent3D srcSize,
-                       VkExtent3D dstSize)
+    VkExtent3D dstSize)
 {
-    VkImageBlit2 blitRegion{};
+    VkImageBlit2 blitRegion {};
     blitRegion.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;
     blitRegion.pNext = nullptr;
 
@@ -160,7 +158,7 @@ void Image::copyFromTo(VkCommandBuffer commandBuffer, VkImage src, VkImage dst, 
     blitRegion.dstSubresource.layerCount = 1;
     blitRegion.dstSubresource.mipLevel = 0;
 
-    VkBlitImageInfo2 blitInfo{};
+    VkBlitImageInfo2 blitInfo {};
     blitInfo.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2;
     blitInfo.pNext = nullptr;
     blitInfo.srcImage = src;

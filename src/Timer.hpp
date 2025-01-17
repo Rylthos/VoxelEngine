@@ -13,8 +13,7 @@ struct TimeObject {
     std::chrono::milliseconds duration;
 };
 
-class Timer : public EventReceiver
-{
+class Timer : public EventReceiver {
   public:
     static void startTimer(const std::string& timerName);
     static void stopTimer(const std::string& timerName);

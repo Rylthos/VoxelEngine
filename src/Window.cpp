@@ -10,7 +10,7 @@
 
 #include <imgui.h>
 
-Window::Window() {}
+Window::Window() { }
 Window::~Window()
 {
     spdlog::info("Destroying GLFW");
@@ -46,8 +46,7 @@ VkSurfaceKHR Window::createSurface(VkInstance instance)
 
 void Window::initGLFW()
 {
-    if (!glfwInit())
-    {
+    if (!glfwInit()) {
         spdlog::error("Failed to initialize GLFW");
         exit(-1);
     }
@@ -60,8 +59,7 @@ void Window::initGLFW()
 void Window::initWindow(const char* title, int width, int height)
 {
     m_Window = glfwCreateWindow(width, height, title, nullptr, nullptr);
-    if (!m_Window)
-    {
+    if (!m_Window) {
         spdlog::error("Failed to create window");
         exit(-1);
     }
@@ -81,23 +79,18 @@ void Window::initWindow(const char* title, int width, int height)
 
 void Window::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    if (ImGui::GetIO().WantCaptureKeyboard) return;
+    if (ImGui::GetIO().WantCaptureKeyboard)
+        return;
 
     Window* self = (Window*)glfwGetWindowUserPointer(window);
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-    {
+    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
-    }
-    else if (key == GLFW_KEY_LEFT_ALT && action == GLFW_PRESS)
-    {
+    } else if (key == GLFW_KEY_LEFT_ALT && action == GLFW_PRESS) {
         int mode = glfwGetInputMode(window, GLFW_CURSOR);
-        if (mode == GLFW_CURSOR_DISABLED)
-        {
+        if (mode == GLFW_CURSOR_DISABLED) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             self->m_MouseCaptured = false;
-        }
-        else
-        {
+        } else {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
             self->m_MouseCaptured = true;
         }
@@ -119,8 +112,7 @@ void Window::mouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
     static double previousX = 0.0f;
     static double previousY = 0.0f;
 
-    if (self->m_FirstMouse)
-    {
+    if (self->m_FirstMouse) {
         previousX = xPos;
         previousY = yPos;
         self->m_FirstMouse = false;
@@ -161,7 +153,8 @@ void Window::mouseEnterCallback(GLFWwindow* window, int entered)
 
     self->m_MouseContained = entered;
 
-    if (!entered) self->m_FirstMouse = true;
+    if (!entered)
+        self->m_FirstMouse = true;
 }
 
 void Window::resizeCallback(GLFWwindow* window, int width, int height)

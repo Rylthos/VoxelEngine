@@ -9,14 +9,14 @@ void PaletteManager::initResources(VkDevice device, VmaAllocator allocator)
 {
     VkExtent3D lookupExtent = { 256, 1, 1 };
     m_LookupTexture.create(allocator, VK_FORMAT_R32G32B32A32_SFLOAT, lookupExtent, VK_IMAGE_TYPE_1D,
-                           VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-                           VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_LookupTexture.createImageView(device, VK_IMAGE_VIEW_TYPE_1D);
 
     m_StagingBuffer.create(allocator, 256 * sizeof(glm::vec4),
-                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                           VMA_MEMORY_USAGE_CPU_TO_GPU);
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VMA_MEMORY_USAGE_CPU_TO_GPU);
 }
 
 void PaletteManager::freeResources()
@@ -27,8 +27,7 @@ void PaletteManager::freeResources()
 
 void PaletteManager::flushColours()
 {
-    for (auto pair : m_Mapping)
-    {
+    for (auto pair : m_Mapping) {
         m_Colours[pair.second] = glm::vec4(0.);
     }
     m_Mapping.clear();
@@ -49,8 +48,7 @@ uint8_t PaletteManager::getColourIndex(glm::vec4 colour)
 void PaletteManager::setColourIndex(uint8_t index, glm::vec4 colour)
 {
     glm::vec4 previousColour = m_Colours[index];
-    if (m_Mapping.find(previousColour) != m_Mapping.end())
-    {
+    if (m_Mapping.find(previousColour) != m_Mapping.end()) {
         m_Mapping.erase(m_Mapping.find(previousColour));
     }
 
@@ -61,7 +59,8 @@ void PaletteManager::setColourIndex(uint8_t index, glm::vec4 colour)
 
 void PaletteManager::updateImage()
 {
-    if (!m_HasChanged) return;
+    if (!m_HasChanged)
+        return;
 
     m_StagingBuffer.copyFromData_CPUOnly<glm::vec4>(m_Colours);
 
@@ -91,59 +90,49 @@ void arrayToVec4(std::array<float, 4> modifiedColour, glm::vec4& colour)
 
 void PaletteManager::receive(const Event* event)
 {
-    switch (event->getType())
-    {
-    case EventType::ImGuiRender:
-        {
-            if (ImGui::Begin("Palette Manager"))
-            {
-                float windowVisible =
-                    ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    switch (event->getType()) {
+    case EventType::ImGuiRender: {
+        if (ImGui::Begin("Palette Manager")) {
+            float windowVisible = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
 
-                ImGuiStyle& style = ImGui::GetStyle();
-                float buttonWidth = 20.0f;
+            ImGuiStyle& style = ImGui::GetStyle();
+            float buttonWidth = 20.0f;
 
-                const int rows = 256 / 8;
-                const int cols = 8;
+            const int rows = 256 / 8;
+            const int cols = 8;
 
-                for (int r = 0; r < rows; ++r)
-                {
-                    for (int c = 0; c < cols; ++c)
-                    {
-                        int i = r * cols + c;
-                        ImGui::PushID(i);
+            for (int r = 0; r < rows; ++r) {
+                for (int c = 0; c < cols; ++c) {
+                    int i = r * cols + c;
+                    ImGui::PushID(i);
 
-                        std::array<float, 4> floatColour = vec4ToArray(m_Colours[i]);
+                    std::array<float, 4> floatColour = vec4ToArray(m_Colours[i]);
 
-                        if (ImGui::ColorEdit4("##Temp", floatColour.data(),
-                                              ImGuiColorEditFlags_NoInputs |
-                                                  ImGuiColorEditFlags_NoLabel))
-                        {
-                            arrayToVec4(floatColour, m_Colours[i]);
-                            m_HasChanged = true;
-                        }
-
-                        float lastButtonX2 = ImGui::GetItemRectMax().x;
-                        float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + buttonWidth;
-
-                        if (c < cols - 1)
-                        {
-                            ImGui::SameLine();
-                        }
-
-                        ImGui::PopID();
+                    if (ImGui::ColorEdit4("##Temp", floatColour.data(),
+                            ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+                        arrayToVec4(floatColour, m_Colours[i]);
+                        m_HasChanged = true;
                     }
+
+                    float lastButtonX2 = ImGui::GetItemRectMax().x;
+                    float nextButtonX2 = lastButtonX2 + style.ItemSpacing.x + buttonWidth;
+
+                    if (c < cols - 1) {
+                        ImGui::SameLine();
+                    }
+
+                    ImGui::PopID();
                 }
             }
-            ImGui::End();
-
-            if (m_HasChanged)
-            {
-                updateImage();
-            }
-
-            break;
         }
+        ImGui::End();
+
+        if (m_HasChanged) {
+            updateImage();
+        }
+
+        break;
+    }
     default:
         break;
     }
@@ -412,8 +401,7 @@ void PaletteManager::defaultPalette()
 uint8_t PaletteManager::addColour(glm::vec4 colour)
 {
     size_t index = m_CurrentColour;
-    if (index > 256)
-    {
+    if (index > 256) {
         throw std::runtime_error("Too many colours");
     }
 

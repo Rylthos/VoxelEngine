@@ -50,19 +50,18 @@ void Engine::init()
 
 #ifdef PROF_TRACY
     PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT
-        myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT =
-            reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(
-                vkGetInstanceProcAddr(m_Instance,
-                                      "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
+        myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT
+        = reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(
+            vkGetInstanceProcAddr(m_Instance,
+                "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
 
-    PFN_vkGetCalibratedTimestampsEXT myvkGetCalibratedTimestampsEXT =
-        reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(
-            vkGetInstanceProcAddr(m_Instance, "vkGetCalibratedTimestampsEXT"));
+    PFN_vkGetCalibratedTimestampsEXT myvkGetCalibratedTimestampsEXT = reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(
+        vkGetInstanceProcAddr(m_Instance, "vkGetCalibratedTimestampsEXT"));
 
     g_TracyVkCtx = TracyVkContextHostCalibrated(m_PhysicalDevice, m_Device, vkResetQueryPool,
 
-                                                myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
-                                                myvkGetCalibratedTimestampsEXT);
+        myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+        myvkGetCalibratedTimestampsEXT);
 #endif
 
     m_SceneManager.initResources(m_Device, m_Allocator, &m_ComputeQueue);
@@ -73,8 +72,8 @@ void Engine::init()
         { EventType::KeyboardInput, EventType::ImGuiRender, EventType::WindowResize }, this);
 
     EventHandler::subscribe({ EventType::KeyboardInput, EventType::MouseMove, EventType::GameUpdate,
-                              EventType::ImGuiRender },
-                            &m_Camera);
+                                EventType::ImGuiRender },
+        &m_Camera);
 
     EventHandler::subscribe(
         { EventType::GameUpdate, EventType::MouseButton, EventType::ImGuiRender }, &m_SceneManager);
@@ -88,9 +87,9 @@ void Engine::start()
     float currentTime;
     float previousTime = glfwGetTime();
 
-    while (!m_Window.shouldClose())
-    {
-        if (m_ShouldResize) resizeWindow();
+    while (!m_Window.shouldClose()) {
+        if (m_ShouldResize)
+            resizeWindow();
 
         currentTime = glfwGetTime();
         float frameDelta = currentTime - previousTime;
@@ -105,7 +104,7 @@ void Engine::start()
         render(frameDelta);
 
         {
-            VkCommandBufferBeginInfo commandBufferBI{};
+            VkCommandBufferBeginInfo commandBufferBI {};
             commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             commandBufferBI.pNext = nullptr;
             commandBufferBI.pInheritanceInfo = nullptr;
@@ -156,16 +155,14 @@ void Engine::cleanup()
 
     vkDestroyDescriptorPool(m_Device, m_ImguiPool, nullptr);
 
-    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
-    {
+    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
         vkDestroyFence(m_Device, m_Frames[i].renderFence, nullptr);
         vkDestroySemaphore(m_Device, m_Frames[i].renderSemaphore, nullptr);
         vkDestroySemaphore(m_Device, m_Frames[i].swapchainSemaphore, nullptr);
     }
 
     vkDestroyCommandPool(m_Device, m_TracyCommandPool, nullptr);
-    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
-    {
+    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
         vkDestroyCommandPool(m_Device, m_Frames[i].commandPool, nullptr);
     }
 
@@ -183,29 +180,26 @@ void Engine::cleanup()
 
 void Engine::receive(const Event* event)
 {
-    switch (event->getType())
-    {
-    case EventType::KeyboardInput:
-        {
-            const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
+    switch (event->getType()) {
+    case EventType::KeyboardInput: {
+        const KeyboardInput* ki = reinterpret_cast<const KeyboardInput*>(event);
 
-            if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS) m_RenderImGui = !m_RenderImGui;
+        if (ki->key == GLFW_KEY_M && ki->action == GLFW_PRESS)
+            m_RenderImGui = !m_RenderImGui;
 
-            if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
-                m_RenderAlt = !m_RenderAlt;
+        if (ki->key == GLFW_KEY_RIGHT_CONTROL && ki->action == GLFW_PRESS)
+            m_RenderAlt = !m_RenderAlt;
 
-            break;
-        }
-    case EventType::ImGuiRender:
-        {
-            updateImGui();
-            break;
-        }
-    case EventType::WindowResize:
-        {
-            m_ShouldResize = true;
-            break;
-        }
+        break;
+    }
+    case EventType::ImGuiRender: {
+        updateImGui();
+        break;
+    }
+    case EventType::WindowResize: {
+        m_ShouldResize = true;
+        break;
+    }
     default:
         break;
     }
@@ -222,8 +216,7 @@ void Engine::initVulkan()
                        .require_api_version(1, 3, 0)
                        .build();
 
-    if (!instRet)
-    {
+    if (!instRet) {
         spdlog::error("Failed to create Instance: {}", instRet.error().message());
         exit(-1);
     }
@@ -234,11 +227,11 @@ void Engine::initVulkan()
     m_Surface = m_Window.createSurface(m_Instance);
     spdlog::info("Created Window Surface");
 
-    VkPhysicalDeviceVulkan13Features features13{};
+    VkPhysicalDeviceVulkan13Features features13 {};
     features13.dynamicRendering = true;
     features13.synchronization2 = true;
 
-    VkPhysicalDeviceVulkan12Features features12{};
+    VkPhysicalDeviceVulkan12Features features12 {};
     features12.bufferDeviceAddress = true;
     features12.shaderBufferInt64Atomics = true;
     features12.descriptorIndexing = true;
@@ -247,11 +240,11 @@ void Engine::initVulkan()
     features12.storageBuffer8BitAccess = true;
     features12.runtimeDescriptorArray = true;
 
-    VkPhysicalDeviceVulkan11Features features11{};
+    VkPhysicalDeviceVulkan11Features features11 {};
     features11.shaderDrawParameters = true;
     features11.storageBuffer16BitAccess = true;
 
-    VkPhysicalDeviceFeatures features{};
+    VkPhysicalDeviceFeatures features {};
     features.robustBufferAccess = true;
     features.fragmentStoresAndAtomics = true;
     features.imageCubeArray = true;
@@ -259,28 +252,26 @@ void Engine::initVulkan()
     features.shaderInt16 = true;
     features.shaderInt64 = true;
 
-    vkb::PhysicalDeviceSelector selector{ vkbInst };
-    auto vkbMaybeDevice =
-        selector.set_minimum_version(1, 3)
-            .set_required_features_13(features13)
-            .set_required_features_12(features12)
-            .set_required_features_11(features11)
-            .set_required_features(features)
-            .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
-            // .add_required_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME)
-            .add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
-            .set_surface(m_Surface)
-            .select();
+    vkb::PhysicalDeviceSelector selector { vkbInst };
+    auto vkbMaybeDevice = selector.set_minimum_version(1, 3)
+                              .set_required_features_13(features13)
+                              .set_required_features_12(features12)
+                              .set_required_features_11(features11)
+                              .set_required_features(features)
+                              .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
+                              // .add_required_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME)
+                              .add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
+                              .set_surface(m_Surface)
+                              .select();
 
-    if (!vkbMaybeDevice.has_value())
-    {
+    if (!vkbMaybeDevice.has_value()) {
         spdlog::error("{}: {}", vkbMaybeDevice.error().value(), vkbMaybeDevice.error().message());
         exit(-1);
     }
 
     vkb::PhysicalDevice vkbPhysicalDevice = vkbMaybeDevice.value();
 
-    vkb::DeviceBuilder deviceBuilder{ vkbPhysicalDevice };
+    vkb::DeviceBuilder deviceBuilder { vkbPhysicalDevice };
 
     vkb::Device vkbDevice = deviceBuilder.build().value();
 
@@ -296,7 +287,7 @@ void Engine::initVulkan()
     m_ComputeQueue.queueFamily = vkbDevice.get_queue_index(vkb::QueueType::compute).value();
     spdlog::info("Created Compute Queue: {}", m_ComputeQueue.queueFamily);
 
-    VmaAllocatorCreateInfo allocatorCI{};
+    VmaAllocatorCreateInfo allocatorCI {};
     allocatorCI.physicalDevice = m_PhysicalDevice;
     allocatorCI.device = m_Device;
     allocatorCI.instance = m_Instance;
@@ -307,18 +298,17 @@ void Engine::initVulkan()
 
 void Engine::createSwapchain()
 {
-    vkb::SwapchainBuilder swapchainBuilder{ m_PhysicalDevice, m_Device, m_Surface };
+    vkb::SwapchainBuilder swapchainBuilder { m_PhysicalDevice, m_Device, m_Surface };
     m_SwapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
-    vkb::Swapchain vkbSwapchain =
-        swapchainBuilder
-            .set_desired_format({ .format = m_SwapchainImageFormat,
-                                  .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-            .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-            .set_desired_extent(m_Window.getSize().x, m_Window.getSize().y)
-            .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-            .build()
-            .value();
+    vkb::Swapchain vkbSwapchain = swapchainBuilder
+                                      .set_desired_format({ .format = m_SwapchainImageFormat,
+                                          .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+                                      .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+                                      .set_desired_extent(m_Window.getSize().x, m_Window.getSize().y)
+                                      .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                                      .build()
+                                      .value();
 
     m_SwapchainImageExtent = vkbSwapchain.extent;
     m_Swapchain = vkbSwapchain.swapchain;
@@ -334,18 +324,16 @@ void Engine::initSwapchain()
     VkExtent3D drawImageExtent = { m_Window.getSize().x, m_Window.getSize().y, 1 };
 
     m_DrawImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent,
-                       VK_IMAGE_TYPE_2D,
-                       VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                           VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                       VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
     m_AltImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, m_DrawImage.getExtent(),
-                      VK_IMAGE_TYPE_2D,
-                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                          VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                      VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
@@ -359,8 +347,7 @@ void Engine::destroySwapchain()
 
     vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
 
-    for (size_t i = 0; i < m_SwapchainImageViews.size(); i++)
-    {
+    for (size_t i = 0; i < m_SwapchainImageViews.size(); i++) {
         vkDestroyImageView(m_Device, m_SwapchainImageViews[i], nullptr);
     }
     spdlog::info("Destroyed Swapchain");
@@ -368,21 +355,20 @@ void Engine::destroySwapchain()
 
 void Engine::initCommandPool()
 {
-    VkCommandPoolCreateInfo commandPoolCI{};
+    VkCommandPoolCreateInfo commandPoolCI {};
     commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     commandPoolCI.pNext = nullptr;
     commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     commandPoolCI.queueFamilyIndex = m_GraphicsQueue.queueFamily;
 
-    VkCommandBufferAllocateInfo commandBufferAI{};
+    VkCommandBufferAllocateInfo commandBufferAI {};
     commandBufferAI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     commandBufferAI.pNext = nullptr;
     commandBufferAI.commandBufferCount = 1;
     commandBufferAI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
     m_Frames.resize(FRAMES_IN_FLIGHT);
-    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
-    {
+    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
         VK_CHECK(vkCreateCommandPool(m_Device, &commandPoolCI, nullptr, &m_Frames[i].commandPool));
         spdlog::info("Created Frame Command Pool: {}", i);
 
@@ -399,17 +385,16 @@ void Engine::initCommandPool()
 
 void Engine::initSyncStructures()
 {
-    VkFenceCreateInfo fenceCI{};
+    VkFenceCreateInfo fenceCI {};
     fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceCI.pNext = nullptr;
     fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    VkSemaphoreCreateInfo semaphoreCI{};
+    VkSemaphoreCreateInfo semaphoreCI {};
     semaphoreCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     semaphoreCI.pNext = nullptr;
 
-    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++)
-    {
+    for (size_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
         VK_CHECK(vkCreateFence(m_Device, &fenceCI, nullptr, &m_Frames[i].renderFence));
         VK_CHECK(
             vkCreateSemaphore(m_Device, &semaphoreCI, nullptr, &m_Frames[i].swapchainSemaphore));
@@ -421,19 +406,19 @@ void Engine::initSyncStructures()
 void Engine::initImGui()
 {
     VkDescriptorPoolSize poolSizes[] = {
-        { VK_DESCRIPTOR_TYPE_SAMPLER,                1000 },
-        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   1000 },
-        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 },
     };
 
-    VkDescriptorPoolCreateInfo poolCI{};
+    VkDescriptorPoolCreateInfo poolCI {};
     poolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolCI.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     poolCI.maxSets = 1000;
@@ -453,13 +438,13 @@ void Engine::initImGui()
 
     VkFormat colourFormat = m_SwapchainImageFormat;
 
-    VkPipelineRenderingCreateInfoKHR pipelineCI{};
+    VkPipelineRenderingCreateInfoKHR pipelineCI {};
     pipelineCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     pipelineCI.pNext = nullptr;
     pipelineCI.colorAttachmentCount = 1;
     pipelineCI.pColorAttachmentFormats = &colourFormat;
 
-    ImGui_ImplVulkan_InitInfo vulkanII{};
+    ImGui_ImplVulkan_InitInfo vulkanII {};
     vulkanII.Instance = m_Instance;
     vulkanII.PhysicalDevice = m_PhysicalDevice;
     vulkanII.Device = m_Device;
@@ -479,11 +464,11 @@ void Engine::initImGui()
 void Engine::initDescriptorPool()
 {
     std::vector<VkDescriptorPoolSize> poolSizes = {
-        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  .descriptorCount = 1                },
+        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 1 },
         { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT }
     };
 
-    VkDescriptorPoolCreateInfo descriptorPoolCI{};
+    VkDescriptorPoolCreateInfo descriptorPoolCI {};
     descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     descriptorPoolCI.pNext = nullptr;
     descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
@@ -508,12 +493,12 @@ void Engine::initDescriptorLayouts()
 void Engine::initPipelines()
 {
     {
-        VkPushConstantRange pushConstant{};
+        VkPushConstantRange pushConstant {};
         pushConstant.offset = 0;
         pushConstant.size = sizeof(VoxelPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        VkPipelineLayoutCreateInfo computeLayoutCI{};
+        VkPipelineLayoutCreateInfo computeLayoutCI {};
         computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         computeLayoutCI.pNext = nullptr;
         computeLayoutCI.setLayoutCount = 1;
@@ -527,34 +512,33 @@ void Engine::initPipelines()
         ShaderModule voxelShader;
         voxelShader.create("res/shaders/Brickmap.comp.spv", m_Device);
 
-        VkPipelineShaderStageCreateInfo shaderStageCI{};
+        VkPipelineShaderStageCreateInfo shaderStageCI {};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStageCI.pNext = nullptr;
         shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shaderStageCI.module = voxelShader.getShaderModule();
         shaderStageCI.pName = "main";
 
-        VkComputePipelineCreateInfo computePipelineCI{};
+        VkComputePipelineCreateInfo computePipelineCI {};
         computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         computePipelineCI.pNext = nullptr;
         computePipelineCI.layout = m_VoxelPipelineLayout;
         computePipelineCI.stage = shaderStageCI;
 
         VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
-                                          &m_VoxelPipeline));
+            &m_VoxelPipeline));
         spdlog::info("Created Background Pipeline and Pipeline Layout");
     }
 }
 
 void Engine::initDescriptorSets()
 {
-    m_VoxelDescriptorSet =
-        DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
-            .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
-            .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
-            .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_PaletteManager.getImage().getImageView())
-            .build()
-            .at(0);
+    m_VoxelDescriptorSet = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
+                               .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
+                               .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
+                               .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_PaletteManager.getImage().getImageView())
+                               .build()
+                               .at(0);
 
     spdlog::info("Created descriptors");
 }
@@ -568,7 +552,7 @@ void Engine::recreateDescriptorSets()
 
 void Engine::initQueryPool()
 {
-    VkQueryPoolCreateInfo queryPoolCI{};
+    VkQueryPoolCreateInfo queryPoolCI {};
     queryPoolCI.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
     queryPoolCI.pNext = nullptr;
     queryPoolCI.flags = 0;
@@ -614,16 +598,13 @@ void Engine::updateImGui()
 
     // frameTimes[currentFrame] = m_Stats.frameDelta;
     frameTimes[currentFrame] = dispatchTime;
-    if (currentFrame > 0)
-    {
-        for (size_t i = 0; i < currentFrame; i++)
-        {
+    if (currentFrame > 0) {
+        for (size_t i = 0; i < currentFrame; i++) {
             avgTime += frameTimes[i];
             maxTime = fmin(maxTime, frameTimes[i]);
             minTime = fmax(minTime, frameTimes[i]);
 
-            if (currentFrame == frameTimes.size() - 1)
-            {
+            if (currentFrame == frameTimes.size() - 1) {
                 frameTimes[i] = frameTimes[i + 1];
             }
         }
@@ -633,18 +614,16 @@ void Engine::updateImGui()
         avgTime /= (float)currentFrame;
     }
 
-    if (currentFrame + 1 < frameTimes.size())
-    {
+    if (currentFrame + 1 < frameTimes.size()) {
         currentFrame += 1;
     }
 
-    if (ImGui::Begin("Stats"))
-    {
+    if (ImGui::Begin("Stats")) {
         ImGui::PushItemWidth(ImGui::GetWindowContentRegionMax().x - 10.0f);
         ImGui::Text("Dispatch Time %.3f(ms)", dispatchTime);
 
         ImGui::PlotLines("##FrametimeGraph", frameTimes.data(), frameTimes.size(), 0, NULL, 0.0f,
-                         FLT_MAX, ImVec2(0, 80.0f));
+            FLT_MAX, ImVec2(0, 80.0f));
         ImGui::PopItemWidth();
 
         ImGui::Text("MAX: %1.3f : %.3f", maxTime, 1000.0f / maxTime);
@@ -680,7 +659,7 @@ void Engine::update(float frameDelta)
 
 void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView, VkExtent2D extent)
 {
-    VkRenderingAttachmentInfo colorAI{};
+    VkRenderingAttachmentInfo colorAI {};
     colorAI.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     colorAI.pNext = nullptr;
     colorAI.imageView = targetView;
@@ -688,7 +667,7 @@ void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView,
     colorAI.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     colorAI.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-    VkRenderingInfo renderInfo{};
+    VkRenderingInfo renderInfo {};
     renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderInfo.pNext = nullptr;
     renderInfo.flags = 0;
@@ -699,8 +678,7 @@ void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView,
     renderInfo.pDepthAttachment = nullptr;
     renderInfo.pStencilAttachment = nullptr;
 
-    if (m_RenderImGui)
-    {
+    if (m_RenderImGui) {
         vkCmdBeginRendering(commandBuffer, &renderInfo);
 
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
@@ -722,11 +700,11 @@ void Engine::render(float frameDelta)
 
     uint32_t swapchainImageIndex;
     {
-        VkResult result =
-            vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000,
-                                  currentFrame.swapchainSemaphore, nullptr, &swapchainImageIndex);
+        VkResult result = vkAcquireNextImageKHR(m_Device, m_Swapchain, 1000000000,
+            currentFrame.swapchainSemaphore, nullptr, &swapchainImageIndex);
 
-        if (result == VK_ERROR_OUT_OF_DATE_KHR) m_ShouldResize = true;
+        if (result == VK_ERROR_OUT_OF_DATE_KHR)
+            m_ShouldResize = true;
     }
 
     VkCommandBuffer commandBuffer = currentFrame.commandBuffer;
@@ -736,7 +714,7 @@ void Engine::render(float frameDelta)
     drawExtent.width = m_DrawImage.getExtent().width;
     drawExtent.height = m_DrawImage.getExtent().height;
 
-    VkCommandBufferBeginInfo commandBufferBI{};
+    VkCommandBufferBeginInfo commandBufferBI {};
     commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     commandBufferBI.pNext = nullptr;
     commandBufferBI.pInheritanceInfo = nullptr;
@@ -754,18 +732,18 @@ void Engine::render(float frameDelta)
         m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
-                                               VK_IMAGE_LAYOUT_GENERAL);
+            VK_IMAGE_LAYOUT_GENERAL);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-                          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool,
-                            frameIndex * 2);
+            frameIndex * 2);
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
 
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                m_VoxelPipelineLayout, 0, 1, &m_VoxelDescriptorSet, 0, nullptr);
+            m_VoxelPipelineLayout, 0, 1, &m_VoxelDescriptorSet, 0, nullptr);
 
         VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants(frameIndex);
         pushConstants.cameraPosition = m_Camera.getPosition();
@@ -776,34 +754,34 @@ void Engine::render(float frameDelta)
         pushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
 
         vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                           sizeof(pushConstants), &pushConstants);
+            sizeof(pushConstants), &pushConstants);
 
         vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
-                      std::ceil(drawExtent.height / 16.0), 1);
+            std::ceil(drawExtent.height / 16.0), 1);
 
         vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool,
-                            frameIndex * 2 + 1);
+            frameIndex * 2 + 1);
 
         renderImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
         VkExtent3D target = { .width = m_SwapchainImageExtent.width,
-                              .height = m_SwapchainImageExtent.height,
-                              .depth = 1 };
+            .height = m_SwapchainImageExtent.height,
+            .depth = 1 };
 
         Image::copyFromTo(commandBuffer, renderImage.getImage(),
-                          m_SwapchainImages[swapchainImageIndex], renderImage.getExtent(), target);
+            m_SwapchainImages[swapchainImageIndex], renderImage.getExtent(), target);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
         renderImGui(commandBuffer, m_SwapchainImageViews[swapchainImageIndex],
-                    m_SwapchainImageExtent);
+            m_SwapchainImageExtent);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         // VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
         //                             .pNext = nullptr,
@@ -817,13 +795,13 @@ void Engine::render(float frameDelta)
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
-    VkCommandBufferSubmitInfo commandBufferSI{};
+    VkCommandBufferSubmitInfo commandBufferSI {};
     commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
     commandBufferSI.pNext = nullptr;
     commandBufferSI.commandBuffer = commandBuffer;
     commandBufferSI.deviceMask = 0;
 
-    VkSemaphoreSubmitInfo waitSI{};
+    VkSemaphoreSubmitInfo waitSI {};
     waitSI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
     waitSI.pNext = nullptr;
     waitSI.semaphore = currentFrame.swapchainSemaphore;
@@ -831,7 +809,7 @@ void Engine::render(float frameDelta)
     waitSI.deviceIndex = 0;
     waitSI.value = 1;
 
-    VkSemaphoreSubmitInfo signalSI{};
+    VkSemaphoreSubmitInfo signalSI {};
     signalSI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
     signalSI.pNext = nullptr;
     signalSI.semaphore = currentFrame.renderSemaphore;
@@ -839,7 +817,7 @@ void Engine::render(float frameDelta)
     signalSI.deviceIndex = 0;
     signalSI.value = 1;
 
-    VkSubmitInfo2 submit{};
+    VkSubmitInfo2 submit {};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
     submit.pNext = nullptr;
     submit.waitSemaphoreInfoCount = 1;
@@ -852,7 +830,7 @@ void Engine::render(float frameDelta)
     VK_CHECK(vkQueueSubmit2(m_GraphicsQueue.queue, 1, &submit, currentFrame.renderFence));
     Timer::stopTimer("Render");
 
-    VkPresentInfoKHR presentInfo{};
+    VkPresentInfoKHR presentInfo {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     presentInfo.pNext = nullptr;
     presentInfo.pSwapchains = &m_Swapchain;
@@ -869,15 +847,11 @@ void Engine::render(float frameDelta)
     }
 
     static uint64_t timeQueryBuffer[2];
-    VkResult result =
-        vkGetQueryPoolResults(m_Device, m_QueryPool, frameIndex * 2, 2, sizeof(uint64_t) * 2,
-                              timeQueryBuffer, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+    VkResult result = vkGetQueryPoolResults(m_Device, m_QueryPool, frameIndex * 2, 2, sizeof(uint64_t) * 2,
+        timeQueryBuffer, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 
-    if (result == VK_NOT_READY)
-    {
-    }
-    else if (result == VK_SUCCESS)
-    {
+    if (result == VK_NOT_READY) {
+    } else if (result == VK_SUCCESS) {
         m_PreviousFrameTime = timeQueryBuffer[1] - timeQueryBuffer[0];
     }
     vkResetQueryPool(m_Device, m_QueryPool, frameIndex * 2, 2);

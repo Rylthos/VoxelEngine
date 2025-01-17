@@ -5,8 +5,7 @@
 
 #include "Buffer.hpp"
 
-class Image
-{
+class Image {
   public:
     Image();
     Image(Image&) = delete;
@@ -15,8 +14,8 @@ class Image
     ~Image();
 
     void create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, VkImageType type,
-                VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
-                VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels = 1);
+        VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
+        VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels = 1);
 
     void createImageView(VkDevice device, VkImageViewType viewType);
     void free();
@@ -30,7 +29,7 @@ class Image
 
     void transition(VkCommandBuffer commandBuffer, VkImageLayout current, VkImageLayout target);
     static void transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current,
-                           VkImageLayout target);
+        VkImageLayout target);
 
     void copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer);
 
@@ -38,7 +37,7 @@ class Image
     void copyFromImage(VkCommandBuffer commandBuffer, const Image& image);
 
     static void copyFromTo(VkCommandBuffer commandBuffer, VkImage src, VkImage dst,
-                           VkExtent3D srcSize, VkExtent3D dstSize);
+        VkExtent3D srcSize, VkExtent3D dstSize);
 
   private:
     VkImage m_Image = 0;

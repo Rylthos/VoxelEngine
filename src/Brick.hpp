@@ -19,8 +19,7 @@ struct BrickStruct {
     uint8_t _;
 };
 
-class Brick
-{
+class Brick {
   public:
     Brick();
 

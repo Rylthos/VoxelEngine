@@ -12,7 +12,7 @@
 #include "VkCheck.hpp"
 #include "imgui.h"
 
-SuperBrick::SuperBrick() {}
+SuperBrick::SuperBrick() { }
 
 void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
 {
@@ -20,13 +20,11 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
     m_Allocator = allocator;
     m_ComputeQueue = computeQueue;
     m_CurrentPoolSize = 512;
-    for (size_t i = 0; i < m_CurrentPoolSize; i++)
-    {
+    for (size_t i = 0; i < m_CurrentPoolSize; i++) {
         m_FreeIndices.insert(i);
     }
 
-    for (size_t i = 0; i < m_Struct.data.size(); i++)
-    {
+    for (size_t i = 0; i < m_Struct.data.size(); i++) {
         m_Struct.data[i] = {
             .loaded = 0,
             .empty_flag = 0,
@@ -35,19 +33,17 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
 
     m_GeneratedData.create(
         m_Allocator, sizeof(uint32_t) + sizeof(uint64_t) * 8,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
     m_GeneratedColourData.create(
         m_Allocator, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 
     {
-        VkCommandPoolCreateInfo commandPoolCI{};
+        VkCommandPoolCreateInfo commandPoolCI {};
         commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         commandPoolCI.pNext = nullptr;
         commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -55,7 +51,7 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
 
         VK_CHECK(vkCreateCommandPool(m_Device, &commandPoolCI, nullptr, &m_CommandPool));
 
-        VkCommandBufferAllocateInfo commandBufferAI{};
+        VkCommandBufferAllocateInfo commandBufferAI {};
         commandBufferAI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         commandBufferAI.pNext = nullptr;
         commandBufferAI.commandPool = m_CommandPool;
@@ -66,12 +62,12 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
     }
 
     {
-        VkPushConstantRange pushConstant{};
+        VkPushConstantRange pushConstant {};
         pushConstant.offset = 0;
         pushConstant.size = sizeof(GenerationPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-        VkPipelineLayoutCreateInfo computeLayoutCI{};
+        VkPipelineLayoutCreateInfo computeLayoutCI {};
         computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         computeLayoutCI.pNext = nullptr;
         computeLayoutCI.setLayoutCount = 0;
@@ -85,25 +81,25 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
         ShaderModule voxelShader;
         voxelShader.create("res/shaders/GenerateBrickmap.comp.spv", m_Device);
 
-        VkPipelineShaderStageCreateInfo shaderStageCI{};
+        VkPipelineShaderStageCreateInfo shaderStageCI {};
         shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStageCI.pNext = nullptr;
         shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shaderStageCI.module = voxelShader.getShaderModule();
         shaderStageCI.pName = "main";
 
-        VkComputePipelineCreateInfo computePipelineCI{};
+        VkComputePipelineCreateInfo computePipelineCI {};
         computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
         computePipelineCI.pNext = nullptr;
         computePipelineCI.layout = m_GeneratePipelineLayout;
         computePipelineCI.stage = shaderStageCI;
 
         VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
-                                          &m_GeneratePipeline));
+            &m_GeneratePipeline));
     }
 
     {
-        VkFenceCreateInfo fenceCI{};
+        VkFenceCreateInfo fenceCI {};
         fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceCI.pNext = nullptr;
         fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -112,12 +108,9 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
     }
 
     std::vector<glm::vec4> colours;
-    for (int y = 0; y < 8; y++)
-    {
-        for (int z = 0; z < 8; z++)
-        {
-            for (int x = 0; x < 8; x++)
-            {
+    for (int y = 0; y < 8; y++) {
+        for (int z = 0; z < 8; z++) {
+            for (int x = 0; x < 8; x++) {
                 colours.push_back({ x / 7., y / 7., z / 7., 1. });
             }
         }
@@ -128,25 +121,21 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
     m_Colours.reserve(1);
     m_Colours.emplace_back();
     m_Colours[0].create(m_Allocator, colours.size() * sizeof(glm::vec4),
-                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                            VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                        VMA_MEMORY_USAGE_GPU_ONLY);
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
     m_Colours[0].copyFromBuffer(m_Staging, colours.size() * sizeof(glm::vec4));
 
-    std::vector<VkDeviceAddress> temp{ m_Colours[0].getDeviceAddress(m_Device) };
+    std::vector<VkDeviceAddress> temp { m_Colours[0].getDeviceAddress(m_Device) };
     generateStaging(temp.size() * sizeof(VkDeviceAddress));
     m_Staging.copyFromData_CPUOnly<VkDeviceAddress>(temp);
     m_ColourMap.create(m_Allocator, temp.size() * sizeof(VkDeviceAddress),
-                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                       VMA_MEMORY_USAGE_GPU_ONLY);
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
     m_ColourMap.copyFromBuffer(m_Staging, temp.size() * sizeof(VkDeviceAddress));
 
     m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
-                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                           VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                       VMA_MEMORY_USAGE_GPU_ONLY);
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
 
     m_Running = true;
     m_GenerationThread = std::thread(&SuperBrick::generateBrickLoop, this);
@@ -156,7 +145,8 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
 
 void SuperBrick::free()
 {
-    if (!m_Initialized) return;
+    if (!m_Initialized)
+        return;
 
     m_Running = false;
     m_CanGenerate.notify_one();
@@ -166,8 +156,7 @@ void SuperBrick::free()
     m_Staging.free();
     m_ColourMap.free();
 
-    for (auto& c : m_Colours)
-    {
+    for (auto& c : m_Colours) {
         c.free();
     }
     m_Colours.clear();
@@ -184,9 +173,11 @@ void SuperBrick::addBrickToQueue(glm::ivec3 position)
 {
     std::lock_guard<std::mutex> m_Lock(m_QueueLock);
 
-    if (m_GeneratedBricks.contains(position)) return;
+    if (m_GeneratedBricks.contains(position))
+        return;
 
-    if (m_Enqueued.contains(position)) return;
+    if (m_Enqueued.contains(position))
+        return;
 
     m_Enqueued.insert(position);
     m_ToBeGenerated.push_back(position);
@@ -196,7 +187,7 @@ void SuperBrick::addBrickToQueue(glm::ivec3 position)
 
 void SuperBrick::addBrickToQueue(uint32_t index)
 {
-    glm::ivec3 position{ 0 };
+    glm::ivec3 position { 0 };
     position.x = index % SUPERBRICK_SIZE;
     position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
     position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
@@ -216,21 +207,18 @@ void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex)
 
 SuperBrickStruct SuperBrick::getStruct()
 {
-    if (m_HasChanged)
-    {
+    if (m_HasChanged) {
         std::unique_lock<std::mutex> lock(m_BufferLock);
 
         m_HasChanged = false;
 
         size_t newSize = m_CurrentPoolSize - m_FreeIndices.size() + m_ToBeLoaded.size();
 
-        if ((int64_t)m_FreeIndices.size() - (int64_t)m_ToBeLoaded.size() < 0)
-        {
+        if ((int64_t)m_FreeIndices.size() - (int64_t)m_ToBeLoaded.size() < 0) {
             size_t previous = m_CurrentPoolSize;
             m_CurrentPoolSize *= 2;
 
-            for (size_t i = previous; i < m_CurrentPoolSize; i++)
-            {
+            for (size_t i = previous; i < m_CurrentPoolSize; i++) {
                 m_FreeIndices.insert(i);
             }
 
@@ -241,8 +229,7 @@ SuperBrickStruct SuperBrick::getStruct()
             m_BrickPool.free();
             m_BrickPool.create(
                 m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                    VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
                 VMA_MEMORY_USAGE_GPU_ONLY);
 
             m_BrickPool.copyFromBuffer(m_Staging, size);
@@ -256,17 +243,16 @@ SuperBrickStruct SuperBrick::getStruct()
         generateStaging(stagingSize);
 
         size_t offset = 0;
-        for (glm::ivec3 p : m_ToBeLoaded)
-        {
-            if (m_GeneratedBricks.contains(p)) continue;
+        for (glm::ivec3 p : m_ToBeLoaded) {
+            if (m_GeneratedBricks.contains(p))
+                continue;
 
             Brick& brick = m_Bricks[p];
             size_t index = p.x + p.z * SUPERBRICK_SIZE + p.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
 
             auto brickStruct = brick.getStruct();
 
-            if (!brickStruct.has_value())
-            {
+            if (!brickStruct.has_value()) {
                 m_Struct.data[index].loaded = 1;
                 m_Struct.data[index].empty_flag = 1;
                 continue;
@@ -283,13 +269,13 @@ SuperBrickStruct SuperBrick::getStruct()
 
             brickStruct->colourPtr = 0;
 
-            std::vector<BrickStruct> temp{ brickStruct.value() };
+            std::vector<BrickStruct> temp { brickStruct.value() };
 
             std::memcpy((char*)m_Staging.getAllocationInfo().pMappedData, &brickStruct.value(),
-                        sizeof(BrickStruct));
+                sizeof(BrickStruct));
 
             m_BrickPool.copyFromBuffer(m_Staging, sizeof(BrickStruct), 0,
-                                       chosenIndex * sizeof(BrickStruct));
+                chosenIndex * sizeof(BrickStruct));
         }
 
         m_ToBeLoaded.clear();
@@ -305,49 +291,38 @@ void SuperBrick::reset()
     m_CurrentPoolSize = 512;
 
     m_FreeIndices.clear();
-    for (size_t i = 0; i < m_CurrentPoolSize; i++)
-    {
+    for (size_t i = 0; i < m_CurrentPoolSize; i++) {
         m_FreeIndices.insert(i);
     }
 
     m_BrickPool.free();
     m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
-                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                           VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                           VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                       VMA_MEMORY_USAGE_GPU_ONLY);
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
     m_Bricks.clear();
     m_ToBeLoaded.clear();
     m_GeneratedBricks.clear();
     m_ToBeGenerated.clear();
     m_Enqueued.clear();
 
-    for (size_t i = 0; i < m_Struct.data.size(); i++)
-    {
+    for (size_t i = 0; i < m_Struct.data.size(); i++) {
         m_Struct.data[i] = {};
     }
 }
 
 void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air, glm::vec4 colour)
 {
-    if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 ||
-        brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE)
-    {
+    if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 || brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE) {
         return;
     }
 
-    if (voxelIndex.x < 0 || voxelIndex.x >= BRICK_SIZE || voxelIndex.y < 0 ||
-        voxelIndex.y >= BRICK_SIZE || voxelIndex.z < 0 || voxelIndex.z >= BRICK_SIZE)
-    {
+    if (voxelIndex.x < 0 || voxelIndex.x >= BRICK_SIZE || voxelIndex.y < 0 || voxelIndex.y >= BRICK_SIZE || voxelIndex.z < 0 || voxelIndex.z >= BRICK_SIZE) {
         return;
     }
 
-    if (air)
-    {
+    if (air) {
         m_Bricks.at(brickIndex).setAir(voxelIndex);
-    }
-    else
-    {
+    } else {
         m_Bricks.at(brickIndex).setVoxel(voxelIndex, colour);
     }
 
@@ -359,8 +334,7 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
 
 void SuperBrick::generateStaging(size_t size)
 {
-    if (m_Staging.getSize() >= size)
-    {
+    if (m_Staging.getSize() >= size) {
         return;
     }
 
@@ -373,27 +347,27 @@ void SuperBrick::generateStaging(size_t size)
 
 void SuperBrick::generateBrickLoop()
 {
-    while (m_Running)
-    {
+    while (m_Running) {
         glm::ivec3 position;
         {
             std::unique_lock<std::mutex> lock(m_QueueLock);
-            if (m_ToBeGenerated.size() == 0)
-            {
+            if (m_ToBeGenerated.size() == 0) {
                 m_CanGenerate.wait(lock, [this] { return !m_ToBeGenerated.empty() || !m_Running; });
             }
-            if (!m_Running) return;
+            if (!m_Running)
+                return;
 
             position = m_ToBeGenerated.front();
         }
         std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue->queueMutex);
-        if (!m_Running) return;
+        if (!m_Running)
+            return;
 
         m_HasChanged = true;
         VK_CHECK(vkResetFences(m_Device, 1, &m_GenerationFence));
         VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
 
-        VkCommandBufferBeginInfo commandBufferBI{};
+        VkCommandBufferBeginInfo commandBufferBI {};
         commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         commandBufferBI.pNext = nullptr;
         commandBufferBI.pInheritanceInfo = nullptr;
@@ -402,7 +376,7 @@ void SuperBrick::generateBrickLoop()
             VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &commandBufferBI));
             {
                 vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                  m_GeneratePipeline);
+                    m_GeneratePipeline);
 
                 GenerationPushConstants pushConstants;
                 pushConstants.brickIndex = position;
@@ -411,20 +385,20 @@ void SuperBrick::generateBrickLoop()
                 pushConstants.colours = m_GeneratedColourData.getDeviceAddress(m_Device);
 
                 vkCmdPushConstants(m_CommandBuffer, m_GeneratePipelineLayout,
-                                   VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
-                                   &pushConstants);
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
+                    &pushConstants);
 
                 vkCmdDispatch(m_CommandBuffer, 1, 1, 1);
             }
             VK_CHECK(vkEndCommandBuffer(m_CommandBuffer));
 
-            VkCommandBufferSubmitInfo commandBufferSI{};
+            VkCommandBufferSubmitInfo commandBufferSI {};
             commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
             commandBufferSI.pNext = nullptr;
             commandBufferSI.commandBuffer = m_CommandBuffer;
             commandBufferSI.deviceMask = 0;
 
-            VkSubmitInfo2 submitInfo{};
+            VkSubmitInfo2 submitInfo {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
             submitInfo.pNext = nullptr;
             submitInfo.commandBufferInfoCount = 1;
@@ -438,21 +412,15 @@ void SuperBrick::generateBrickLoop()
         const uint32_t solidVoxels = *data;
         const uint64_t* mask = (const uint64_t*)(data + 1);
 
-        const glm::vec4* colour_data =
-            (const glm::vec4*)(m_GeneratedColourData.getAllocationInfo().pMappedData);
+        const glm::vec4* colour_data = (const glm::vec4*)(m_GeneratedColourData.getAllocationInfo().pMappedData);
 
         Brick brick;
-        if (solidVoxels != 0)
-        {
-            for (int y = 0; y < BRICK_SIZE; y++)
-            {
-                for (int z = 0; z < BRICK_SIZE; z++)
-                {
-                    for (int x = 0; x < BRICK_SIZE; x++)
-                    {
+        if (solidVoxels != 0) {
+            for (int y = 0; y < BRICK_SIZE; y++) {
+                for (int z = 0; z < BRICK_SIZE; z++) {
+                    for (int x = 0; x < BRICK_SIZE; x++) {
                         uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
-                        if (colour_data[index].a >= 0)
-                        {
+                        if (colour_data[index].a >= 0) {
                             brick.setVoxel({ x, y, z }, colour_data[index]);
                         }
                     }

@@ -6,8 +6,7 @@
 #include "Buffer.hpp"
 #include "Voxel.hpp"
 
-class Chunk
-{
+class Chunk {
   public:
     Chunk();
     Chunk(glm::ivec3 chunkPosition, uint32_t dimension);

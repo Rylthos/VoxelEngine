@@ -38,8 +38,7 @@ struct GenerationPushConstants {
     VkDeviceAddress colours;
 };
 
-class SuperBrick
-{
+class SuperBrick {
   public:
     SuperBrick();
 
@@ -102,7 +101,7 @@ class SuperBrick
 
   private:
     void setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air,
-                  glm::vec4 colour = glm::vec4(0.));
+        glm::vec4 colour = glm::vec4(0.));
     void generateStaging(size_t size);
 
     void generateBrickLoop();

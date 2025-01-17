@@ -6,8 +6,7 @@
 #include "Chunk.hpp"
 #include "PaletteManager.hpp"
 
-class VoxLoader
-{
+class VoxLoader {
   public:
     VoxLoader(Chunk* chunk, PaletteManager* paletteManager);
 
@@ -20,7 +19,7 @@ class VoxLoader
   private:
     bool readChunk(std::ifstream& file);
 
-    template<int N>
+    template <int N>
     std::array<uint8_t, N> readBytes(std::ifstream& file)
     {
         std::array<uint8_t, N> bytes;

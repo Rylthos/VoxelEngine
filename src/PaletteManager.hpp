@@ -8,8 +8,7 @@
 #include "Events.hpp"
 #include "Image.hpp"
 
-class PaletteManager : public EventReceiver
-{
+class PaletteManager : public EventReceiver {
   public:
     PaletteManager();
 

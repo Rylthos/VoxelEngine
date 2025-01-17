@@ -8,8 +8,7 @@
 
 Brick::Brick()
 {
-    for (int i = 0; i < BRICK_SIZE; i++)
-    {
+    for (int i = 0; i < BRICK_SIZE; i++) {
         m_Brick.solidMask[i] = 0;
     }
     m_Brick.colourPtr = 0;
@@ -20,8 +19,7 @@ Brick::Brick()
 
 void Brick::setAir(glm::ivec3 position)
 {
-    if (!validPosition(position))
-    {
+    if (!validPosition(position)) {
         spdlog::error("Invalid set position: {}", glm::to_string(position));
     }
 
@@ -31,8 +29,7 @@ void Brick::setAir(glm::ivec3 position)
 
 void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour)
 {
-    if (!validPosition(position))
-    {
+    if (!validPosition(position)) {
         spdlog::error("Invalid set position: {}", glm::to_string(position));
     };
 
@@ -44,19 +41,15 @@ void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour)
 
 std::optional<glm::vec4> Brick::getVoxel(glm::ivec3 position)
 {
-    if (!validPosition(position))
-    {
+    if (!validPosition(position)) {
         return {};
     }
 
     uint64_t mask = position.z * BRICK_SIZE + position.x;
     uint64_t v = m_Brick.solidMask[position.y] >> mask;
-    if (v != 0)
-    {
+    if (v != 0) {
         return std::optional<glm::vec4>(m_Colours[getColourIndex(position)]);
-    }
-    else
-    {
+    } else {
         return {};
     }
 }
@@ -64,15 +57,14 @@ std::optional<glm::vec4> Brick::getVoxel(glm::ivec3 position)
 std::optional<BrickStruct> Brick::getStruct()
 {
     bool isAir = true;
-    for (int i = 0; i < BRICK_SIZE; i++)
-    {
-        if (m_Brick.solidMask[i] != 0)
-        {
+    for (int i = 0; i < BRICK_SIZE; i++) {
+        if (m_Brick.solidMask[i] != 0) {
             isAir = false;
             break;
         }
     }
-    if (isAir) return {};
+    if (isAir)
+        return {};
 
     m_Brick.lodR = 0;
     m_Brick.lodG = 255;
@@ -85,8 +77,7 @@ std::vector<glm::vec4> Brick::getColours()
 {
     std::vector<glm::vec4> colours;
     colours.reserve(m_Colours.size());
-    for (auto i : m_Colours)
-    {
+    for (auto i : m_Colours) {
         colours.push_back(i.second);
     }
 
@@ -95,8 +86,7 @@ std::vector<glm::vec4> Brick::getColours()
 
 bool Brick::validPosition(glm::ivec3 pos)
 {
-    return !(pos.x < 0 || pos.x >= BRICK_SIZE || pos.y < 0 || pos.y >= BRICK_SIZE || pos.z < 0 ||
-             pos.z >= BRICK_SIZE);
+    return !(pos.x < 0 || pos.x >= BRICK_SIZE || pos.y < 0 || pos.y >= BRICK_SIZE || pos.z < 0 || pos.z >= BRICK_SIZE);
 }
 
 uint64_t Brick::getColourIndex(glm::ivec3 position)

@@ -28,7 +28,7 @@ extern TracyVkCtx g_TracyVkCtx;
 
 #define PROF_FRAME_MARK FrameMark
 
-template<class T>
+template <class T>
 using PROF_lockable_T = tracy::Lockable<T>;
 
 #endif
@@ -54,7 +54,7 @@ using PROF_lockable_T = tracy::Lockable<T>;
 
 #define PROF_FRAME_MARK
 
-template<class T>
+template <class T>
 using PROF_lockable_T = T;
 
 #endif

@@ -6,21 +6,18 @@
 #include <spdlog/spdlog.h>
 
 #ifndef DEBUG
-#define VK_CHECK(x)                                                                                \
-    do                                                                                             \
-    {                                                                                              \
-        VkResult result = x;                                                                       \
-        if (result)                                                                                \
-        {                                                                                          \
-            spdlog::error("{}:{} {}", __FILE__, __LINE__, string_VkResult(result));                \
-        }                                                                                          \
+#define VK_CHECK(x)                                                                 \
+    do {                                                                            \
+        VkResult result = x;                                                        \
+        if (result) {                                                               \
+            spdlog::error("{}:{} {}", __FILE__, __LINE__, string_VkResult(result)); \
+        }                                                                           \
     } while (0)
 #else
 
 inline void VK_CHECK(VkResult result)
 {
-    if (result)
-    {
+    if (result) {
         spdlog::error("{}:{} {}", __FILE__, __LINE__, string_VkResult(result));
     }
 }

@@ -10,8 +10,7 @@
 
 #include "ImmediateSubmit.hpp"
 
-class Buffer
-{
+class Buffer {
   public:
     Buffer();
     Buffer(Buffer&) = delete;
@@ -20,8 +19,8 @@ class Buffer
     ~Buffer();
 
     void create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage,
-                VmaMemoryUsage properties,
-                VmaAllocationCreateFlags flags = VMA_ALLOCATION_CREATE_MAPPED_BIT);
+        VmaMemoryUsage properties,
+        VmaAllocationCreateFlags flags = VMA_ALLOCATION_CREATE_MAPPED_BIT);
     void free();
 
     VkBuffer getBuffer() const { return m_Buffer; }
@@ -32,18 +31,18 @@ class Buffer
     VkDeviceAddress getDeviceAddress(VkDevice device) const;
 
     void copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset = 0,
-                        size_t dstOffset = 0);
+        size_t dstOffset = 0);
 
     void copyFromBuffer(VkCommandBuffer cmd, const Buffer& buffer, size_t size,
-                        size_t srcOffset = 0, size_t dstOffset = 0);
+        size_t srcOffset = 0, size_t dstOffset = 0);
 
-    template<typename T>
+    template <typename T>
     void copyFromData(const std::span<T>& data)
     {
         size_t size = data.size() * sizeof(T);
         Buffer stagingBuffer;
         stagingBuffer.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                             VMA_MEMORY_USAGE_CPU_TO_GPU);
+            VMA_MEMORY_USAGE_CPU_TO_GPU);
 
         std::memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
 
@@ -52,7 +51,7 @@ class Buffer
         stagingBuffer.free();
     }
 
-    template<typename T>
+    template <typename T>
     void copyToVector(std::vector<T>& data)
     {
         size_t elements = m_Size / sizeof(T);
@@ -60,7 +59,7 @@ class Buffer
         std::memcpy(data.data(), getAllocationInfo().pMappedData, m_Size);
     }
 
-    template<typename T>
+    template <typename T>
     void copyFromData_CPUOnly(const std::span<T>& data)
     {
         size_t size = data.size() * sizeof(T);

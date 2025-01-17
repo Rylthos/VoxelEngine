@@ -7,8 +7,7 @@
 
 #include "EventHandler.hpp"
 
-class Window
-{
+class Window {
   public:
     Window();
     Window(Window&) = delete;

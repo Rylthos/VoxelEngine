@@ -6,7 +6,7 @@
 
 #include <fstream>
 
-ShaderModule::ShaderModule() {}
+ShaderModule::ShaderModule() { }
 ShaderModule::~ShaderModule() { free(); }
 
 void ShaderModule::create(const char* filePath, VkDevice device)
@@ -16,8 +16,7 @@ void ShaderModule::create(const char* filePath, VkDevice device)
 
     std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
-    if (!file.is_open())
-    {
+    if (!file.is_open()) {
         spdlog::error("Failed to open file: {}", filePath);
         return;
     }
@@ -30,15 +29,14 @@ void ShaderModule::create(const char* filePath, VkDevice device)
 
     file.close();
 
-    VkShaderModuleCreateInfo shaderModuleCI{};
+    VkShaderModuleCreateInfo shaderModuleCI {};
     shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     shaderModuleCI.pNext = nullptr;
     shaderModuleCI.codeSize = buffer.size() * sizeof(uint32_t);
     shaderModuleCI.pCode = buffer.data();
 
     VkResult result = vkCreateShaderModule(m_Device, &shaderModuleCI, nullptr, &m_Module);
-    if (result != VK_SUCCESS)
-    {
+    if (result != VK_SUCCESS) {
         spdlog::error("Failed to compile Shader module: {}: {}", filePath, string_VkResult(result));
         return;
     }

@@ -30,11 +30,10 @@ struct Stats {
     float frameDelta;
 };
 
-class Engine : EventReceiver
-{
+class Engine : EventReceiver {
   public:
   public:
-    Engine() {}
+    Engine() { }
 
     void init();
     void start();
