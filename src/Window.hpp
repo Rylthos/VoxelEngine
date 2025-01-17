@@ -40,6 +40,7 @@ class Window
 
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void mouseMoveCallback(GLFWwindow* window, double xpos, double ypos);
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
     static void mouseEnterCallback(GLFWwindow* window, int entered);
     static void resizeCallback(GLFWwindow* window, int width, int height);
 };

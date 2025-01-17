@@ -17,7 +17,10 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
     m_Allocator = allocator;
     m_ComputeQueue = computeQueue;
     m_CurrentPoolSize = 512;
-    m_CurrentPoolAllocation = 0;
+    for (size_t i = 0; i < m_CurrentPoolSize; i++)
+    {
+        m_FreeIndices.insert(i);
+    }
 
     for (size_t i = 0; i < m_Struct.data.size(); i++)
     {
@@ -198,6 +201,16 @@ void SuperBrick::addBrickToQueue(uint32_t index)
     addBrickToQueue(position);
 }
 
+void SuperBrick::placeVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour)
+{
+    setVoxel(brickIndex, voxelIndex, false, colour);
+}
+
+void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex)
+{
+    setVoxel(brickIndex, voxelIndex, true);
+}
+
 SuperBrickStruct SuperBrick::getStruct()
 {
     if (m_HasChanged)
@@ -206,11 +219,18 @@ SuperBrickStruct SuperBrick::getStruct()
 
         m_HasChanged = false;
 
-        size_t newSize = m_CurrentPoolAllocation + m_ToBeLoaded.size();
+        size_t newSize = m_CurrentPoolSize - m_FreeIndices.size() + m_ToBeLoaded.size();
 
-        if (newSize >= m_CurrentPoolSize)
+        if ((int64_t)m_FreeIndices.size() - (int64_t)m_ToBeLoaded.size() < 0)
         {
+            size_t previous = m_CurrentPoolSize;
             m_CurrentPoolSize *= 2;
+
+            for (size_t i = previous; i < m_CurrentPoolSize; i++)
+            {
+                m_FreeIndices.insert(i);
+            }
+
             size_t size = m_BrickPool.getSize();
             generateStaging(size);
             m_Staging.copyFromBuffer(m_BrickPool, size);
@@ -225,9 +245,11 @@ SuperBrickStruct SuperBrick::getStruct()
             m_BrickPool.copyFromBuffer(m_Staging, size);
         }
 
-        size_t original_offset = m_CurrentPoolAllocation;
+        // TODO: Improve loading by combining adjacent chunks into one copy
 
-        size_t stagingSize = m_ToBeLoaded.size() * sizeof(BrickStruct);
+        // size_t original_offset = m_CurrentPoolAllocation;
+
+        size_t stagingSize = sizeof(BrickStruct);
         generateStaging(stagingSize);
 
         size_t offset = 0;
@@ -247,28 +269,27 @@ SuperBrickStruct SuperBrick::getStruct()
                 continue;
             }
 
-            m_GeneratedBricks[p] = m_CurrentPoolAllocation;
+            size_t chosenIndex = *m_FreeIndices.begin();
+            m_GeneratedBricks[p] = chosenIndex;
 
-            m_Struct.data[index].pointer = m_CurrentPoolAllocation;
+            m_Struct.data[index].pointer = chosenIndex;
             m_Struct.data[index].loaded = 1;
             m_Struct.data[index].empty_flag = 0;
 
-            m_CurrentPoolAllocation += 1;
+            m_FreeIndices.erase(chosenIndex);
 
             brickStruct->colourPtr = 0;
 
             std::vector<BrickStruct> temp{ brickStruct.value() };
 
-            std::memcpy((char*)m_Staging.getAllocationInfo().pMappedData + offset,
-                        &brickStruct.value(), sizeof(BrickStruct));
+            std::memcpy((char*)m_Staging.getAllocationInfo().pMappedData, &brickStruct.value(),
+                        sizeof(BrickStruct));
 
-            offset += sizeof(BrickStruct);
+            m_BrickPool.copyFromBuffer(m_Staging, sizeof(BrickStruct), 0,
+                                       chosenIndex * sizeof(BrickStruct));
         }
 
         m_ToBeLoaded.clear();
-
-        m_BrickPool.copyFromBuffer(m_Staging, stagingSize, 0,
-                                   original_offset * sizeof(BrickStruct));
 
         m_Struct.bricks = m_BrickPool.getDeviceAddress(m_Device);
         m_Struct.colour = m_ColourMap.getDeviceAddress(m_Device);
@@ -279,7 +300,13 @@ SuperBrickStruct SuperBrick::getStruct()
 void SuperBrick::reset()
 {
     m_CurrentPoolSize = 512;
-    m_CurrentPoolAllocation = 0;
+
+    m_FreeIndices.clear();
+    for (size_t i = 0; i < m_CurrentPoolSize; i++)
+    {
+        m_FreeIndices.insert(i);
+    }
+
     m_BrickPool.free();
     m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
@@ -296,6 +323,35 @@ void SuperBrick::reset()
     {
         m_Struct.data[i] = {};
     }
+}
+
+void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air, glm::vec4 colour)
+{
+    if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 ||
+        brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE)
+    {
+        return;
+    }
+
+    if (voxelIndex.x < 0 || voxelIndex.x >= BRICK_SIZE || voxelIndex.y < 0 ||
+        voxelIndex.y >= BRICK_SIZE || voxelIndex.z < 0 || voxelIndex.z >= BRICK_SIZE)
+    {
+        return;
+    }
+
+    if (air)
+    {
+        m_Bricks.at(brickIndex).setAir(voxelIndex);
+    }
+    else
+    {
+        m_Bricks.at(brickIndex).setVoxel(voxelIndex, colour);
+    }
+
+    m_ToBeLoaded.push_back(brickIndex);
+    m_GeneratedBricks.erase(brickIndex);
+
+    m_HasChanged = true;
 }
 
 void SuperBrick::generateStaging(size_t size)

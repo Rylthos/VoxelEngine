@@ -244,14 +244,13 @@ HitRecord traverseSuperBrick(Ray ray)
         }
 
         uint32_t data = p_SuperBrick.superBrick.data[index];
-        uint32_t flags = bitfieldExtract(data, 1, 3);
 
-        uint32_t is_valid = bitfieldExtract(data, 0, 1);
-        uint32_t unused = bitfieldExtract(data, 16, 16);
+        uint32_t is_loaded = bitfieldExtract(data, SUPER_BRICK_IS_LOADED_OFFSET, SUPER_BRICK_IS_LOADED_SIZE);
+        uint32_t is_empty = bitfieldExtract(data, SUPER_BRICK_IS_EMPTY_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
 
-        uint32_t brickPointer = bitfieldExtract(data, 4, 12);
+        uint32_t brickPointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
-        if (is_valid == 0) {
+        if (is_loaded == 0) {
             Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
 
             hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
@@ -261,10 +260,10 @@ HitRecord traverseSuperBrick(Ray ray)
                 return hit;
             }
 
-            uint32_t new_data = bitfieldInsert(data, 1, 1, 1);
+            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             uint32_t previous = atomicExchange(p_SuperBrick.superBrick.data[index], new_data);
 
-            uint32_t previously_requested = bitfieldExtract(previous, 1, 1);
+            uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             if (previously_requested == 0) {
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
@@ -276,7 +275,7 @@ HitRecord traverseSuperBrick(Ray ray)
 
             return hit;
         } else { // Brick is already loaded
-            if ((flags & LOADED_BRICK_FLAG_EMPTY) == 0) // Not Empty
+            if (is_empty == 0) // Not Empty
             {
                 vec3 brickMinBound = superBrickIndex * BRICK_SIZE;
 

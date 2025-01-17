@@ -1,20 +1,15 @@
 #define BRICK_SIZE 8
 #define SUPER_BRICK_SIZE 16
 
-#define SUPER_BRICK_IS_VALID_BIT 0x1
+#define SUPER_BRICK_IS_LOADED_OFFSET 0
+#define SUPER_BRICK_IS_LOADED_SIZE 1
 
-#define SUPER_BRICK_FLAGS_OFFSET 0x1
-#define SUPER_BRICK_FLAGS_BITMASK 0x7
+#define SUPER_BRICK_FLAG_SIZE 1
+#define SUPER_BRICK_REQUESTED_FLAG_OFFSET 1
+#define SUPER_BRICK_IS_EMPTY_FLAG_OFFSET 2
 
-#define LOADED_BRICK_FLAG_EMPTY 0x1
-
-#define UNLOADED_BRICK_FLAG_REQUESTED 0x1
-
-#define LOADED_BRICK_POINTER_OFFSET 0x4
-#define LOADED_BRICK_POINTER_BITMASK 0xFFF
-
-#define LOADED_BRICK_LOD_OFFSET 0x10
-#define LOADED_BRICK_LOD_BITMASK 0xFF
+#define SUPER_BRICK_POINTER_OFFSET 4
+#define SUPER_BRICK_POINTER_SIZE 12
 
 struct Brick {
     uint64_t solidMask[8];
@@ -39,10 +34,7 @@ layout(buffer_reference, std430) readonly buffer ColourBuffers {
 
 struct SuperBrick {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
-    // Flags: Empty
-
     // Unloaded:     LOD: 8 | LOD: 8 | LOD:     12 | Flags: 3 | 0
-    // Flags: REQUESTED
 
     uint32_t data[16 * 16 * 16];
     BrickBuffer bricksBuffer;

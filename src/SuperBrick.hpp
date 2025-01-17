@@ -1,11 +1,11 @@
 #pragma once
-
 #include <vulkan/vulkan.h>
 
 #include <array>
 #include <condition_variable>
 #include <deque>
 #include <glm/gtx/hash.hpp>
+#include <set>
 #include <unordered_set>
 
 #include "Brick.hpp"
@@ -16,8 +16,9 @@
 
 struct SuperBrickEntry {
     uint32_t loaded : 1;
+    uint32_t requested_flag : 1;
     uint32_t empty_flag : 1;
-    uint32_t flags : 2;
+    uint32_t unused : 1;
     uint32_t pointer : 12;
     uint32_t _ : 16;
 };
@@ -49,6 +50,9 @@ class SuperBrick
     void addBrickToQueue(uint32_t index);
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
 
+    void placeVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour);
+    void eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex);
+
     SuperBrickStruct getStruct();
 
     void reset();
@@ -61,8 +65,9 @@ class SuperBrick
     std::unordered_map<glm::ivec3, Brick> m_Bricks;
     std::deque<glm::ivec3> m_ToBeLoaded;
     std::unordered_map<glm::ivec3, uint16_t> m_GeneratedBricks;
+    std::set<uint16_t> m_FreeIndices;
+
     size_t m_CurrentPoolSize;
-    size_t m_CurrentPoolAllocation;
 
     Buffer m_BrickPool;
     Buffer m_Staging;
@@ -96,6 +101,8 @@ class SuperBrick
     std::unordered_set<glm::ivec3> m_Enqueued;
 
   private:
+    void setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air,
+                  glm::vec4 colour = glm::vec4(0.));
     void generateStaging(size_t size);
 
     void generateBrickLoop();

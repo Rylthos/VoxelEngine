@@ -1,5 +1,6 @@
 #include "Window.hpp"
 
+#include <GLFW/glfw3.h>
 #include <spdlog/spdlog.h>
 
 #include "VkCheck.hpp"
@@ -74,6 +75,7 @@ void Window::initWindow(const char* title, int width, int height)
     glfwSetKeyCallback(m_Window, Window::keyCallback);
     glfwSetCursorEnterCallback(m_Window, Window::mouseEnterCallback);
     glfwSetCursorPosCallback(m_Window, Window::mouseMoveCallback);
+    glfwSetMouseButtonCallback(m_Window, Window::mouseButtonCallback);
     glfwSetWindowSizeCallback(m_Window, Window::resizeCallback);
 }
 
@@ -135,6 +137,20 @@ void Window::mouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
     event.delta = { xDelta, yDelta };
 
     event.captured = self->m_MouseCaptured;
+
+    EventHandler::dispatchEvent(&event);
+}
+
+void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+    Window* self = (Window*)glfwGetWindowUserPointer(window);
+
+    MouseButton event;
+    event.leftMousePressed = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS;
+    event.leftMouseReleased = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE;
+
+    event.rightMousePressed = button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS;
+    event.rightMouseReleased = button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE;
 
     EventHandler::dispatchEvent(&event);
 }

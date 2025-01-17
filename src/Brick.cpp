@@ -28,8 +28,6 @@ void Brick::setAir(glm::ivec3 position)
 
 void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour)
 {
-    auto previous = getVoxel(position);
-
     uint64_t mask = position.z * BRICK_SIZE + position.x;
     m_Brick.solidMask[position.y] |= ((uint64_t)1) << mask;
 

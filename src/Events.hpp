@@ -10,6 +10,7 @@ enum class EventType {
     UNDEFINED,
     KeyboardInput,
     MouseMove,
+    MouseButton,
     GameUpdate,
     GameRender,
     ImGuiRender,
@@ -36,6 +37,16 @@ struct MouseMove : public Event {
     glm::vec2 position;
     glm::vec2 delta;
     bool captured;
+};
+
+struct MouseButton : public Event {
+    EventType getType() const override { return EventType::MouseButton; }
+
+    bool leftMousePressed;
+    bool leftMouseReleased;
+
+    bool rightMousePressed;
+    bool rightMouseReleased;
 };
 
 struct GameUpdate : public Event {

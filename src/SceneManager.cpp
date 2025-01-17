@@ -1,7 +1,6 @@
 #include "SceneManager.hpp"
 
 #include <glm/gtx/string_cast.hpp>
-#include <iterator>
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
@@ -114,6 +113,28 @@ void SceneManager::receive(const Event* event)
 
             reedbackFeedback();
 
+            break;
+        }
+    case EventType::MouseButton:
+        {
+            const MouseButton* mv = static_cast<const MouseButton*>(event);
+
+            if (mv->leftMousePressed)
+            {
+                if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel)
+                {
+                    glm::ivec3 newIndex =
+                        m_Feedback.voxelIndex + glm::ivec3(m_Feedback.voxelNormal);
+                    m_SuperBrick.placeVoxel(m_Feedback.brickIndex, newIndex, glm::vec4(1.));
+                }
+            }
+            if (mv->rightMousePressed)
+            {
+                if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel)
+                {
+                    m_SuperBrick.eraseVoxel(m_Feedback.brickIndex, m_Feedback.voxelIndex);
+                }
+            }
             break;
         }
     case EventType::ImGuiRender:
