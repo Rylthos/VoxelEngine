@@ -58,11 +58,13 @@ class SuperBrick {
 
     size_t getBricksSize() { return m_GeneratedBricks.size(); }
     size_t getQueued() { return m_ToBeGenerated.size(); }
+    size_t getFreeIndices() { return m_FreeIndices.size(); }
+    size_t getCurrentAllocation() { return m_CurrentPoolSize; }
 
   private:
     bool m_Initialized = false;
     std::unordered_map<glm::ivec3, Brick> m_Bricks;
-    std::deque<glm::ivec3> m_ToBeLoaded;
+    std::unordered_set<glm::ivec3> m_ToBeLoaded;
     std::unordered_map<glm::ivec3, uint16_t> m_GeneratedBricks;
     std::set<uint16_t> m_FreeIndices;
 

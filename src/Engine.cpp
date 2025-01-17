@@ -76,7 +76,7 @@ void Engine::init()
         &m_Camera);
 
     EventHandler::subscribe(
-        { EventType::GameUpdate, EventType::MouseButton, EventType::ImGuiRender }, &m_SceneManager);
+        { EventType::GameUpdate, EventType::MouseButton, EventType::MouseScroll, EventType::ImGuiRender }, &m_SceneManager);
     EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_RenderAlt = false;

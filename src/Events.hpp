@@ -11,6 +11,7 @@ enum class EventType {
     KeyboardInput,
     MouseMove,
     MouseButton,
+    MouseScroll,
     GameUpdate,
     GameRender,
     ImGuiRender,
@@ -47,6 +48,13 @@ struct MouseButton : public Event {
 
     bool rightMousePressed;
     bool rightMouseReleased;
+};
+
+struct MouseScroll : public Event {
+    EventType getType() const override { return EventType::MouseScroll; }
+
+    double yOffset;
+    double xOffset;
 };
 
 struct GameUpdate : public Event {

@@ -74,6 +74,7 @@ void Window::initWindow(const char* title, int width, int height)
     glfwSetCursorEnterCallback(m_Window, Window::mouseEnterCallback);
     glfwSetCursorPosCallback(m_Window, Window::mouseMoveCallback);
     glfwSetMouseButtonCallback(m_Window, Window::mouseButtonCallback);
+    glfwSetScrollCallback(m_Window, Window::mouseScrollCallback);
     glfwSetWindowSizeCallback(m_Window, Window::resizeCallback);
 }
 
@@ -135,14 +136,21 @@ void Window::mouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
 
 void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
-    Window* self = (Window*)glfwGetWindowUserPointer(window);
-
     MouseButton event;
     event.leftMousePressed = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS;
     event.leftMouseReleased = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE;
 
     event.rightMousePressed = button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS;
     event.rightMouseReleased = button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE;
+
+    EventHandler::dispatchEvent(&event);
+}
+
+void Window::mouseScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
+{
+    MouseScroll event;
+    event.xOffset = xOffset;
+    event.yOffset = yOffset;
 
     EventHandler::dispatchEvent(&event);
 }

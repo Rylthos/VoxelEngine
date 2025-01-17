@@ -28,7 +28,7 @@ struct Feedback {
     int hasHitVoxel;
     glm::ivec3 voxelIndex;
     int _1;
-    glm::vec3 voxelNormal;
+    glm::ivec3 voxelNormal;
     int _2;
 };
 
@@ -102,6 +102,8 @@ class SceneManager : public EventReceiver {
 
     glm::ivec3 m_CurrentChunk { -10, -10, -10 };
     int m_ChunkRange = 2;
+
+    uint32_t m_PlacementSize = 1;
 
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);

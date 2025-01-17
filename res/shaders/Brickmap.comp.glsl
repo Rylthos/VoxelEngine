@@ -21,7 +21,7 @@ layout(buffer_reference, std430) buffer FeedbackBuffer {
     int hasHitVoxel;
     ivec3 voxelIndex;
     int _3;
-    vec3 voxelNormal;
+    ivec3 voxelNormal;
     int _4;
 };
 
@@ -59,7 +59,7 @@ struct HitRecord {
     vec3 voxelHitPosition;
     ivec3 voxelHitIndex;
     ivec3 brickHitIndex;
-    vec3 normal;
+    ivec3 normal;
     vec4 colour;
     int comparisons;
 };
@@ -90,21 +90,21 @@ ivec3 dir_sign(vec3 v)
     return ivec3(getsign(v.x), getsign(v.y), getsign(v.z));
 }
 
-vec3 calculateNormalFromBounds(Ray ray, float t, vec3 minBound, vec3 maxBound) {
+ivec3 calculateNormalFromBounds(Ray ray, float t, vec3 minBound, vec3 maxBound) {
     vec3 position = calculatePosition(ray.origin, ray.direction, t);
 
     bvec3 minBoundHit = lessThanEqual(position - minBound, vec3(0.0001));
     bvec3 maxBoundHit = greaterThanEqual(position - maxBound, vec3(0.0001));
 
-    if (minBoundHit.x) return vec3(-1, 0, 0);
-    if (minBoundHit.y) return vec3(0, -1, 0);
-    if (minBoundHit.z) return vec3(0, 0, -1);
+    if (minBoundHit.x) return ivec3(-1, 0, 0);
+    if (minBoundHit.y) return ivec3(0, -1, 0);
+    if (minBoundHit.z) return ivec3(0, 0, -1);
 
-    if (maxBoundHit.x) return vec3(1, 0, 0);
-    if (maxBoundHit.y) return vec3(0, 1, 0);
-    if (maxBoundHit.z) return vec3(0, 0, 1);
+    if (maxBoundHit.x) return ivec3(1, 0, 0);
+    if (maxBoundHit.y) return ivec3(0, 1, 0);
+    if (maxBoundHit.z) return ivec3(0, 0, 1);
 
-    return vec3(0.);
+    return ivec3(0.);
 }
 
 vec4 calculateColour(in Brick brick, in ivec3 brickIndex) {
@@ -160,7 +160,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     ivec3 stepAxis = ivec3(1, 0, 0);
 
     vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin) - minBound;
-    vec3 normal = hit.normal;
+    ivec3 normal = hit.normal;
 
     int count = 0;
     for (; iterations < p_MaxIterations; iterations++)
@@ -189,7 +189,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
         totalDistTraveled += stepSize * stepAxis;
         nextDist += stepSize * stepAxis;
         brickIndex += stepDirection * stepAxis;
-        normal = -(stepDirection * stepAxis);
+        normal = ivec3(-(stepDirection * stepAxis));
 
         bvec3 lower = lessThan(brickIndex, ivec3(0));
         bvec3 higher = greaterThanEqual(brickIndex, ivec3(BRICK_SIZE));
@@ -229,7 +229,7 @@ HitRecord traverseSuperBrick(Ray ray)
     vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (superBrickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
-    vec3 normal = calculateNormalFromBounds(ray, tMin, minBound, maxBound);
+    ivec3 normal = calculateNormalFromBounds(ray, tMin, minBound, maxBound);
 
     for (int iterations = 0; iterations < p_MaxIterations; iterations++)
     {

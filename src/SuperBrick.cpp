@@ -212,9 +212,7 @@ SuperBrickStruct SuperBrick::getStruct()
 
         m_HasChanged = false;
 
-        size_t newSize = m_CurrentPoolSize - m_FreeIndices.size() + m_ToBeLoaded.size();
-
-        if ((int64_t)m_FreeIndices.size() - (int64_t)m_ToBeLoaded.size() < 0) {
+        if (m_FreeIndices.size() < m_ToBeLoaded.size()) {
             size_t previous = m_CurrentPoolSize;
             m_CurrentPoolSize *= 2;
 
@@ -312,12 +310,25 @@ void SuperBrick::reset()
 
 void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air, glm::vec4 colour)
 {
+    for (int i = 0; i < 3; i++) {
+        while (voxelIndex[i] < 0) {
+            brickIndex[i] -= 1;
+            voxelIndex[i] = voxelIndex[i] + BRICK_SIZE;
+        }
+
+        while (voxelIndex[i] >= BRICK_SIZE) {
+            brickIndex[i] += 1;
+            voxelIndex[i] = voxelIndex[i] - BRICK_SIZE;
+        }
+    }
+
     if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 || brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE) {
         return;
     }
 
-    if (voxelIndex.x < 0 || voxelIndex.x >= BRICK_SIZE || voxelIndex.y < 0 || voxelIndex.y >= BRICK_SIZE || voxelIndex.z < 0 || voxelIndex.z >= BRICK_SIZE) {
-        return;
+    if (!m_Bricks.contains(brickIndex)) {
+        Brick brick;
+        m_Bricks[brickIndex] = brick;
     }
 
     if (air) {
@@ -326,8 +337,12 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
         m_Bricks.at(brickIndex).setVoxel(voxelIndex, colour);
     }
 
-    m_ToBeLoaded.push_back(brickIndex);
-    m_GeneratedBricks.erase(brickIndex);
+    m_ToBeLoaded.insert(brickIndex);
+    if (m_GeneratedBricks.contains(brickIndex)) {
+        uint16_t lookup = m_GeneratedBricks[brickIndex];
+        m_GeneratedBricks.erase(brickIndex);
+        m_FreeIndices.insert(lookup);
+    }
 
     m_HasChanged = true;
 }
@@ -436,7 +451,7 @@ void SuperBrick::generateBrickLoop()
         {
             std::lock_guard<std::mutex> lock(m_QueueLock);
             m_ToBeGenerated.pop_front();
-            m_ToBeLoaded.push_front(position);
+            m_ToBeLoaded.insert(position);
             m_Enqueued.erase(position);
         }
     }
