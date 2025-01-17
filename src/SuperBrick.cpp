@@ -1,9 +1,12 @@
 #include "SuperBrick.hpp"
-#include "Brick.hpp"
-#include "Buffer.hpp"
+
 #include <pthread.h>
 #include <vulkan/vulkan_core.h>
 
+#include <glm/gtx/string_cast.hpp>
+
+#include "Brick.hpp"
+#include "Buffer.hpp"
 #include "SceneManager.hpp"
 #include "ShaderModule.hpp"
 #include "VkCheck.hpp"
@@ -396,7 +399,6 @@ void SuperBrick::generateBrickLoop()
         commandBufferBI.pInheritanceInfo = nullptr;
         commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         {
-
             VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &commandBufferBI));
             {
                 vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,

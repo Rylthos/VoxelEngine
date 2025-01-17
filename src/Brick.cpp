@@ -3,6 +3,9 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <glm/gtx/string_cast.hpp>
+#include <spdlog/spdlog.h>
+
 Brick::Brick()
 {
     for (int i = 0; i < BRICK_SIZE; i++)
@@ -19,15 +22,20 @@ void Brick::setAir(glm::ivec3 position)
 {
     if (!validPosition(position))
     {
-        return;
+        spdlog::error("Invalid set position: {}", glm::to_string(position));
     }
 
     uint64_t mask = position.z * BRICK_SIZE + position.x;
-    m_Brick.solidMask[position.y] &= ~(1 << mask);
+    m_Brick.solidMask[position.y] &= ~((uint64_t)1 << mask);
 }
 
 void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour)
 {
+    if (!validPosition(position))
+    {
+        spdlog::error("Invalid set position: {}", glm::to_string(position));
+    };
+
     uint64_t mask = position.z * BRICK_SIZE + position.x;
     m_Brick.solidMask[position.y] |= ((uint64_t)1) << mask;
 

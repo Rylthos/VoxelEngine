@@ -189,7 +189,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
         totalDistTraveled += stepSize * stepAxis;
         nextDist += stepSize * stepAxis;
         brickIndex += stepDirection * stepAxis;
-        normal = -stepAxis;
+        normal = -(stepDirection * stepAxis);
 
         bvec3 lower = lessThan(brickIndex, ivec3(0));
         bvec3 higher = greaterThanEqual(brickIndex, ivec3(BRICK_SIZE));
@@ -295,7 +295,7 @@ HitRecord traverseSuperBrick(Ray ray)
         superBrickIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
 
-        normal = -stepAxis;
+        normal = -(stepDirection * stepAxis);
 
         bvec3 lower = lessThan(superBrickIndex, vec3(0));
         bvec3 higher = greaterThanEqual(superBrickIndex, vec3(SUPER_BRICK_SIZE));
