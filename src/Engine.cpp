@@ -29,13 +29,13 @@ void Engine::init()
     spdlog::set_level(spdlog::level::trace);
     m_Window.create("Voxel Engine", 960, 960);
 
-    m_Camera = Camera(glm::vec3(0.0f, -2.0f, 0.0f), -45.0f, -45.f);
+    m_Camera = Camera(glm::vec3(2.5f, -1.0f, 0.0f), 0.0f, -30.f);
 
-    m_PaletteManager.defaultPalette();
+    // m_PaletteManager.defaultPalette();
     m_SceneManager = SceneManager(&m_PaletteManager, &m_Camera);
 
     initVulkan();
-    m_PaletteManager.initResources(m_Device, m_Allocator);
+    // m_PaletteManager.initResources(m_Device, m_Allocator);
 
     initSwapchain();
     initCommandPool();
@@ -66,7 +66,7 @@ void Engine::init()
 
     m_SceneManager.initResources(m_Device, m_Allocator, &m_ComputeQueue);
 
-    m_PaletteManager.updateImage();
+    // m_PaletteManager.updateImage();
 
     EventHandler::subscribe(
         { EventType::KeyboardInput, EventType::ImGuiRender, EventType::WindowResize }, this);
@@ -77,7 +77,7 @@ void Engine::init()
 
     EventHandler::subscribe(
         { EventType::GameUpdate, EventType::MouseButton, EventType::MouseScroll, EventType::ImGuiRender }, &m_SceneManager);
-    EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
+    // EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_RenderAlt = false;
 }
@@ -127,8 +127,8 @@ void Engine::start()
 
 void Engine::cleanup()
 {
-    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
     std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_GraphicsQueue.queueMutex);
+    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
 
     vkDeviceWaitIdle(m_Device);
 
@@ -167,7 +167,7 @@ void Engine::cleanup()
     }
 
     m_SceneManager.freeResources();
-    m_PaletteManager.freeResources();
+    // m_PaletteManager.freeResources();
 
     destroySwapchain();
 
@@ -464,7 +464,6 @@ void Engine::initImGui()
 void Engine::initDescriptorPool()
 {
     std::vector<VkDescriptorPoolSize> poolSizes = {
-        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 1 },
         { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT }
     };
 
@@ -485,7 +484,6 @@ void Engine::initDescriptorLayouts()
     m_VoxelDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
                                      .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
                                      .addStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT)
-                                     .addStorageImage(2, VK_SHADER_STAGE_COMPUTE_BIT)
                                      .build();
     spdlog::info("Created descriptor layouts");
 }
@@ -536,7 +534,6 @@ void Engine::initDescriptorSets()
     m_VoxelDescriptorSet = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
                                .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
                                .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
-                               .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_PaletteManager.getImage().getImageView())
                                .build()
                                .at(0);
 
@@ -573,8 +570,8 @@ void Engine::resizeWindow()
 {
     spdlog::info("Resizing | W: {} H: {}", m_Window.getSize().x, m_Window.getSize().y);
 
-    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
     std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_GraphicsQueue.queueMutex);
+    std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
 
     vkDeviceWaitIdle(m_Device);
 
@@ -631,6 +628,21 @@ void Engine::updateImGui()
         ImGui::Text("MIN: %1.3f : %.2f", minTime, 1000.0f / minTime);
 
         ImGui::Text("FPS: %1.3f", 1.0f / m_Stats.frameDelta);
+    }
+    ImGui::End();
+
+    if (ImGui::Begin("Memory")) {
+        static VmaTotalStatistics stats {};
+
+        if (ImGui::Button("Refresh memory stats")) {
+            vmaCalculateStatistics(m_Allocator, &stats);
+        }
+
+        ImGui::Text("Block Count: %d", stats.total.statistics.blockCount);
+        ImGui::Text("Allocation Count: %d", stats.total.statistics.allocationCount);
+        ImGui::Text("Block Bytes: %ld B", stats.total.statistics.blockBytes);
+        ImGui::Text("           : %.2f kB", stats.total.statistics.blockBytes / 1024.f);
+        ImGui::Text("           : %.2f mB", stats.total.statistics.blockBytes / (1024.f * 1024.f));
     }
     ImGui::End();
 
@@ -731,8 +743,8 @@ void Engine::render(float frameDelta)
 
         m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_GENERAL);
+        // m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
+        //     VK_IMAGE_LAYOUT_GENERAL);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);

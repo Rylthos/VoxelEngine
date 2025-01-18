@@ -12,7 +12,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba16f, set = 0, binding = 0) uniform image2D o_Image;
 layout(rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
-layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
+// layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 
 layout(buffer_reference, std430) buffer FeedbackBuffer {
     ivec3 superBrickIndex;
@@ -145,18 +145,15 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     }
 
     vec3 invDir = ray.invDir;
-    if (isinf(invDir.x)) invDir.x = 0.;
-    if (isinf(invDir.y)) invDir.y = 0.;
-    if (isinf(invDir.z)) invDir.z = 0.;
 
     vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0.);
 
     vec3 entryPos = (rayStart - minBound) / 1.;
 
-    ivec3 brickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
+    ivec3 voxelIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
     vec3 stepSize = invDir * stepDirection;
-    vec3 nextDist = (brickIndex - entryPos + max(stepDirection, 0)) * invDir;
+    vec3 nextDist = (voxelIndex - entryPos + max(stepDirection, 0)) * invDir;
     ivec3 stepAxis = ivec3(1, 0, 0);
 
     vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin) - minBound;
@@ -165,18 +162,23 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     int count = 0;
     for (; iterations < p_MaxIterations; iterations++)
     {
+        bvec3 lower = lessThan(voxelIndex, ivec3(0));
+        bvec3 higher = greaterThanEqual(voxelIndex, ivec3(BRICK_SIZE));
+        if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
+            break;
+
         hit.comparisons++;
         count++;
 
-        int y = brickIndex.y;
-        int bitMask = brickIndex.z * BRICK_SIZE
-                + brickIndex.x;
+        int y = voxelIndex.y;
+        int bitMask = voxelIndex.z * BRICK_SIZE
+                + voxelIndex.x;
 
         if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
-            hit.colour = calculateColour(brick, brickIndex);
+            hit.colour = calculateColour(brick, voxelIndex);
             hit.voxelHitPosition = totalDistTraveled;
-            hit.voxelHitIndex = brickIndex;
+            hit.voxelHitIndex = voxelIndex;
             hit.hasHitBrick = true;
             hit.hasHitVoxel = true;
             hit.normal = normal;
@@ -188,13 +190,8 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
 
         totalDistTraveled += stepSize * stepAxis;
         nextDist += stepSize * stepAxis;
-        brickIndex += stepDirection * stepAxis;
+        voxelIndex += stepDirection * stepAxis;
         normal = ivec3(-(stepDirection * stepAxis));
-
-        bvec3 lower = lessThan(brickIndex, ivec3(0));
-        bvec3 higher = greaterThanEqual(brickIndex, ivec3(BRICK_SIZE));
-        if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
-            break;
     }
 
     hit.hasHitBrick = false;
@@ -215,29 +212,31 @@ HitRecord traverseSuperBrick(Ray ray)
     hit.comparisons = 0;
 
     vec3 invDir = ray.invDir;
-    if (isinf(invDir.x)) invDir.x = 0.;
-    if (isinf(invDir.y)) invDir.y = 0.;
-    if (isinf(invDir.z)) invDir.z = 0.;
 
     vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
     vec3 rayEnd = ray.origin + ray.direction * tMax;
 
     vec3 entryPos = (rayStart - minBound) / BRICK_SIZE;
 
-    ivec3 superBrickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(SUPER_BRICK_SIZE));
+    ivec3 brickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(SUPER_BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
     vec3 stepSize = invDir * stepDirection;
-    vec3 nextDist = (superBrickIndex - entryPos + max(stepDirection, 0)) * invDir;
+    vec3 nextDist = (brickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
     ivec3 normal = calculateNormalFromBounds(ray, tMin, minBound, maxBound);
 
     for (int iterations = 0; iterations < p_MaxIterations; iterations++)
     {
+        bvec3 lower = lessThan(brickIndex, vec3(0));
+        bvec3 higher = greaterThanEqual(brickIndex, vec3(SUPER_BRICK_SIZE));
+        if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
+            break;
+
         hit.comparisons++;
 
-        uint32_t index = superBrickIndex.y * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE
-                + superBrickIndex.z * SUPER_BRICK_SIZE
-                + superBrickIndex.x;
+        uint32_t index = brickIndex.y * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE
+                + brickIndex.z * SUPER_BRICK_SIZE
+                + brickIndex.x;
 
         if (index >= SUPER_BRICK_SIZE * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE) {
             break;
@@ -277,13 +276,13 @@ HitRecord traverseSuperBrick(Ray ray)
         } else { // Brick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                vec3 brickMinBound = superBrickIndex * BRICK_SIZE;
+                vec3 brickMinBound = brickIndex * BRICK_SIZE;
 
                 hit.normal = normal;
                 traverseBrick(ray, brickPointer, brickMinBound, iterations, hit);
 
                 if (hit.hasHitBrick) {
-                    hit.brickHitIndex = superBrickIndex;
+                    hit.brickHitIndex = brickIndex;
                     return hit;
                 }
             }
@@ -292,15 +291,10 @@ HitRecord traverseSuperBrick(Ray ray)
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
-        superBrickIndex += stepDirection * stepAxis;
+        brickIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
 
         normal = -(stepDirection * stepAxis);
-
-        bvec3 lower = lessThan(superBrickIndex, vec3(0));
-        bvec3 higher = greaterThanEqual(superBrickIndex, vec3(SUPER_BRICK_SIZE));
-        if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
-            break;
     }
 
     hit.hasHitBrick = false;

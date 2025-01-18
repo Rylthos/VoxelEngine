@@ -47,9 +47,9 @@ void main() {
 
     ivec3 worldPosition = p_WorldPosition + ivec3(currentIndex);
 
-    if (p_BrickIndex.x % 2 == 0 && p_BrickIndex.z % 4 == 0 && p_BrickIndex.y % 4 == 0) {
+    if (p_BrickIndex.y % 4 == 0) {
         uint sum = currentIndex.x + currentIndex.y + currentIndex.z;
-        if (sum % 4 == 0) {
+        if (sum % 5 == 0) {
             setVoxel(currentIndex, vec3(1.));
         } else {
             setAir(currentIndex);

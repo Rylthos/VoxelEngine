@@ -73,7 +73,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
 
     m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
 
-    m_MaxLoaded = 64;
+    m_MaxLoaded = 128;
     size_t loadedSize = sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded;
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
         createStaging(loadedSize);
