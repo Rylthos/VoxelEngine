@@ -135,34 +135,42 @@ void SceneManager::receive(const Event* event)
             rightLength = m_PlacementSize / 2;
         }
 
-        if (mv->leftMousePressed) {
-            if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel) {
-                glm::ivec3 offset = glm::ivec3(glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
-                glm::ivec3 center = m_Feedback.voxelIndex + offset;
+        glm::ivec3 offset = glm::ivec3(glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
+        glm::ivec3 center = m_Feedback.voxelIndex;
 
-                for (int y = -leftLength; y <= rightLength; y++) {
-                    for (int z = -leftLength; z <= rightLength; z++) {
-                        for (int x = -leftLength; x <= rightLength; x++) {
-                            glm::ivec3 newIndex = center + glm::ivec3(x, y, z);
+        if (mv->leftMousePressed) {
+            center += offset;
+        }
+
+        if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel) {
+            for (int y = -leftLength; y <= rightLength; y++) {
+                for (int z = -leftLength; z <= rightLength; z++) {
+                    for (int x = -leftLength; x <= rightLength; x++) {
+                        glm::ivec3 newIndex = center + glm::ivec3(x, y, z);
+                        bool canPlace = true;
+                        switch (m_CurrentPlacement) {
+                        case PlacementType::Square:
+                            break;
+                        case PlacementType::Sphere: {
+                            if (glm::length(glm::vec3(newIndex - center)) > (float)(m_PlacementSize / 2.)) {
+                                canPlace = false;
+                            }
+                            break;
+                        }
+                        }
+
+                        if (!canPlace) {
+                            continue;
+                        }
+
+                        if (mv->leftMousePressed) {
                             m_SuperBrick.placeVoxel(m_Feedback.brickIndex, newIndex, glm::vec4(1.));
                         }
-                    }
-                }
-            }
-        }
-        if (mv->rightMousePressed) {
-            if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel) {
-                glm::ivec3 center = m_Feedback.voxelIndex;
-
-                for (int y = -leftLength; y <= rightLength; y++) {
-                    for (int z = -leftLength; z <= rightLength; z++) {
-                        for (int x = -leftLength; x <= rightLength; x++) {
-                            glm::ivec3 newIndex = center + glm::ivec3(x, y, z);
+                        if (mv->rightMousePressed) {
                             m_SuperBrick.eraseVoxel(m_Feedback.brickIndex, newIndex);
                         }
                     }
                 }
-                m_SuperBrick.eraseVoxel(m_Feedback.brickIndex, m_Feedback.voxelIndex);
             }
         }
         break;
