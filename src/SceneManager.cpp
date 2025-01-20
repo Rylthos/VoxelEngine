@@ -119,11 +119,6 @@ void SceneManager::receive(const Event* event)
 
         reedbackFeedback();
 
-        break;
-    }
-    case EventType::MouseButton: {
-        const MouseButton* mv = static_cast<const MouseButton*>(event);
-
         int leftLength = 0;
         int rightLength = 0;
 
@@ -138,7 +133,7 @@ void SceneManager::receive(const Event* event)
         glm::ivec3 offset = glm::ivec3(glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
         glm::ivec3 center = m_Feedback.voxelIndex;
 
-        if (mv->leftMousePressed) {
+        if (m_PlaceVoxel) {
             center += offset;
         }
 
@@ -163,16 +158,30 @@ void SceneManager::receive(const Event* event)
                             continue;
                         }
 
-                        if (mv->leftMousePressed) {
+                        if (m_PlaceVoxel && !m_EraseVoxel) {
                             m_SuperBrick.placeVoxel(m_Feedback.brickIndex, newIndex, glm::vec4(1.));
                         }
-                        if (mv->rightMousePressed) {
+                        if (m_EraseVoxel && !m_PlaceVoxel) {
                             m_SuperBrick.eraseVoxel(m_Feedback.brickIndex, newIndex);
                         }
                     }
                 }
             }
         }
+
+        if (!m_InfinitePlace) {
+            m_PlaceVoxel = false;
+            m_EraseVoxel = false;
+        }
+
+        break;
+    }
+    case EventType::MouseButton: {
+        const MouseButton* mv = static_cast<const MouseButton*>(event);
+
+        m_PlaceVoxel = mv->leftMousePressed;
+        m_EraseVoxel = mv->rightMousePressed;
+
         break;
     }
 
@@ -198,9 +207,6 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("Max Heat");
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
 
-            ImGui::Text("Placement Size");
-            ImGui::SliderInt("##PlacementSize", (int*)&m_PlacementSize, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
-
             ImGui::Text("Hit Data");
             ImGui::Text("Hitting Brick: %d", m_Feedback.hasHitBrick);
             ImGui::Text("Hitting Voxel: %d", m_Feedback.hasHitVoxel);
@@ -211,6 +217,15 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("Voxel Normal: %s", glm::to_string(m_Feedback.voxelNormal).c_str());
         }
         ImGui::End();
+
+        if (ImGui::Begin("Voxel Placement")) {
+            ImGui::Checkbox("Infinite Place", &m_InfinitePlace);
+
+            ImGui::Text("Placement Size");
+            ImGui::SliderInt("##PlacementSize", (int*)&m_PlacementSize, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
+        }
+        ImGui::End();
+
         break;
     }
     default:

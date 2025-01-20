@@ -136,6 +136,9 @@ void Window::mouseMoveCallback(GLFWwindow* window, double xPos, double yPos)
 
 void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
 {
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
+
     MouseButton event;
     event.leftMousePressed = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS;
     event.leftMouseReleased = button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE;
@@ -148,6 +151,9 @@ void Window::mouseButtonCallback(GLFWwindow* window, int button, int action, int
 
 void Window::mouseScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
 {
+    if (ImGui::GetIO().WantCaptureMouse)
+        return;
+
     MouseScroll event;
     event.xOffset = xOffset;
     event.yOffset = yOffset;

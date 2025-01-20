@@ -108,6 +108,9 @@ class SceneManager : public EventReceiver {
     glm::ivec3 m_CurrentChunk { -10, -10, -10 };
     int m_ChunkRange = 2;
 
+    bool m_InfinitePlace = false;
+    bool m_PlaceVoxel = false;
+    bool m_EraseVoxel = false;
     PlacementType m_CurrentPlacement = PlacementType::Sphere;
     uint32_t m_PlacementSize = 1;
 
