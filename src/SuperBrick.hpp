@@ -1,4 +1,6 @@
 #pragma once
+#include <variant>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 #include <array>
@@ -13,6 +15,10 @@
 #include "Queue.hpp"
 
 #define SUPERBRICK_SIZE 16
+
+#define ERASE_OP uint8_t
+#define PLACE_OP glm::vec4
+typedef std::variant<ERASE_OP, PLACE_OP> VoxelOp;
 
 struct SuperBrickEntry {
     uint32_t loaded : 1;
@@ -77,7 +83,6 @@ class SuperBrick {
     Buffer m_ColourMap;
 
     SuperBrickStruct m_Struct;
-    bool m_HasChanged = true;
 
     VkDevice m_Device;
     VmaAllocator m_Allocator;
@@ -100,6 +105,8 @@ class SuperBrick {
     std::mutex m_BufferLock;
     std::deque<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_Enqueued;
+
+    std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, VoxelOp>> m_QueuedChanges;
 
   private:
     void setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air,

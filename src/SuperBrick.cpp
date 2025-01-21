@@ -1,6 +1,7 @@
 #include "SuperBrick.hpp"
 
 #include <pthread.h>
+#include <variant>
 #include <vulkan/vulkan_core.h>
 
 #include <glm/gtx/string_cast.hpp>
@@ -173,10 +174,13 @@ void SuperBrick::addBrickToQueue(glm::ivec3 position)
 {
     std::lock_guard<std::mutex> m_Lock(m_QueueLock);
 
-    if (m_GeneratedBricks.contains(position))
+    if (m_Bricks.contains(position))
         return;
 
     if (m_Enqueued.contains(position))
+        return;
+
+    if (m_ToBeLoaded.contains(position))
         return;
 
     m_Enqueued.insert(position);
@@ -207,10 +211,8 @@ void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex)
 
 SuperBrickStruct SuperBrick::getStruct()
 {
-    if (m_HasChanged) {
+    if (m_ToBeLoaded.size() != 0) {
         std::unique_lock<std::mutex> lock(m_BufferLock);
-
-        m_HasChanged = false;
 
         if (m_FreeIndices.size() < m_ToBeLoaded.size()) {
             size_t previous = m_CurrentPoolSize;
@@ -327,8 +329,25 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
     }
 
     if (!m_Bricks.contains(brickIndex)) {
-        Brick brick;
-        m_Bricks[brickIndex] = brick;
+        VoxelOp op;
+        if (air) {
+            op = (uint8_t)0;
+        } else {
+            op = colour;
+        }
+
+        if (m_QueuedChanges.contains(brickIndex)) {
+            m_QueuedChanges[brickIndex].insert({ voxelIndex, op });
+        } else {
+            std::unordered_map<glm::ivec3, VoxelOp> map = {
+                { voxelIndex, op }
+            };
+
+            m_QueuedChanges.insert({ brickIndex,
+                map });
+        }
+
+        return;
     }
 
     if (air) {
@@ -343,8 +362,6 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
         m_GeneratedBricks.erase(brickIndex);
         m_FreeIndices.insert(lookup);
     }
-
-    m_HasChanged = true;
 }
 
 void SuperBrick::generateStaging(size_t size)
@@ -378,7 +395,6 @@ void SuperBrick::generateBrickLoop()
         if (!m_Running)
             return;
 
-        m_HasChanged = true;
         VK_CHECK(vkResetFences(m_Device, 1, &m_GenerationFence));
         VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
 
@@ -435,12 +451,26 @@ void SuperBrick::generateBrickLoop()
                 for (int z = 0; z < BRICK_SIZE; z++) {
                     for (int x = 0; x < BRICK_SIZE; x++) {
                         uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
+                        glm::ivec3 voxelIndex = { x, y, z };
                         if (colour_data[index].a >= 0) {
-                            brick.setVoxel({ x, y, z }, colour_data[index]);
+                            brick.setVoxel(voxelIndex, colour_data[index]);
                         }
                     }
                 }
             }
+        }
+
+        if (m_QueuedChanges.contains(position)) {
+            auto copy = m_QueuedChanges[position];
+            for (auto p : copy) {
+                if (std::holds_alternative<ERASE_OP>(p.second)) {
+                    brick.setAir(p.first);
+                } else if (std::holds_alternative<PLACE_OP>(p.second)) {
+                    brick.setVoxel(p.first, std::get<PLACE_OP>(p.second));
+                }
+            }
+
+            m_QueuedChanges.erase(position);
         }
 
         {
