@@ -91,18 +91,23 @@ class SuperBrick {
     VkPipeline m_GeneratePipeline;
     VkPipelineLayout m_GeneratePipelineLayout;
 
-    Buffer m_GeneratedData;
-    Buffer m_GeneratedColourData;
-    VkFence m_GenerationFence;
+    // Buffer m_GeneratedData;
+    // Buffer m_GeneratedColourData;
+    // VkFence m_GenerationFence;
 
-    VkCommandPool m_CommandPool;
-    VkCommandBuffer m_CommandBuffer;
+    // VkCommandPool m_CommandPool;
+    // VkCommandBuffer m_CommandBuffer;
 
     bool m_Running = false;
-    std::thread m_GenerationThread;
+    std::vector<std::thread> m_GenerationThreads;
+    size_t m_NumGenerationThreads = 4;
+
     std::condition_variable_any m_CanGenerate;
-    std::mutex m_QueueLock;
+    std::mutex m_GeneratedQueueLock;
     std::mutex m_BufferLock;
+    std::mutex m_QueuedChangesLock;
+    std::mutex m_LoadedLock;
+    std::mutex m_EnqueuedLock;
     std::deque<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_Enqueued;
 
@@ -113,5 +118,5 @@ class SuperBrick {
         glm::vec4 colour = glm::vec4(0.));
     void generateStaging(size_t size);
 
-    void generateBrickLoop();
+    void generateBrickLoop(size_t id);
 };

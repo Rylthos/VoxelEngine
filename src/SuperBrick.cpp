@@ -10,6 +10,7 @@
 #include "Buffer.hpp"
 #include "SceneManager.hpp"
 #include "ShaderModule.hpp"
+#include "Timer.hpp"
 #include "VkCheck.hpp"
 #include "imgui.h"
 
@@ -30,36 +31,6 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
             .loaded = 0,
             .empty_flag = 0,
         };
-    }
-
-    m_GeneratedData.create(
-        m_Allocator, sizeof(uint32_t) + sizeof(uint64_t) * 8,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VMA_MEMORY_USAGE_AUTO,
-        VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
-    m_GeneratedColourData.create(
-        m_Allocator, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE,
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VMA_MEMORY_USAGE_AUTO,
-        VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
-
-    {
-        VkCommandPoolCreateInfo commandPoolCI {};
-        commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        commandPoolCI.pNext = nullptr;
-        commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        commandPoolCI.queueFamilyIndex = m_ComputeQueue->queueFamily;
-
-        VK_CHECK(vkCreateCommandPool(m_Device, &commandPoolCI, nullptr, &m_CommandPool));
-
-        VkCommandBufferAllocateInfo commandBufferAI {};
-        commandBufferAI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        commandBufferAI.pNext = nullptr;
-        commandBufferAI.commandPool = m_CommandPool;
-        commandBufferAI.commandBufferCount = 1;
-        commandBufferAI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-        VK_CHECK(vkAllocateCommandBuffers(m_Device, &commandBufferAI, &m_CommandBuffer));
     }
 
     {
@@ -99,15 +70,6 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
             &m_GeneratePipeline));
     }
 
-    {
-        VkFenceCreateInfo fenceCI {};
-        fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceCI.pNext = nullptr;
-        fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        VK_CHECK(vkCreateFence(m_Device, &fenceCI, nullptr, &m_GenerationFence));
-    }
-
     std::vector<glm::vec4> colours;
     for (int y = 0; y < 8; y++) {
         for (int z = 0; z < 8; z++) {
@@ -139,7 +101,11 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
         VMA_MEMORY_USAGE_GPU_ONLY);
 
     m_Running = true;
-    m_GenerationThread = std::thread(&SuperBrick::generateBrickLoop, this);
+
+    m_GenerationThreads.resize(m_NumGenerationThreads);
+    for (size_t i = 0; i < m_NumGenerationThreads; i++) {
+        m_GenerationThreads[i] = std::thread(&SuperBrick::generateBrickLoop, this, i);
+    }
 
     m_Initialized = true;
 }
@@ -150,8 +116,10 @@ void SuperBrick::free()
         return;
 
     m_Running = false;
-    m_CanGenerate.notify_one();
-    m_GenerationThread.join();
+    m_CanGenerate.notify_all();
+    for (auto& thread : m_GenerationThreads) {
+        thread.join();
+    }
 
     m_BrickPool.free();
     m_Staging.free();
@@ -162,17 +130,14 @@ void SuperBrick::free()
     }
     m_Colours.clear();
 
-    m_GeneratedColourData.free();
-    m_GeneratedData.free();
-    vkDestroyCommandPool(m_Device, m_CommandPool, nullptr);
-    vkDestroyFence(m_Device, m_GenerationFence, nullptr);
     vkDestroyPipeline(m_Device, m_GeneratePipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_GeneratePipelineLayout, nullptr);
 }
 
 void SuperBrick::addBrickToQueue(glm::ivec3 position)
 {
-    std::lock_guard<std::mutex> m_Lock(m_QueueLock);
+    std::lock_guard<std::mutex> lock1(m_GeneratedQueueLock);
+    std::lock_guard<std::mutex> lock2(m_EnqueuedLock);
 
     if (m_Bricks.contains(position))
         return;
@@ -212,7 +177,8 @@ void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex)
 SuperBrickStruct SuperBrick::getStruct()
 {
     if (m_ToBeLoaded.size() != 0) {
-        std::unique_lock<std::mutex> lock(m_BufferLock);
+        std::unique_lock<std::mutex> lock1(m_BufferLock);
+        std::unique_lock<std::mutex> lock2(m_LoadedLock);
 
         if (m_FreeIndices.size() < m_ToBeLoaded.size()) {
             size_t previous = m_CurrentPoolSize;
@@ -336,6 +302,7 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
             op = colour;
         }
 
+        std::lock_guard<std::mutex> lock(m_QueuedChangesLock);
         if (m_QueuedChanges.contains(brickIndex)) {
             m_QueuedChanges[brickIndex].insert({ voxelIndex, op });
         } else {
@@ -350,17 +317,23 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
         return;
     }
 
-    if (air) {
-        m_Bricks.at(brickIndex).setAir(voxelIndex);
-    } else {
-        m_Bricks.at(brickIndex).setVoxel(voxelIndex, colour);
+    {
+        std::lock_guard<std::mutex> lock(m_BufferLock);
+        if (air) {
+            m_Bricks.at(brickIndex).setAir(voxelIndex);
+        } else {
+            m_Bricks.at(brickIndex).setVoxel(voxelIndex, colour);
+        }
     }
 
-    m_ToBeLoaded.insert(brickIndex);
-    if (m_GeneratedBricks.contains(brickIndex)) {
-        uint16_t lookup = m_GeneratedBricks[brickIndex];
-        m_GeneratedBricks.erase(brickIndex);
-        m_FreeIndices.insert(lookup);
+    {
+        std::lock_guard<std::mutex> lock(m_LoadedLock);
+        m_ToBeLoaded.insert(brickIndex);
+        if (m_GeneratedBricks.contains(brickIndex)) {
+            uint16_t lookup = m_GeneratedBricks[brickIndex];
+            m_GeneratedBricks.erase(brickIndex);
+            m_FreeIndices.insert(lookup);
+        }
     }
 }
 
@@ -377,56 +350,105 @@ void SuperBrick::generateStaging(size_t size)
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 }
 
-void SuperBrick::generateBrickLoop()
+void SuperBrick::generateBrickLoop(size_t id)
 {
+    Buffer generatedData;
+    Buffer generatedColour;
+    generatedData.create(
+        m_Allocator, sizeof(uint32_t) + sizeof(uint64_t) * 8,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_AUTO,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+
+    generatedColour.create(
+        m_Allocator, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_AUTO,
+        VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+
+    VkCommandPool commandPool;
+    VkCommandPoolCreateInfo commandPoolCI {};
+    commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    commandPoolCI.pNext = nullptr;
+    commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    commandPoolCI.queueFamilyIndex = m_ComputeQueue->queueFamily;
+
+    VK_CHECK(vkCreateCommandPool(m_Device, &commandPoolCI, nullptr, &commandPool));
+
+    VkCommandBuffer commandBuffer;
+
+    VkCommandBufferAllocateInfo commandBufferAI {};
+    commandBufferAI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    commandBufferAI.pNext = nullptr;
+    commandBufferAI.commandPool = commandPool;
+    commandBufferAI.commandBufferCount = 1;
+    commandBufferAI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+    VK_CHECK(vkAllocateCommandBuffers(m_Device, &commandBufferAI, &commandBuffer));
+
+    std::string timerString = std::format("Brick Generate: {}", id);
+
+    VkFence generationFence;
+    {
+        VkFenceCreateInfo fenceCI {};
+        fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCI.pNext = nullptr;
+        fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        VK_CHECK(vkCreateFence(m_Device, &fenceCI, nullptr, &generationFence));
+    }
     while (m_Running) {
         glm::ivec3 position;
         {
-            std::unique_lock<std::mutex> lock(m_QueueLock);
-            if (m_ToBeGenerated.size() == 0) {
+            std::unique_lock<std::mutex> lock(m_GeneratedQueueLock);
+            while (m_ToBeGenerated.size() == 0) {
                 m_CanGenerate.wait(lock, [this] { return !m_ToBeGenerated.empty() || !m_Running; });
+
+                if (!m_Running)
+                    break;
             }
-            if (!m_Running)
-                return;
 
             position = m_ToBeGenerated.front();
+            m_ToBeGenerated.pop_front();
         }
-        std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue->queueMutex);
         if (!m_Running)
-            return;
+            break;
 
-        VK_CHECK(vkResetFences(m_Device, 1, &m_GenerationFence));
-        VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
+        VK_CHECK(vkResetFences(m_Device, 1, &generationFence));
+        VK_CHECK(vkResetCommandBuffer(commandBuffer, 0));
 
+        Timer::startTimer(timerString);
         VkCommandBufferBeginInfo commandBufferBI {};
         commandBufferBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         commandBufferBI.pNext = nullptr;
         commandBufferBI.pInheritanceInfo = nullptr;
         commandBufferBI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         {
-            VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &commandBufferBI));
+            std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)>
+                lk(m_ComputeQueue->queueMutex);
+            VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
             {
-                vkCmdBindPipeline(m_CommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                     m_GeneratePipeline);
 
                 GenerationPushConstants pushConstants;
                 pushConstants.brickIndex = position;
                 pushConstants.worldPosition = position * BRICK_SIZE;
-                pushConstants.data = m_GeneratedData.getDeviceAddress(m_Device);
-                pushConstants.colours = m_GeneratedColourData.getDeviceAddress(m_Device);
+                pushConstants.data = generatedData.getDeviceAddress(m_Device);
+                pushConstants.colours = generatedColour.getDeviceAddress(m_Device);
 
-                vkCmdPushConstants(m_CommandBuffer, m_GeneratePipelineLayout,
+                vkCmdPushConstants(commandBuffer, m_GeneratePipelineLayout,
                     VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants),
                     &pushConstants);
 
-                vkCmdDispatch(m_CommandBuffer, 1, 1, 1);
+                vkCmdDispatch(commandBuffer, 1, 1, 1);
             }
-            VK_CHECK(vkEndCommandBuffer(m_CommandBuffer));
+            VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
             VkCommandBufferSubmitInfo commandBufferSI {};
             commandBufferSI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
             commandBufferSI.pNext = nullptr;
-            commandBufferSI.commandBuffer = m_CommandBuffer;
+            commandBufferSI.commandBuffer = commandBuffer;
             commandBufferSI.deviceMask = 0;
 
             VkSubmitInfo2 submitInfo {};
@@ -435,15 +457,15 @@ void SuperBrick::generateBrickLoop()
             submitInfo.commandBufferInfoCount = 1;
             submitInfo.pCommandBufferInfos = &commandBufferSI;
 
-            VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, m_GenerationFence));
-            VK_CHECK(vkWaitForFences(m_Device, 1, &m_GenerationFence, true, 1e10));
+            VK_CHECK(vkQueueSubmit2(m_ComputeQueue->queue, 1, &submitInfo, generationFence));
         }
+        VK_CHECK(vkWaitForFences(m_Device, 1, &generationFence, true, 1e10));
 
-        const uint32_t* data = (const uint32_t*)(m_GeneratedData.getAllocationInfo().pMappedData);
+        const uint32_t* data = (const uint32_t*)(generatedData.getAllocationInfo().pMappedData);
         const uint32_t solidVoxels = *data;
         const uint64_t* mask = (const uint64_t*)(data + 1);
 
-        const glm::vec4* colour_data = (const glm::vec4*)(m_GeneratedColourData.getAllocationInfo().pMappedData);
+        const glm::vec4* colour_data = (const glm::vec4*)(generatedColour.getAllocationInfo().pMappedData);
 
         Brick brick;
         if (solidVoxels != 0) {
@@ -460,18 +482,22 @@ void SuperBrick::generateBrickLoop()
             }
         }
 
-        if (m_QueuedChanges.contains(position)) {
-            auto copy = m_QueuedChanges[position];
-            for (auto p : copy) {
-                if (std::holds_alternative<ERASE_OP>(p.second)) {
-                    brick.setAir(p.first);
-                } else if (std::holds_alternative<PLACE_OP>(p.second)) {
-                    brick.setVoxel(p.first, std::get<PLACE_OP>(p.second));
+        {
+            std::lock_guard<std::mutex> lock(m_QueuedChangesLock);
+            if (m_QueuedChanges.contains(position)) {
+                auto copy = m_QueuedChanges[position];
+                for (auto p : copy) {
+                    if (std::holds_alternative<ERASE_OP>(p.second)) {
+                        brick.setAir(p.first);
+                    } else if (std::holds_alternative<PLACE_OP>(p.second)) {
+                        brick.setVoxel(p.first, std::get<PLACE_OP>(p.second));
+                    }
                 }
-            }
 
-            m_QueuedChanges.erase(position);
+                m_QueuedChanges.erase(position);
+            }
         }
+        Timer::stopTimer(timerString);
 
         {
             std::lock_guard<std::mutex> lock(m_BufferLock);
@@ -479,10 +505,17 @@ void SuperBrick::generateBrickLoop()
         }
 
         {
-            std::lock_guard<std::mutex> lock(m_QueueLock);
-            m_ToBeGenerated.pop_front();
+            std::lock_guard<std::mutex> lock1(m_LoadedLock);
+            std::lock_guard<std::mutex> lock2(m_EnqueuedLock);
             m_ToBeLoaded.insert(position);
             m_Enqueued.erase(position);
         }
     }
+
+    vkDestroyFence(m_Device, generationFence, nullptr);
+
+    generatedData.free();
+    generatedColour.free();
+
+    vkDestroyCommandPool(m_Device, commandPool, nullptr);
 }

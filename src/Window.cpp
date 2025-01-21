@@ -90,9 +90,11 @@ void Window::keyCallback(GLFWwindow* window, int key, int scancode, int action, 
         int mode = glfwGetInputMode(window, GLFW_CURSOR);
         if (mode == GLFW_CURSOR_DISABLED) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
             self->m_MouseCaptured = false;
         } else {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+            ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouse;
             self->m_MouseCaptured = true;
         }
     }
