@@ -16,9 +16,6 @@
 #include <GLFW/glfw3.h>
 #include <vulkan/vulkan_core.h>
 
-#define MAX_PLACEMENT_SIZE 32
-#define MIN_PLACEMENT_SIZE 1
-
 // #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
@@ -144,7 +141,7 @@ void SceneManager::receive(const Event* event)
                         glm::ivec3 newIndex = center + glm::ivec3(x, y, z);
                         bool canPlace = true;
                         switch (m_CurrentPlacement) {
-                        case PlacementType::Square:
+                        case PlacementType::Cube:
                             break;
                         case PlacementType::Sphere: {
                             if (glm::length(glm::vec3(newIndex - center)) > (float)(m_PlacementSize / 2.)) {
@@ -152,6 +149,8 @@ void SceneManager::receive(const Event* event)
                             }
                             break;
                         }
+                        default:
+                            break;
                         }
 
                         if (!canPlace) {
@@ -219,6 +218,24 @@ void SceneManager::receive(const Event* event)
         ImGui::End();
 
         if (ImGui::Begin("Voxel Placement")) {
+
+            int selected_idx = static_cast<int>(m_CurrentPlacement);
+            const char* preview = PlacementTypeToString[selected_idx];
+            int len = static_cast<int>(PlacementType::NUM_TYPES);
+
+            if (ImGui::BeginCombo("##PlacementType", preview)) {
+                for (int i = 0; i < len; i++) {
+                    const bool is_selected = (selected_idx == i);
+                    if (ImGui::Selectable(PlacementTypeToString[i], is_selected))
+                        m_CurrentPlacement = static_cast<PlacementType>(i);
+
+                    if (is_selected)
+                        ImGui::SetItemDefaultFocus();
+                }
+
+                ImGui::EndCombo();
+            }
+
             ImGui::Checkbox("Infinite Place", &m_InfinitePlace);
 
             ImGui::Text("Placement Size");

@@ -19,9 +19,18 @@
 
 #include "Chunk.hpp"
 
-enum class PlacementType {
-    Square,
-    Sphere
+#define MAX_PLACEMENT_SIZE 32
+#define MIN_PLACEMENT_SIZE 1
+
+enum class PlacementType : int {
+    Cube = 0,
+    Sphere = 1,
+    NUM_TYPES
+};
+
+static const char* PlacementTypeToString[] = {
+    "Cube",
+    "Sphere",
 };
 
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
@@ -112,7 +121,7 @@ class SceneManager : public EventReceiver {
     bool m_PlaceVoxel = false;
     bool m_EraseVoxel = false;
     PlacementType m_CurrentPlacement = PlacementType::Sphere;
-    uint32_t m_PlacementSize = 64;
+    uint32_t m_PlacementSize = MIN_PLACEMENT_SIZE;
 
   private:
     glm::ivec3 worldToChunkPos(glm::vec3 position);
