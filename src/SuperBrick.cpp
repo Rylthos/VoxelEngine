@@ -8,6 +8,7 @@
 
 #include "Brick.hpp"
 #include "Buffer.hpp"
+#include "Profilling.hpp"
 #include "SceneManager.hpp"
 #include "ShaderModule.hpp"
 #include "Timer.hpp"
@@ -136,8 +137,8 @@ void SuperBrick::free()
 
 void SuperBrick::addBrickToQueue(glm::ivec3 position)
 {
-    std::lock_guard<std::mutex> lock1(m_GeneratedQueueLock);
-    std::lock_guard<std::mutex> lock2(m_EnqueuedLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_GeneratedQueueLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_EnqueuedLock);
 
     if (m_Bricks.contains(position))
         return;
@@ -166,19 +167,26 @@ void SuperBrick::addBrickToQueue(uint32_t index)
 
 void SuperBrick::placeVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour)
 {
-    setVoxel(brickIndex, voxelIndex, false, colour);
+    std::vector<VoxelChange> temp = { std::make_tuple(brickIndex, voxelIndex, colour) };
+    setVoxels(temp);
 }
 
 void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex)
 {
-    setVoxel(brickIndex, voxelIndex, true);
+    std::vector<VoxelChange> temp = { std::make_tuple(brickIndex, voxelIndex, 0) };
+    setVoxels(temp);
+}
+
+void SuperBrick::changeVoxels(const std::vector<VoxelChange>& voxels)
+{
+    setVoxels(voxels);
 }
 
 SuperBrickStruct SuperBrick::getStruct()
 {
     if (m_ToBeLoaded.size() != 0) {
-        std::unique_lock<std::mutex> lock1(m_BufferLock);
-        std::unique_lock<std::mutex> lock2(m_LoadedLock);
+        std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+        std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
 
         if (m_FreeIndices.size() < m_ToBeLoaded.size()) {
             size_t previous = m_CurrentPoolSize;
@@ -276,8 +284,12 @@ void SuperBrick::reset()
     }
 }
 
-void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air, glm::vec4 colour)
+VoxelChange SuperBrick::transformChange(VoxelChange change)
 {
+    glm::ivec3 brickIndex = std::get<0>(change);
+    glm::ivec3 voxelIndex = std::get<1>(change);
+    VoxelOp op = std::get<2>(change);
+
     for (int i = 0; i < 3; i++) {
         while (voxelIndex[i] < 0) {
             brickIndex[i] -= 1;
@@ -290,44 +302,57 @@ void SuperBrick::setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air
         }
     }
 
-    if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 || brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE) {
-        return;
-    }
+    return { brickIndex, voxelIndex, op };
+}
 
-    if (!m_Bricks.contains(brickIndex)) {
-        VoxelOp op;
-        if (air) {
-            op = (uint8_t)0;
-        } else {
-            op = colour;
+void SuperBrick::transformChanges(const std::vector<VoxelChange> changes, std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>& groupedChanges)
+{
+    PROF_ZONE_SCOPED;
+    for (const VoxelChange& change : changes) {
+        VoxelChange correctedChange = transformChange(change);
+
+        glm::ivec3 brickIndex = std::get<0>(correctedChange);
+        glm::ivec3 voxelIndex = std::get<1>(correctedChange);
+        VoxelOp op = std::get<2>(correctedChange);
+
+        if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 || brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE) {
+            continue;
         }
 
-        std::lock_guard<std::mutex> lock(m_QueuedChangesLock);
-        if (m_QueuedChanges.contains(brickIndex)) {
-            m_QueuedChanges[brickIndex].insert({ voxelIndex, op });
-        } else {
-            std::unordered_map<glm::ivec3, VoxelOp> map = {
-                { voxelIndex, op }
-            };
+        groupedChanges[brickIndex].emplace_back(voxelIndex, op);
+    }
+}
 
-            m_QueuedChanges.insert({ brickIndex,
-                map });
+void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes)
+{
+    PROF_ZONE_SCOPED;
+    std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>> groupedChanges;
+    transformChanges(changes, groupedChanges);
+
+    spdlog::info("Set Voxels");
+
+    for (const auto& brickChanges : groupedChanges) {
+        glm::ivec3 brickIndex = brickChanges.first;
+
+        if (!m_Bricks.contains(brickIndex)) {
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);
+            for (const auto& change : brickChanges.second) {
+                m_QueuedChanges[brickIndex].insert({ change.first, change.second });
+            }
+
+            continue;
         }
 
-        return;
-    }
-
-    {
-        std::lock_guard<std::mutex> lock(m_BufferLock);
-        if (air) {
-            m_Bricks.at(brickIndex).setAir(voxelIndex);
-        } else {
-            m_Bricks.at(brickIndex).setVoxel(voxelIndex, colour);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_BufferLock);
+        for (const auto& change : brickChanges.second) {
+            if (std::holds_alternative<ERASE_OP>(change.second)) {
+                m_Bricks.at(brickIndex).setAir(change.first);
+            } else {
+                m_Bricks.at(brickIndex).setVoxel(change.first, std::get<PLACE_OP>(change.second));
+            }
         }
-    }
 
-    {
-        std::lock_guard<std::mutex> lock(m_LoadedLock);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
         m_ToBeLoaded.insert(brickIndex);
         if (m_GeneratedBricks.contains(brickIndex)) {
             uint16_t lookup = m_GeneratedBricks[brickIndex];
@@ -400,7 +425,7 @@ void SuperBrick::generateBrickLoop(size_t id)
     while (m_Running) {
         glm::ivec3 position;
         {
-            std::unique_lock<std::mutex> lock(m_GeneratedQueueLock);
+            std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lock(m_GeneratedQueueLock);
             while (m_ToBeGenerated.size() == 0) {
                 m_CanGenerate.wait(lock, [this] { return !m_ToBeGenerated.empty() || !m_Running; });
 
@@ -483,7 +508,7 @@ void SuperBrick::generateBrickLoop(size_t id)
         }
 
         {
-            std::lock_guard<std::mutex> lock(m_QueuedChangesLock);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);
             if (m_QueuedChanges.contains(position)) {
                 auto copy = m_QueuedChanges[position];
                 for (auto p : copy) {
@@ -500,13 +525,13 @@ void SuperBrick::generateBrickLoop(size_t id)
         Timer::stopTimer(timerString);
 
         {
-            std::lock_guard<std::mutex> lock(m_BufferLock);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_BufferLock);
             m_Bricks[position] = brick;
         }
 
         {
-            std::lock_guard<std::mutex> lock1(m_LoadedLock);
-            std::lock_guard<std::mutex> lock2(m_EnqueuedLock);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_LoadedLock);
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_EnqueuedLock);
             m_ToBeLoaded.insert(position);
             m_Enqueued.erase(position);
         }

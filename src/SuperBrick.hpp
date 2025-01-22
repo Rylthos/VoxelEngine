@@ -16,9 +16,10 @@
 
 #define SUPERBRICK_SIZE 16
 
-#define ERASE_OP uint8_t
+#define ERASE_OP int
 #define PLACE_OP glm::vec4
 typedef std::variant<ERASE_OP, PLACE_OP> VoxelOp;
+typedef std::tuple<glm::ivec3, glm::ivec3, VoxelOp> VoxelChange;
 
 struct SuperBrickEntry {
     uint32_t loaded : 1;
@@ -57,6 +58,8 @@ class SuperBrick {
 
     void placeVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour);
     void eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex);
+
+    void changeVoxels(const std::vector<VoxelChange>& voxels);
 
     SuperBrickStruct getStruct();
 
@@ -103,19 +106,26 @@ class SuperBrick {
     size_t m_NumGenerationThreads = 4;
 
     std::condition_variable_any m_CanGenerate;
-    std::mutex m_GeneratedQueueLock;
-    std::mutex m_BufferLock;
-    std::mutex m_QueuedChangesLock;
-    std::mutex m_LoadedLock;
-    std::mutex m_EnqueuedLock;
+    PROF_LOCKABLE_MUTEX(std::mutex,
+        m_GeneratedQueueLock, "Generated Queue Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex,
+        m_BufferLock, "Buffer Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex,
+        m_QueuedChangesLock, "Queued Changed Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex,
+        m_LoadedLock, "ToBeLoaded Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex,
+        m_EnqueuedLock, "Enqueued Lock");
+
     std::deque<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_Enqueued;
 
     std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, VoxelOp>> m_QueuedChanges;
 
   private:
-    void setVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool air,
-        glm::vec4 colour = glm::vec4(0.));
+    VoxelChange transformChange(VoxelChange change);
+    void transformChanges(const std::vector<VoxelChange> changes, std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>& groupedChanges);
+    void setVoxels(const std::vector<VoxelChange>& voxels);
     void generateStaging(size_t size);
 
     void generateBrickLoop(size_t id);

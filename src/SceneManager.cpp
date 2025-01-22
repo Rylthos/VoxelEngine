@@ -9,6 +9,7 @@
 
 #include "Buffer.hpp"
 #include "Constants.hpp"
+#include "Timer.hpp"
 
 #include "Events.hpp"
 #include "imgui.h"
@@ -70,7 +71,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
 
     m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
 
-    m_MaxLoaded = 128;
+    m_MaxLoaded = 256;
     size_t loadedSize = sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded;
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
         createStaging(loadedSize);
@@ -134,7 +135,13 @@ void SceneManager::receive(const Event* event)
             center += offset;
         }
 
-        if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel) {
+        if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel && (m_PlaceVoxel || m_EraseVoxel)) {
+            PROF_ZONE_SCOPED;
+            Timer::startTimer("Modify Voxels");
+            static std::vector<VoxelChange> changes;
+            changes.clear();
+            changes.resize(m_PlacementSize * m_PlacementSize * m_PlacementSize);
+
             for (int y = -leftLength; y <= rightLength; y++) {
                 for (int z = -leftLength; z <= rightLength; z++) {
                     for (int x = -leftLength; x <= rightLength; x++) {
@@ -157,15 +164,22 @@ void SceneManager::receive(const Event* event)
                             continue;
                         }
 
+                        VoxelOp op;
                         if (m_PlaceVoxel && !m_EraseVoxel) {
-                            m_SuperBrick.placeVoxel(m_Feedback.brickIndex, newIndex, glm::vec4(1.));
+                            op = glm::vec4(1.);
                         }
                         if (m_EraseVoxel && !m_PlaceVoxel) {
-                            m_SuperBrick.eraseVoxel(m_Feedback.brickIndex, newIndex);
+                            op = 0;
                         }
+
+                        changes.push_back({ m_Feedback.brickIndex,
+                            newIndex,
+                            op });
                     }
                 }
             }
+            m_SuperBrick.changeVoxels(changes);
+            Timer::stopTimer("Modify Voxels");
         }
 
         if (!m_InfinitePlace) {

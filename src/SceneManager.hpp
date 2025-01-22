@@ -19,7 +19,7 @@
 
 #include "Chunk.hpp"
 
-#define MAX_PLACEMENT_SIZE 32
+#define MAX_PLACEMENT_SIZE 64
 #define MIN_PLACEMENT_SIZE 1
 
 enum class PlacementType : int {

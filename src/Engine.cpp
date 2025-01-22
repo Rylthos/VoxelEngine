@@ -654,6 +654,7 @@ void Engine::updateImGui()
 void Engine::update(float frameDelta)
 {
     PROF_ZONE_SCOPED;
+    Timer::startTimer("Update");
     GameUpdate update;
     update.frameDelta = frameDelta;
     EventHandler::dispatchEvent(&update);
@@ -667,6 +668,7 @@ void Engine::update(float frameDelta)
     EventHandler::dispatchEvent(&imGuiRender);
 
     ImGui::Render();
+    Timer::stopTimer("Update");
 }
 
 void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView, VkExtent2D extent)
@@ -702,6 +704,8 @@ void Engine::renderImGui(VkCommandBuffer& commandBuffer, VkImageView targetView,
 void Engine::render(float frameDelta)
 {
     PROF_ZONE_SCOPED;
+    Timer::startTimer("Render");
+
     static uint32_t currentFrameIndex = 0;
     int frameIndex = currentFrameIndex % FRAMES_IN_FLIGHT;
     FrameData& currentFrame = m_Frames[frameIndex];
@@ -734,7 +738,6 @@ void Engine::render(float frameDelta)
 
     Image& renderImage = m_RenderAlt ? m_AltImage : m_DrawImage;
 
-    Timer::startTimer("Render");
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
     {
         PROF_VK_ZONE(commandBuffer, "VkRender");
@@ -840,7 +843,6 @@ void Engine::render(float frameDelta)
     submit.pCommandBufferInfos = &commandBufferSI;
 
     VK_CHECK(vkQueueSubmit2(m_GraphicsQueue.queue, 1, &submit, currentFrame.renderFence));
-    Timer::stopTimer("Render");
 
     VkPresentInfoKHR presentInfo {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -869,4 +871,6 @@ void Engine::render(float frameDelta)
     vkResetQueryPool(m_Device, m_QueryPool, frameIndex * 2, 2);
 
     currentFrameIndex++;
+
+    Timer::stopTimer("Render");
 }
