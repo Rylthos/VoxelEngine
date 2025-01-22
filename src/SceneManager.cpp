@@ -94,6 +94,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+
+    m_CurrentColour = glm::vec3(1.);
 }
 
 void SceneManager::freeResources()
@@ -166,7 +168,7 @@ void SceneManager::receive(const Event* event)
 
                         VoxelOp op;
                         if (m_PlaceVoxel && !m_EraseVoxel) {
-                            op = glm::vec4(1.);
+                            op = glm::vec4(m_CurrentColour, 1.);
                         }
                         if (m_EraseVoxel && !m_PlaceVoxel) {
                             op = 0;
@@ -192,8 +194,8 @@ void SceneManager::receive(const Event* event)
     case EventType::MouseButton: {
         const MouseButton* mv = static_cast<const MouseButton*>(event);
 
-        m_PlaceVoxel = mv->leftMousePressed;
-        m_EraseVoxel = mv->rightMousePressed;
+        m_PlaceVoxel = mv->leftMousePressed && !mv->leftMouseReleased;
+        m_EraseVoxel = mv->rightMousePressed && !mv->rightMouseReleased;
 
         break;
     }
@@ -216,6 +218,8 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
             ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
             ImGui::Text("Allocation Size: %ld", m_SuperBrick.getCurrentAllocation());
+            ImGui::Text("Colours Allocated: %ld", m_SuperBrick.getCurrentColourAllocation());
+            ImGui::Text("Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
 
             ImGui::Text("Max Heat");
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
@@ -233,7 +237,15 @@ void SceneManager::receive(const Event* event)
 
         if (ImGui::Begin("Voxel Placement")) {
 
-            int selected_idx = static_cast<int>(m_CurrentPlacement);
+            float data[] = { m_CurrentColour.r, m_CurrentColour.g, m_CurrentColour.b };
+            ImGui::Text("Placement Colour");
+            ImGui::ColorEdit3("Placement Colour", (float*)&data, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+            m_CurrentColour.r = data[0];
+            m_CurrentColour.g = data[1];
+            m_CurrentColour.b = data[2];
+
+            int selected_idx
+                = static_cast<int>(m_CurrentPlacement);
             const char* preview = PlacementTypeToString[selected_idx];
             int len = static_cast<int>(PlacementType::NUM_TYPES);
 
@@ -254,6 +266,9 @@ void SceneManager::receive(const Event* event)
 
             ImGui::Text("Placement Size");
             ImGui::SliderInt("##PlacementSize", (int*)&m_PlacementSize, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
+
+            ImGui::Text("Placing: %d", m_PlaceVoxel);
+            ImGui::Text("Erasing: %d", m_EraseVoxel);
         }
         ImGui::End();
 

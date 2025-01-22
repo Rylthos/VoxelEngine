@@ -114,8 +114,7 @@ class SceneManager : public EventReceiver {
     Buffer m_FeedbackBuffer;
     Feedback m_Feedback;
 
-    glm::ivec3 m_CurrentChunk { -10, -10, -10 };
-    int m_ChunkRange = 2;
+    glm::vec3 m_CurrentColour;
 
     bool m_InfinitePlace = false;
     bool m_PlaceVoxel = false;

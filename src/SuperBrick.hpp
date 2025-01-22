@@ -69,6 +69,8 @@ class SuperBrick {
     size_t getQueued() { return m_ToBeGenerated.size(); }
     size_t getFreeIndices() { return m_FreeIndices.size(); }
     size_t getCurrentAllocation() { return m_CurrentPoolSize; }
+    size_t getCurrentColourAllocation() { return m_CurrentColourCount; }
+    size_t getCurrentColourAllocationSize() { return m_MaxColours; }
 
   private:
     bool m_Initialized = false;

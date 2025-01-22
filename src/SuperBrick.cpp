@@ -335,8 +335,6 @@ void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes)
     std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>> groupedChanges;
     transformChanges(changes, groupedChanges);
 
-    spdlog::info("Set Voxels");
-
     for (const auto& brickChanges : groupedChanges) {
         glm::ivec3 brickIndex = brickChanges.first;
 
