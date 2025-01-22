@@ -71,31 +71,9 @@ void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQue
             &m_GeneratePipeline));
     }
 
-    std::vector<glm::vec4> colours;
-    for (int y = 0; y < 8; y++) {
-        for (int z = 0; z < 8; z++) {
-            for (int x = 0; x < 8; x++) {
-                colours.push_back({ x / 7., y / 7., z / 7., 1. });
-            }
-        }
-    }
-    generateStaging(colours.size() * sizeof(glm::vec4));
-    m_Staging.copyFromData_CPUOnly<glm::vec4>(colours);
-
-    m_Colours.reserve(1);
-    m_Colours.emplace_back();
-    m_Colours[0].create(m_Allocator, colours.size() * sizeof(glm::vec4),
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    m_Colours.create(m_Allocator, m_MaxColours * sizeof(glm::vec4),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY);
-    m_Colours[0].copyFromBuffer(m_Staging, colours.size() * sizeof(glm::vec4));
-
-    std::vector<VkDeviceAddress> temp { m_Colours[0].getDeviceAddress(m_Device) };
-    generateStaging(temp.size() * sizeof(VkDeviceAddress));
-    m_Staging.copyFromData_CPUOnly<VkDeviceAddress>(temp);
-    m_ColourMap.create(m_Allocator, temp.size() * sizeof(VkDeviceAddress),
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY);
-    m_ColourMap.copyFromBuffer(m_Staging, temp.size() * sizeof(VkDeviceAddress));
 
     m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -124,12 +102,8 @@ void SuperBrick::free()
 
     m_BrickPool.free();
     m_Staging.free();
-    m_ColourMap.free();
 
-    for (auto& c : m_Colours) {
-        c.free();
-    }
-    m_Colours.clear();
+    m_Colours.free();
 
     vkDestroyPipeline(m_Device, m_GeneratePipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_GeneratePipelineLayout, nullptr);
@@ -216,7 +190,9 @@ SuperBrickStruct SuperBrick::getStruct()
         size_t stagingSize = sizeof(BrickStruct);
         generateStaging(stagingSize);
 
+        std::vector<glm::vec4> newColours;
         size_t offset = 0;
+        size_t colourOffset = 0;
         for (glm::ivec3 p : m_ToBeLoaded) {
             if (m_GeneratedBricks.contains(p))
                 continue;
@@ -232,16 +208,19 @@ SuperBrickStruct SuperBrick::getStruct()
                 continue;
             }
 
+            brickStruct->colourPtr = m_CurrentColourCount + colourOffset;
+
             size_t chosenIndex = *m_FreeIndices.begin();
             m_GeneratedBricks[p] = chosenIndex;
 
             m_Struct.data[index].pointer = chosenIndex;
+            // m_Struct.data[index].colourPtr = chosenIndex;
             m_Struct.data[index].loaded = 1;
             m_Struct.data[index].empty_flag = 0;
 
             m_FreeIndices.erase(chosenIndex);
 
-            brickStruct->colourPtr = 0;
+            // brickStruct->colourPtr = 0;
 
             std::vector<BrickStruct> temp { brickStruct.value() };
 
@@ -250,12 +229,44 @@ SuperBrickStruct SuperBrick::getStruct()
 
             m_BrickPool.copyFromBuffer(m_Staging, sizeof(BrickStruct), 0,
                 chosenIndex * sizeof(BrickStruct));
+
+            const auto& colours = brick.getColours();
+            newColours.insert(newColours.end(), colours.begin(), colours.end());
+            colourOffset += colours.size();
         }
+
+        // TODO: Track Erased colours buffers and allow for those to be refilled
+        // if size permits. Arena Allocator / Malloc
+        if (m_CurrentColourCount + newColours.size() > m_MaxColours) {
+            size_t sum = m_CurrentColourCount + newColours.size();
+            size_t previous = m_MaxColours;
+            while (sum > m_MaxColours) {
+                m_MaxColours *= 2;
+            }
+
+            size_t size = m_Colours.getSize();
+            generateStaging(size);
+            m_Staging.copyFromBuffer(m_Colours, size);
+
+            m_Colours.free();
+            m_Colours.create(
+                m_Allocator, m_MaxColours * sizeof(glm::vec4),
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+                VMA_MEMORY_USAGE_GPU_ONLY);
+
+            m_Colours.copyFromBuffer(m_Staging, size);
+        }
+
+        generateStaging(newColours.size() * sizeof(glm::vec4));
+        m_Staging.copyFromData_CPUOnly<glm::vec4>(newColours);
+        m_Colours.copyFromBuffer(m_Staging, newColours.size() * sizeof(glm::vec4), 0,
+            m_CurrentColourCount * sizeof(glm::vec4));
+        m_CurrentColourCount += newColours.size();
 
         m_ToBeLoaded.clear();
 
         m_Struct.bricks = m_BrickPool.getDeviceAddress(m_Device);
-        m_Struct.colour = m_ColourMap.getDeviceAddress(m_Device);
+        m_Struct.colour = m_Colours.getDeviceAddress(m_Device);
     }
     return m_Struct;
 }
@@ -284,36 +295,31 @@ void SuperBrick::reset()
     }
 }
 
-VoxelChange SuperBrick::transformChange(VoxelChange change)
+void SuperBrick::transformChange(VoxelChange change, glm::ivec3& brickIndex, glm::ivec3& voxelIndex, VoxelOp& op)
 {
-    glm::ivec3 brickIndex = std::get<0>(change);
-    glm::ivec3 voxelIndex = std::get<1>(change);
-    VoxelOp op = std::get<2>(change);
+    brickIndex = std::get<0>(change);
+    voxelIndex = std::get<1>(change);
+    op = std::get<2>(change);
 
     for (int i = 0; i < 3; i++) {
-        while (voxelIndex[i] < 0) {
-            brickIndex[i] -= 1;
-            voxelIndex[i] = voxelIndex[i] + BRICK_SIZE;
-        }
+        int brickOffset = (int)std::floor(voxelIndex[i] / (float)BRICK_SIZE);
+        // int brickOffset = voxelIndex[i] >> 4;
+        int voxelOffset = (voxelIndex[i] % BRICK_SIZE + BRICK_SIZE) % BRICK_SIZE;
 
-        while (voxelIndex[i] >= BRICK_SIZE) {
-            brickIndex[i] += 1;
-            voxelIndex[i] = voxelIndex[i] - BRICK_SIZE;
-        }
+        voxelIndex[i] = voxelOffset;
+        brickIndex[i] += brickOffset;
     }
-
-    return { brickIndex, voxelIndex, op };
 }
 
 void SuperBrick::transformChanges(const std::vector<VoxelChange> changes, std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>& groupedChanges)
 {
     PROF_ZONE_SCOPED;
     for (const VoxelChange& change : changes) {
-        VoxelChange correctedChange = transformChange(change);
+        glm::ivec3 brickIndex;
+        glm::ivec3 voxelIndex;
+        VoxelOp op;
 
-        glm::ivec3 brickIndex = std::get<0>(correctedChange);
-        glm::ivec3 voxelIndex = std::get<1>(correctedChange);
-        VoxelOp op = std::get<2>(correctedChange);
+        transformChange(change, brickIndex, voxelIndex, op);
 
         if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0 || brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0 || brickIndex.z >= SUPERBRICK_SIZE) {
             continue;

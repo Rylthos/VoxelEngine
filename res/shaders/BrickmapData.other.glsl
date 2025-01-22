@@ -24,12 +24,8 @@ layout(buffer_reference, std430) readonly buffer BrickBuffer {
     Brick bricks[];
 };
 
-layout(buffer_reference, std430) readonly buffer ColourBuffer {
-    vec4 colours[];
-};
-
 layout(buffer_reference, std430) readonly buffer ColourBuffers {
-    ColourBuffer colour[];
+    vec4 colours[];
 };
 
 struct SuperBrick {

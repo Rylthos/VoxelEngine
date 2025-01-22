@@ -74,6 +74,11 @@ HitRecord emptyHit()
     hit.hasHitVoxel = false;
     hit.comparisons = -1;
     hit.colour = vec4(1., 0., 1., 1.);
+
+    hit.voxelHitPosition = vec3(0.);
+    hit.voxelHitIndex = ivec3(0);
+    hit.brickHitIndex = ivec3(0);
+    hit.normal = ivec3(0);
     return hit;
 }
 
@@ -127,7 +132,7 @@ vec4 calculateColour(in Brick brick, in ivec3 brickIndex) {
     }
 
     // return vec4(index, vec3(brickIndex));
-    return p_SuperBrick.superBrick.colourBuffers.colour[brick.colourPointer].colours[index];
+    return p_SuperBrick.superBrick.colourBuffers.colours[brick.colourPointer + index];
 }
 
 void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iterations, inout HitRecord hit)

@@ -82,8 +82,9 @@ class SuperBrick {
     Buffer m_BrickPool;
     Buffer m_Staging;
 
-    std::vector<Buffer> m_Colours;
-    Buffer m_ColourMap;
+    size_t m_MaxColours = 512;
+    size_t m_CurrentColourCount = 0;
+    Buffer m_Colours;
 
     SuperBrickStruct m_Struct;
 
@@ -123,7 +124,7 @@ class SuperBrick {
     std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, VoxelOp>> m_QueuedChanges;
 
   private:
-    VoxelChange transformChange(VoxelChange change);
+    void transformChange(VoxelChange change, glm::ivec3& brickIndex, glm::ivec3& voxelIndex, VoxelOp& op);
     void transformChanges(const std::vector<VoxelChange> changes, std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>& groupedChanges);
     void setVoxels(const std::vector<VoxelChange>& voxels);
     void generateStaging(size_t size);
