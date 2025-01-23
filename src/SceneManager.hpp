@@ -50,24 +50,21 @@ struct VoxelPushConstants {
     glm::vec3 cameraPosition;
     float aspectRatio;
 
-    glm::vec3 cameraForward;
-    uint32_t _3;
+    glm::vec4 cameraForward;
+    glm::vec4 cameraRight;
+    glm::vec4 cameraUp;
 
-    glm::vec3 cameraRight;
-    uint32_t _1;
+    glm::vec4 sunDirection;
 
-    glm::vec3 cameraUp;
-    uint32_t _2;
-
-    uint32_t _4;
     float size;
     uint32_t maxDepthShown = 5;
     uint32_t lod;
+    uint32_t _1;
 
     uint32_t maxHeatShown;
     uint32_t flags;
     uint32_t maxIterations;
-    uint32_t initialParent;
+    uint32_t _2;
 
     VkDeviceAddress toBeLoaded;
     VkDeviceAddress superBrick;

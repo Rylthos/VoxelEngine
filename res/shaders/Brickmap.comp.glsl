@@ -29,24 +29,21 @@ layout(push_constant) uniform constants {
     vec3 p_CameraPosition;
     float p_AspectRatio;
 
-    vec3 p_CameraFront;
-    int _1;
+    vec4 p_CameraFront;
+    vec4 p_CameraRight;
+    vec4 p_CameraUp;
 
-    vec3 p_CameraRight;
-    int _2;
+    vec4 p_SunDir;
 
-    vec3 p_CameraUp;
-    int _3;
-
-    uint32_t _4;
     float p_Size;
     uint32_t p_MaxDepthShown;
     uint32_t p_LOD;
+    uint32_t _1;
 
     uint32_t p_MaxHeatShown;
     uint32_t p_Flags;
     uint32_t p_MaxIterations;
-    uint32_t p_InitialParent;
+    uint32_t _2;
 
     ToBeLoadedBuffer p_ToBeLoaded;
     SuperBrickBuffer p_SuperBrick;
@@ -56,7 +53,6 @@ layout(push_constant) uniform constants {
 struct HitRecord {
     bool hasHitBrick;
     bool hasHitVoxel;
-    vec3 voxelHitPosition;
     ivec3 voxelHitIndex;
     ivec3 brickHitIndex;
     ivec3 normal;
@@ -75,7 +71,6 @@ HitRecord emptyHit()
     hit.comparisons = -1;
     hit.colour = vec4(1., 0., 1., 1.);
 
-    hit.voxelHitPosition = vec3(0.);
     hit.voxelHitIndex = ivec3(0);
     hit.brickHitIndex = ivec3(0);
     hit.normal = ivec3(0);
@@ -161,7 +156,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     vec3 nextDist = (voxelIndex - entryPos + max(stepDirection, 0)) * invDir;
     ivec3 stepAxis = ivec3(1, 0, 0);
 
-    vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin) - minBound;
+    vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin);
     ivec3 normal = hit.normal;
 
     int count = 0;
@@ -182,7 +177,6 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
         if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
             hit.colour = calculateColour(brick, voxelIndex);
-            hit.voxelHitPosition = totalDistTraveled;
             hit.voxelHitIndex = voxelIndex;
             hit.hasHitBrick = true;
             hit.hasHitVoxel = true;
@@ -203,14 +197,14 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     return;
 }
 
-HitRecord traverseSuperBrick(Ray ray)
+HitRecord traverseSuperBrick(in Ray ray)
 {
     HitRecord hit = emptyHit();
 
     float tMin, tMax;
     const vec3 minBound = vec3(0);
-    const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE);
-    bool intersectBound = rayBoxIntersect(ray, minBound, maxBound * BRICK_SIZE, 0.0, 1000000.0, tMin, tMax);
+    const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE;
+    bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
     if (!intersectBound) return hit;
 
@@ -307,7 +301,7 @@ HitRecord traverseSuperBrick(Ray ray)
 }
 
 vec3 calculateHitPosition(in HitRecord hit) {
-    return hit.brickHitIndex * SUPER_BRICK_SIZE * BRICK_SIZE + hit.voxelHitPosition;
+    return hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex;
 }
 
 bool shouldColourCursor(vec2 uv, vec2 pixelSize) {
@@ -380,30 +374,32 @@ void main()
 
         colour = lookupColour;
         if (hit.hasHitVoxel) {
-            const vec3 lightPosition = vec3(0, -100., 0);
             const vec4 lightColour = vec4(1.);
 
-            const vec3 lightDir = normalize(lightPosition - hitPosition);
-
-            float diff = max(dot(hit.normal, lightDir), 0.);
+            float diff = max(dot(hit.normal, p_SunDir.xyz), 0.);
             vec4 diffuse = lightColour * diff;
 
             Ray shadowRay;
             shadowRay.origin = hitPosition - (ray.direction * 0.001);
-            shadowRay.direction = lightPosition - shadowRay.origin;
+            shadowRay.direction = p_SunDir.xyz;
+            shadowRay.invDir = 1. / shadowRay.direction;
 
-            HitRecord shadow = traverseSuperBrick(ray);
+            HitRecord shadow = traverseSuperBrick(shadowRay);
 
             const float ambientStrength = 0.7;
             vec4 ambient = lightColour * ambientStrength;
 
             float diffStrength = 1.;
-            if (shadow.hasHitBrick)
-                diffStrength = 0.1;
+            if (shadow.hasHitBrick || shadow.hasHitVoxel)
+                diffStrength = 0.;
 
             colour = (ambient + diffuse * diffStrength) * colour;
+
+            // if (shadow.hasHitBrick || shadow.hasHitVoxel)
+            //     colour = vec4(1.);
+            // else
+            //     colour = vec4(0.);
         }
-        // imageStore(o_Image, texelCoord, hit.colour);
         imageStore(o_Image, texelCoord, colour);
     }
 

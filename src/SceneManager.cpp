@@ -96,6 +96,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 
     m_CurrentColour = glm::vec3(1.);
+
+    m_VoxelPushConstants.sunDirection = glm::vec4(0, -1, 0, 1);
 }
 
 void SceneManager::freeResources()
