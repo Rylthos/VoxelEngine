@@ -12,7 +12,6 @@ layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rgba16f, set = 0, binding = 0) uniform image2D o_Image;
 layout(rgba16f, set = 0, binding = 1) uniform image2D o_ComparisonImage;
-// layout(rgba16f, set = 0, binding = 2) readonly uniform image1D i_Lookup;
 
 layout(buffer_reference, std430) buffer FeedbackBuffer {
     ivec3 superBrickIndex;
@@ -57,6 +56,8 @@ struct HitRecord {
     ivec3 brickHitIndex;
     ivec3 normal;
     vec4 colour;
+    float t;
+    vec3 position;
     int comparisons;
 };
 
@@ -74,6 +75,9 @@ HitRecord emptyHit()
     hit.voxelHitIndex = ivec3(0);
     hit.brickHitIndex = ivec3(0);
     hit.normal = ivec3(0);
+
+    hit.t = -1.;
+
     return hit;
 }
 
@@ -156,7 +160,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
     vec3 nextDist = (voxelIndex - entryPos + max(stepDirection, 0)) * invDir;
     ivec3 stepAxis = ivec3(1, 0, 0);
 
-    vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin);
+    // vec3 totalDistTraveled = calculatePosition(ray.origin, ray.direction, tMin);
     ivec3 normal = hit.normal;
 
     int count = 0;
@@ -181,13 +185,15 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
             hit.hasHitBrick = true;
             hit.hasHitVoxel = true;
             hit.normal = normal;
+            hit.t = tMin + dot(nextDist - stepSize, stepAxis);
+            hit.position = rayStart + ray.direction * (nextDist - stepSize) * stepAxis;
             return;
         }
 
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
         stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
-        totalDistTraveled += stepSize * stepAxis;
+        // totalDistTraveled += stepSize * stepAxis;
         nextDist += stepSize * stepAxis;
         voxelIndex += stepDirection * stepAxis;
         normal = ivec3(-(stepDirection * stepAxis));
@@ -301,7 +307,7 @@ HitRecord traverseSuperBrick(in Ray ray)
 }
 
 vec3 calculateHitPosition(in HitRecord hit) {
-    return hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex;
+    return hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex + vec3(0.5) + vec3(hit.normal) * 0.5;
 }
 
 bool shouldColourCursor(vec2 uv, vec2 pixelSize) {
@@ -369,8 +375,8 @@ void main()
 
     vec4 colour = vec4(clearColour, 0.);
     if (hit.hasHitBrick) {
-        vec3 hitPosition = calculateHitPosition(hit);
         vec4 lookupColour = hit.colour;
+        vec3 hitPosition = hit.position - ray.direction * 0.01;
 
         colour = lookupColour;
         if (hit.hasHitVoxel) {
@@ -380,7 +386,7 @@ void main()
             vec4 diffuse = lightColour * diff;
 
             Ray shadowRay;
-            shadowRay.origin = hitPosition - (ray.direction * 0.001);
+            shadowRay.origin = hitPosition;
             shadowRay.direction = p_SunDir.xyz;
             shadowRay.invDir = 1. / shadowRay.direction;
 
@@ -394,12 +400,8 @@ void main()
                 diffStrength = 0.;
 
             colour = (ambient + diffuse * diffStrength) * colour;
-
-            // if (shadow.hasHitBrick || shadow.hasHitVoxel)
-            //     colour = vec4(1.);
-            // else
-            //     colour = vec4(0.);
         }
+
         imageStore(o_Image, texelCoord, colour);
     }
 

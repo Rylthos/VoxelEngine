@@ -119,6 +119,9 @@ void SceneManager::receive(const Event* event)
     case EventType::GameUpdate: {
         const GameUpdate* gu = static_cast<const GameUpdate*>(event);
 
+        if (m_IncreaseTime)
+            m_Time = fmod(m_Time + gu->frameDelta * m_MinutePerSecond, 2400.);
+
         reedbackFeedback();
 
         int leftLength = 0;
@@ -216,6 +219,14 @@ void SceneManager::receive(const Event* event)
                 m_SuperBrick.reset();
             }
 
+            ImGui::Text("Time");
+            ImGui::Checkbox("Increase Time", &m_IncreaseTime);
+            ImGui::SliderFloat("##Time", &m_Time, 0., 2399, "%.2f");
+            ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", m_VoxelPushConstants.sunDirection.x, m_VoxelPushConstants.sunDirection.y, m_VoxelPushConstants.sunDirection.z);
+
+            ImGui::Text("Minutes Per Second");
+            ImGui::SliderFloat("##MinutesPerSecond", &m_MinutePerSecond, 1., 60., "%.2f");
+
             ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
             ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
             ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
@@ -306,6 +317,10 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
     m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
     m_VoxelPushConstants.superBrick = m_SuperBrickBuffer.getDeviceAddress(m_Device);
     m_VoxelPushConstants.feedbackBuffer = m_FeedbackBuffer.getDeviceAddress(m_Device);
+
+    float angle = glm::pi<float>() * ((m_Time / 1200.) + 0.5);
+
+    m_VoxelPushConstants.sunDirection = glm::normalize(glm::vec4(-glm::cos(angle), glm::sin(angle), 0., 0.));
 
     return m_VoxelPushConstants;
 }
