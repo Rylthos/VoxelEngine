@@ -103,13 +103,6 @@ class SuperBrick {
     VkPipeline m_GeneratePipeline;
     VkPipelineLayout m_GeneratePipelineLayout;
 
-    // Buffer m_GeneratedData;
-    // Buffer m_GeneratedColourData;
-    // VkFence m_GenerationFence;
-
-    // VkCommandPool m_CommandPool;
-    // VkCommandBuffer m_CommandBuffer;
-
     bool m_Running = false;
     std::vector<std::thread> m_GenerationThreads;
     size_t m_NumGenerationThreads = 4;
@@ -135,6 +128,9 @@ class SuperBrick {
     void setVoxels(const std::vector<VoxelChange>& voxels, bool replace);
 
     void generateStaging(size_t size);
+
+    void resizeColours(bool preserveStaging = false);
+    void resizeBricks(bool preserveStaging = false);
 
     void generateBrickLoop(size_t id);
 };

@@ -419,7 +419,7 @@ void main()
         if (hit.hasHitVoxel) {
             const vec4 lightColour = vec4(1.);
 
-            float diff = max(dot(hit.normal, p_SunDir.xyz), 0.);
+            float diff = max(dot(hit.normal, p_SunDir.xyz), 0.0);
             vec4 diffuse = lightColour * diff;
 
             Ray shadowRay;
@@ -437,7 +437,7 @@ void main()
 
             float diffStrength = 1.;
             if (shadow.hasHitBrick && shadow.hasHitVoxel)
-                diffStrength = 0.3;
+                diffStrength = 0.1;
 
             colour = (ambient + diffuse * diffStrength) * colour;
         }

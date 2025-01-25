@@ -1,5 +1,7 @@
 #include "SuperBrick.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <pthread.h>
 #include <unordered_map>
 #include <variant>
@@ -167,64 +169,22 @@ SuperBrickStruct SuperBrick::getStruct()
         std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
         std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
 
-        if (m_FreeIndices.size() < m_ToBeLoaded.size()) {
-            size_t previous = m_CurrentPoolSize;
-            m_CurrentPoolSize *= 2;
-
-            for (size_t i = previous; i < m_CurrentPoolSize; i++) {
-                m_FreeIndices.insert(i);
-            }
-
-            size_t size = m_BrickPool.getSize();
-            generateStaging(size);
-            m_Staging.copyFromBuffer(m_BrickPool, size);
-
-            m_BrickPool.free();
-            m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY);
-
-            m_BrickPool.copyFromBuffer(m_Staging, size);
-        }
-
-        size_t coloursSize = 0;
+        size_t totalColourNeeded = 0;
         for (const auto& p : m_ToBeLoaded) {
-            size_t size = m_Bricks[p].getColoursSize();
-            coloursSize += size;
-        }
-
-        if (m_CurrentColourCount + coloursSize > m_MaxColours) {
-            size_t sum = m_CurrentColourCount + coloursSize;
-            size_t previous = m_MaxColours;
-            while (sum > m_MaxColours) {
-                m_MaxColours *= 2;
-            }
-
-            m_AvailableColourIndices.addInterval(previous, m_MaxColours - 1);
-
-            size_t size = m_Colours.getSize();
-            generateStaging(size);
-            m_Staging.copyFromBuffer(m_Colours, size);
-
-            m_Colours.free();
-            m_Colours.create(m_Allocator, m_MaxColours * sizeof(glm::vec4),
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                    | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-                VMA_MEMORY_USAGE_GPU_ONLY);
-
-            m_Colours.copyFromBuffer(m_Staging, size);
+            totalColourNeeded += m_Bricks[p].getColoursSize();
         }
 
         size_t stagingSize = sizeof(BrickStruct) * m_ToBeLoaded.size();
         generateStaging(stagingSize);
 
         std::vector<glm::vec4> newColours;
+        newColours.reserve(totalColourNeeded);
         size_t offset = 0;
         std::unordered_map<size_t, std::pair<size_t, size_t>> mapping;
 
         IntervalList<int> stagingCommit;
         std::unordered_map<int, size_t> stagingMapping;
+        size_t colourOffset = 0;
 
         for (glm::ivec3 p : m_ToBeLoaded) {
             if (m_GeneratedBricks.contains(p))
@@ -244,7 +204,15 @@ SuperBrickStruct SuperBrick::getStruct()
             const auto& colours = brick.getColours();
 
             auto colourInterval = m_AvailableColourIndices.getFirstGreater(colours.size());
+            if (!colourInterval.has_value()) {
+                resizeColours(true);
+                colourInterval = m_AvailableColourIndices.getFirstGreater(colours.size());
+            }
             brickStruct->colourPtr = colourInterval->first;
+
+            if (m_ToBeLoaded.size() > m_FreeIndices.size()) {
+                resizeBricks(true);
+            }
 
             size_t chosenIndex = *m_FreeIndices.begin();
             m_GeneratedBricks[p] = chosenIndex;
@@ -255,21 +223,20 @@ SuperBrickStruct SuperBrick::getStruct()
 
             m_FreeIndices.erase(chosenIndex);
 
-            std::vector<BrickStruct> temp { brickStruct.value() };
-
             std::memcpy(
-                (char*)m_Staging.getAllocationInfo().pMappedData + offset * sizeof(BrickStruct),
+                ((char*)m_Staging.getAllocationInfo().pMappedData) + offset * sizeof(BrickStruct),
                 &brickStruct.value(), sizeof(BrickStruct));
 
             stagingCommit.addInterval(chosenIndex);
             stagingMapping[chosenIndex] = offset;
             offset += 1;
 
-            mapping.insert({ newColours.size(), { colourInterval->first, colours.size() } });
+            mapping.insert({ colourOffset, { colourInterval->first, colours.size() } });
             m_AvailableColourIndices.removeInterval(
                 colourInterval->first, colourInterval->first + colours.size() - 1);
 
             newColours.insert(newColours.end(), colours.begin(), colours.end());
+            colourOffset += colours.size();
             m_AllocatedColourSizes[p] = { colourInterval->first, colours.size() };
         }
 
@@ -422,6 +389,75 @@ void SuperBrick::generateStaging(size_t size)
     m_Staging.create(m_Allocator, size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+}
+
+void SuperBrick::resizeColours(bool preserveStaging)
+{
+    spdlog::info("Resizing Colours");
+    size_t previous = m_MaxColours;
+    m_MaxColours *= 2;
+    m_AvailableColourIndices.addInterval(previous, m_MaxColours - 1);
+
+    size_t size = m_Colours.getSize();
+
+    size_t stagingSize = m_Staging.getSize();
+    char* copy;
+    if (preserveStaging) {
+        copy = (char*)malloc(stagingSize);
+        memcpy(copy, m_Staging.getAllocationInfo().pMappedData, stagingSize);
+    }
+
+    generateStaging(size);
+    m_Staging.copyFromBuffer(m_Colours, size);
+
+    m_Colours.free();
+    m_Colours.create(m_Allocator, m_MaxColours * sizeof(glm::vec4),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
+
+    m_Colours.copyFromBuffer(m_Staging, size);
+
+    if (preserveStaging) {
+        memcpy(m_Staging.getAllocationInfo().pMappedData, copy, stagingSize);
+        std::free(copy);
+    }
+}
+
+void SuperBrick::resizeBricks(bool preserveStaging)
+{
+    spdlog::info("Resizing Bricks");
+    size_t previous = m_CurrentPoolSize;
+    m_CurrentPoolSize *= 2;
+
+    for (size_t i = previous; i < m_CurrentPoolSize; i++) {
+        m_FreeIndices.insert(i);
+    }
+
+    size_t size = m_BrickPool.getSize();
+
+    size_t stagingSize = m_Staging.getSize();
+    char* copy;
+    if (preserveStaging) {
+        copy = (char*)malloc(stagingSize);
+        memcpy(copy, m_Staging.getAllocationInfo().pMappedData, stagingSize);
+    }
+    generateStaging(size);
+
+    m_Staging.copyFromBuffer(m_BrickPool, size);
+
+    m_BrickPool.free();
+    m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
+
+    m_BrickPool.copyFromBuffer(m_Staging, size);
+
+    if (preserveStaging) {
+        memcpy(m_Staging.getAllocationInfo().pMappedData, copy, stagingSize);
+        std::free(copy);
+    }
 }
 
 void SuperBrick::generateBrickLoop(size_t id)
