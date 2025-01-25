@@ -52,16 +52,15 @@ void Engine::init()
     PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT
         myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT
         = reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(
-            vkGetInstanceProcAddr(m_Instance,
-                "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
+            vkGetInstanceProcAddr(m_Instance, "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
 
-    PFN_vkGetCalibratedTimestampsEXT myvkGetCalibratedTimestampsEXT = reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(
-        vkGetInstanceProcAddr(m_Instance, "vkGetCalibratedTimestampsEXT"));
+    PFN_vkGetCalibratedTimestampsEXT myvkGetCalibratedTimestampsEXT
+        = reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(
+            vkGetInstanceProcAddr(m_Instance, "vkGetCalibratedTimestampsEXT"));
 
     g_TracyVkCtx = TracyVkContextHostCalibrated(m_PhysicalDevice, m_Device, vkResetQueryPool,
 
-        myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
-        myvkGetCalibratedTimestampsEXT);
+        myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT, myvkGetCalibratedTimestampsEXT);
 #endif
 
     m_SceneManager.initResources(m_Device, m_Allocator, &m_ComputeQueue);
@@ -75,8 +74,9 @@ void Engine::init()
                                 EventType::ImGuiRender },
         &m_Camera);
 
-    EventHandler::subscribe(
-        { EventType::GameUpdate, EventType::MouseButton, EventType::MouseScroll, EventType::ImGuiRender }, &m_SceneManager);
+    EventHandler::subscribe({ EventType::GameUpdate, EventType::MouseButton, EventType::MouseScroll,
+                                EventType::ImGuiRender },
+        &m_SceneManager);
     // EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
     m_RenderAlt = false;
@@ -253,16 +253,17 @@ void Engine::initVulkan()
     features.shaderInt64 = true;
 
     vkb::PhysicalDeviceSelector selector { vkbInst };
-    auto vkbMaybeDevice = selector.set_minimum_version(1, 3)
-                              .set_required_features_13(features13)
-                              .set_required_features_12(features12)
-                              .set_required_features_11(features11)
-                              .set_required_features(features)
-                              .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
-                              // .add_required_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME)
-                              .add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
-                              .set_surface(m_Surface)
-                              .select();
+    auto vkbMaybeDevice
+        = selector.set_minimum_version(1, 3)
+              .set_required_features_13(features13)
+              .set_required_features_12(features12)
+              .set_required_features_11(features11)
+              .set_required_features(features)
+              .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
+              // .add_required_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME)
+              .add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
+              .set_surface(m_Surface)
+              .select();
 
     if (!vkbMaybeDevice.has_value()) {
         spdlog::error("{}: {}", vkbMaybeDevice.error().value(), vkbMaybeDevice.error().message());
@@ -301,14 +302,15 @@ void Engine::createSwapchain()
     vkb::SwapchainBuilder swapchainBuilder { m_PhysicalDevice, m_Device, m_Surface };
     m_SwapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
-    vkb::Swapchain vkbSwapchain = swapchainBuilder
-                                      .set_desired_format({ .format = m_SwapchainImageFormat,
-                                          .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-                                      .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-                                      .set_desired_extent(m_Window.getSize().x, m_Window.getSize().y)
-                                      .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-                                      .build()
-                                      .value();
+    vkb::Swapchain vkbSwapchain
+        = swapchainBuilder
+              .set_desired_format({ .format = m_SwapchainImageFormat,
+                  .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+              .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+              .set_desired_extent(m_Window.getSize().x, m_Window.getSize().y)
+              .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+              .build()
+              .value();
 
     m_SwapchainImageExtent = vkbSwapchain.extent;
     m_Swapchain = vkbSwapchain.swapchain;
@@ -325,14 +327,16 @@ void Engine::initSwapchain()
 
     m_DrawImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent,
         VK_IMAGE_TYPE_2D,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+            | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
     m_AltImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, m_DrawImage.getExtent(),
         VK_IMAGE_TYPE_2D,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+            | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
@@ -463,9 +467,8 @@ void Engine::initImGui()
 
 void Engine::initDescriptorPool()
 {
-    std::vector<VkDescriptorPoolSize> poolSizes = {
-        { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT }
-    };
+    std::vector<VkDescriptorPoolSize> poolSizes
+        = { { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT } };
 
     VkDescriptorPoolCreateInfo descriptorPoolCI {};
     descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -523,19 +526,20 @@ void Engine::initPipelines()
         computePipelineCI.layout = m_VoxelPipelineLayout;
         computePipelineCI.stage = shaderStageCI;
 
-        VK_CHECK(vkCreateComputePipelines(m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr,
-            &m_VoxelPipeline));
+        VK_CHECK(vkCreateComputePipelines(
+            m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_VoxelPipeline));
         spdlog::info("Created Background Pipeline and Pipeline Layout");
     }
 }
 
 void Engine::initDescriptorSets()
 {
-    m_VoxelDescriptorSet = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
-                               .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
-                               .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
-                               .build()
-                               .at(0);
+    m_VoxelDescriptorSet
+        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
+              .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
+              .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
+              .build()
+              .at(0);
 
     spdlog::info("Created descriptors");
 }
@@ -752,8 +756,8 @@ void Engine::render(float frameDelta)
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool,
-            frameIndex * 2);
+        vkCmdWriteTimestamp(
+            commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool, frameIndex * 2);
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
 
@@ -774,11 +778,11 @@ void Engine::render(float frameDelta)
         vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
             std::ceil(drawExtent.height / 16.0), 1);
 
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool,
-            frameIndex * 2 + 1);
+        vkCmdWriteTimestamp(
+            commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool, frameIndex * 2 + 1);
 
-        renderImage.transition(commandBuffer, VK_IMAGE_LAYOUT_GENERAL,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        renderImage.transition(
+            commandBuffer, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
         VkExtent3D target = { .width = m_SwapchainImageExtent.width,
             .height = m_SwapchainImageExtent.height,
@@ -788,15 +792,13 @@ void Engine::render(float frameDelta)
             m_SwapchainImages[swapchainImageIndex], renderImage.getExtent(), target);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-        renderImGui(commandBuffer, m_SwapchainImageViews[swapchainImageIndex],
-            m_SwapchainImageExtent);
+        renderImGui(
+            commandBuffer, m_SwapchainImageViews[swapchainImageIndex], m_SwapchainImageExtent);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         // VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
         //                             .pNext = nullptr,
@@ -861,8 +863,8 @@ void Engine::render(float frameDelta)
     }
 
     static uint64_t timeQueryBuffer[2];
-    VkResult result = vkGetQueryPoolResults(m_Device, m_QueryPool, frameIndex * 2, 2, sizeof(uint64_t) * 2,
-        timeQueryBuffer, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+    VkResult result = vkGetQueryPoolResults(m_Device, m_QueryPool, frameIndex * 2, 2,
+        sizeof(uint64_t) * 2, timeQueryBuffer, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 
     if (result == VK_NOT_READY) {
     } else if (result == VK_SUCCESS) {

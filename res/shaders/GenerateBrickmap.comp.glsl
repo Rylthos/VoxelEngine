@@ -69,8 +69,16 @@ void main() {
     // float heightValue = height(vec3(worldPosition));
     float value = height(uv) * 10.;
 
+    // if (uv.y < uv.x) {
+    //     setVoxel(currentIndex, vec3(1.));
+    //     // setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+    // } else {
+    //     setAir(currentIndex);
+    // }
+
     if (uv.y < value) {
-        setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+        setVoxel(currentIndex, vec3(1.));
+        // setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
     } else {
         setAir(currentIndex);
     }
