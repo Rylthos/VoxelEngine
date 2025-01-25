@@ -29,6 +29,7 @@ class Brick {
 
     std::optional<BrickStruct> getStruct();
     std::vector<glm::vec4> getColours();
+    size_t getColoursSize() { return m_Colours.size(); }
 
   private:
     BrickStruct m_Brick;

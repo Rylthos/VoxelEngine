@@ -1,5 +1,6 @@
 #include "Engine.hpp"
 
+#include "IntervalList.hpp"
 #include "VkBootstrap.h"
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -26,6 +27,14 @@
 
 void Engine::init()
 {
+    IntervalList<int> list;
+    list.addInterval(1, 4);
+    list.addInterval(5);
+    list.addInterval(6, 10);
+    auto copy = list.getIntervals();
+    auto size = list.totalFree();
+
+    // exit(-1);
     spdlog::set_level(spdlog::level::trace);
     m_Window.create("Voxel Engine", 960, 960);
 

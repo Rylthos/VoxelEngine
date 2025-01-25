@@ -440,20 +440,16 @@ void main()
                 diffStrength = 0.;
 
             colour = (ambient + diffuse * diffStrength) * colour;
-
-            // if (shadow.hasHitVoxel)
-            //     colour = vec4(1.);
         }
         imageStore(o_Image, texelCoord, colour);
     }
-    imageStore(o_ComparisonImage, texelCoord, vec4(hit.position, 1.));
 
     if (hit.comparisons >= 0) {
         vec4 lowestHitColour = vec4(0.5, 0., 0.5, 1.0);
         vec4 highestHitColour = vec4(1., 1., 0., 1.0);
         float mixAmount = hit.comparisons / float(p_MaxHeatShown);
 
-        // imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
+        imageStore(o_ComparisonImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
     }
 
     if (shouldColourCursor(uv, vec2(1.) / vec2(size))) {

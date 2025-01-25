@@ -23,7 +23,7 @@ template <IntervalType T> class IntervalList {
 
         std::set<Interval> toBeRemoved;
         for (const auto& p : m_Intervals) {
-            if (doIntersect({ lower, higher }, p)) {
+            if (doIntersect({ lower - 1, higher + 1 }, p)) {
                 lower = std::min(lower, p.first);
                 higher = std::max(higher, p.second);
                 toBeRemoved.insert(p);
@@ -73,6 +73,25 @@ template <IntervalType T> class IntervalList {
 
     std::set<Interval> getIntervals() { return m_Intervals; }
 
+    Interval getFirstGreater(T size)
+    {
+        for (const auto& p : m_Intervals) {
+            if (sizeOfInterval(p) >= size) {
+                return p;
+            }
+        }
+    }
+
+    void clearIntervals() { m_Intervals.clear(); }
+    T totalFree()
+    {
+        T size = 0;
+        for (const auto& p : m_Intervals) {
+            size += sizeOfInterval(p);
+        }
+        return size;
+    }
+
   private:
     std::set<Interval> m_Intervals;
 
@@ -83,4 +102,6 @@ template <IntervalType T> class IntervalList {
             || (i.second >= j.first && i.second <= j.second)
             || (i.first <= j.first && i.second >= j.second));
     }
+
+    T sizeOfInterval(Interval a) { return a.second - a.first + 1; }
 };

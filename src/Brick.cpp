@@ -88,7 +88,8 @@ std::vector<glm::vec4> Brick::getColours()
 
 bool Brick::validPosition(glm::ivec3 pos)
 {
-    return !(pos.x < 0 || pos.x >= BRICK_SIZE || pos.y < 0 || pos.y >= BRICK_SIZE || pos.z < 0 || pos.z >= BRICK_SIZE);
+    return !(pos.x < 0 || pos.x >= BRICK_SIZE || pos.y < 0 || pos.y >= BRICK_SIZE || pos.z < 0
+        || pos.z >= BRICK_SIZE);
 }
 
 uint64_t Brick::getColourIndex(glm::ivec3 position)

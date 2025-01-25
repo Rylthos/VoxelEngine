@@ -76,22 +76,22 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
         createStaging(loadedSize);
 
-        m_ToBeLoaded[i].create(
-            m_Allocator, sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        m_ToBeLoaded[i].create(m_Allocator, sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+                | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VMA_MEMORY_USAGE_AUTO,
             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
     }
 
-    m_SuperBrickBuffer.create(
-        m_Allocator, sizeof(SuperBrickStruct),
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    m_SuperBrickBuffer.create(m_Allocator, sizeof(SuperBrickStruct),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 
-    m_FeedbackBuffer.create(
-        m_Allocator, sizeof(Feedback),
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    m_FeedbackBuffer.create(m_Allocator, sizeof(Feedback),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 
@@ -129,13 +129,16 @@ void SceneManager::receive(const Event* event)
 
         if (glm::dot(glm::vec3(m_Feedback.voxelNormal), glm::vec3(1.)) < 0.) {
             leftLength = m_PlacementSize / 2;
-            rightLength = (m_PlacementSize % 2 == 0) ? ((m_PlacementSize - 1) / 2) : (m_PlacementSize / 2);
+            rightLength
+                = (m_PlacementSize % 2 == 0) ? ((m_PlacementSize - 1) / 2) : (m_PlacementSize / 2);
         } else {
-            leftLength = (m_PlacementSize % 2 == 0) ? ((m_PlacementSize - 1) / 2) : (m_PlacementSize / 2);
+            leftLength
+                = (m_PlacementSize % 2 == 0) ? ((m_PlacementSize - 1) / 2) : (m_PlacementSize / 2);
             rightLength = m_PlacementSize / 2;
         }
 
-        glm::ivec3 offset = glm::ivec3(glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
+        glm::ivec3 offset = glm::ivec3(
+            glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
         glm::ivec3 center = m_Feedback.voxelIndex;
 
         if (m_PlaceVoxel) {
@@ -147,7 +150,7 @@ void SceneManager::receive(const Event* event)
             Timer::startTimer("Modify Voxels");
             static std::vector<VoxelChange> changes;
             changes.clear();
-            changes.resize(m_PlacementSize * m_PlacementSize * m_PlacementSize);
+            changes.reserve(m_PlacementSize * m_PlacementSize * m_PlacementSize);
 
             for (int y = -leftLength; y <= rightLength; y++) {
                 for (int z = -leftLength; z <= rightLength; z++) {
@@ -158,7 +161,8 @@ void SceneManager::receive(const Event* event)
                         case PlacementType::Cube:
                             break;
                         case PlacementType::Sphere: {
-                            if (glm::length(glm::vec3(newIndex - center)) > (float)(m_PlacementSize / 2.)) {
+                            if (glm::length(glm::vec3(newIndex - center))
+                                > (float)(m_PlacementSize / 2.)) {
                                 canPlace = false;
                             }
                             break;
@@ -179,9 +183,7 @@ void SceneManager::receive(const Event* event)
                             op = 0;
                         }
 
-                        changes.push_back({ m_Feedback.brickIndex,
-                            newIndex,
-                            op });
+                        changes.push_back({ m_Feedback.brickIndex, newIndex, op });
                     }
                 }
             }
@@ -209,7 +211,8 @@ void SceneManager::receive(const Event* event)
         const MouseScroll* ms = static_cast<const MouseScroll*>(event);
         int sign = (ms->yOffset < 0) ? -1 : 1;
 
-        m_PlacementSize = std::clamp((int)m_PlacementSize + sign, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
+        m_PlacementSize
+            = std::clamp((int)m_PlacementSize + sign, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
 
         break;
     }
@@ -222,7 +225,8 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("Time");
             ImGui::Checkbox("Increase Time", &m_IncreaseTime);
             ImGui::SliderFloat("##Time", &m_Time, 0., 2399, "%.2f");
-            ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", m_VoxelPushConstants.sunDirection.x, m_VoxelPushConstants.sunDirection.y, m_VoxelPushConstants.sunDirection.z);
+            ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", m_VoxelPushConstants.sunDirection.x,
+                m_VoxelPushConstants.sunDirection.y, m_VoxelPushConstants.sunDirection.z);
 
             ImGui::Text("Minutes Per Second");
             ImGui::SliderFloat("##MinutesPerSecond", &m_MinutePerSecond, 1., 60., "%.2f");
@@ -232,7 +236,9 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
             ImGui::Text("Allocation Size: %ld", m_SuperBrick.getCurrentAllocation());
             ImGui::Text("Colours Allocated: %ld", m_SuperBrick.getCurrentColourAllocation());
-            ImGui::Text("Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
+            ImGui::Text(
+                "Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
+            ImGui::Text("Colours Indices Free: %ld", m_SuperBrick.getCurrentColourIndexSize());
 
             ImGui::Text("Max Heat");
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
@@ -240,8 +246,8 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("Hit Data");
             ImGui::Text("Hitting Brick: %d", m_Feedback.hasHitBrick);
             ImGui::Text("Hitting Voxel: %d", m_Feedback.hasHitVoxel);
-            ImGui::Text("Super brick Index: %s",
-                glm::to_string(m_Feedback.superBrickIndex).c_str());
+            ImGui::Text(
+                "Super brick Index: %s", glm::to_string(m_Feedback.superBrickIndex).c_str());
             ImGui::Text("Brick Index: %s", glm::to_string(m_Feedback.brickIndex).c_str());
             ImGui::Text("Voxel Index: %s", glm::to_string(m_Feedback.voxelIndex).c_str());
             ImGui::Text("Voxel Normal: %s", glm::to_string(m_Feedback.voxelNormal).c_str());
@@ -252,13 +258,13 @@ void SceneManager::receive(const Event* event)
 
             float data[] = { m_CurrentColour.r, m_CurrentColour.g, m_CurrentColour.b };
             ImGui::Text("Placement Colour");
-            ImGui::ColorEdit3("Placement Colour", (float*)&data, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+            ImGui::ColorEdit3("Placement Colour", (float*)&data,
+                ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
             m_CurrentColour.r = data[0];
             m_CurrentColour.g = data[1];
             m_CurrentColour.b = data[2];
 
-            int selected_idx
-                = static_cast<int>(m_CurrentPlacement);
+            int selected_idx = static_cast<int>(m_CurrentPlacement);
             const char* preview = PlacementTypeToString[selected_idx];
             int len = static_cast<int>(PlacementType::NUM_TYPES);
 
@@ -278,7 +284,8 @@ void SceneManager::receive(const Event* event)
             ImGui::Checkbox("Infinite Place", &m_InfinitePlace);
 
             ImGui::Text("Placement Size");
-            ImGui::SliderInt("##PlacementSize", (int*)&m_PlacementSize, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
+            ImGui::SliderInt(
+                "##PlacementSize", (int*)&m_PlacementSize, MIN_PLACEMENT_SIZE, MAX_PLACEMENT_SIZE);
 
             ImGui::Text("Placing: %d", m_PlaceVoxel);
             ImGui::Text("Erasing: %d", m_EraseVoxel);
@@ -320,7 +327,8 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
     float angle = glm::pi<float>() * ((m_Time / 1200.) + 0.5);
 
-    m_VoxelPushConstants.sunDirection = glm::normalize(glm::vec4(-glm::cos(angle), glm::sin(angle), 0., 0.));
+    m_VoxelPushConstants.sunDirection
+        = glm::normalize(glm::vec4(-glm::cos(angle), glm::sin(angle), 0., 0.));
 
     return m_VoxelPushConstants;
 }
@@ -340,7 +348,8 @@ void SceneManager::checkChunks(uint32_t currentFrame)
     if (m_PauseRegeneration)
         return;
 
-    const uint32_t* data = (const uint32_t*)m_ToBeLoaded[currentFrame].getAllocationInfo().pMappedData;
+    const uint32_t* data
+        = (const uint32_t*)m_ToBeLoaded[currentFrame].getAllocationInfo().pMappedData;
 
     uint32_t length = std::min((uint32_t)data[0], data[1] + 2);
     if (data[1] != 0) {

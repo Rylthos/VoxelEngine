@@ -14,6 +14,8 @@
 #include "Buffer.hpp"
 #include "Queue.hpp"
 
+#include "IntervalList.hpp"
+
 #define SUPERBRICK_SIZE 16
 
 #define ERASE_OP int
@@ -71,6 +73,7 @@ class SuperBrick {
     size_t getCurrentAllocation() { return m_CurrentPoolSize; }
     size_t getCurrentColourAllocation() { return m_CurrentColourCount; }
     size_t getCurrentColourAllocationSize() { return m_MaxColours; }
+    size_t getCurrentColourIndexSize() { return m_AvailableColourIndices.totalFree(); }
 
   private:
     bool m_Initialized = false;
@@ -79,13 +82,15 @@ class SuperBrick {
     std::unordered_map<glm::ivec3, uint16_t> m_GeneratedBricks;
     std::set<uint16_t> m_FreeIndices;
 
-    size_t m_CurrentPoolSize;
+    size_t m_CurrentPoolSize = 256;
 
     Buffer m_BrickPool;
     Buffer m_Staging;
 
-    size_t m_MaxColours = 512;
+    size_t m_MaxColours = 512 * 16 * 16;
     size_t m_CurrentColourCount = 0;
+    IntervalList<uint32_t> m_AvailableColourIndices;
+    std::unordered_map<glm::ivec3, std::pair<uint32_t, uint32_t>> m_AllocatedColourSizes;
     Buffer m_Colours;
 
     SuperBrickStruct m_Struct;
@@ -109,16 +114,11 @@ class SuperBrick {
     size_t m_NumGenerationThreads = 4;
 
     std::condition_variable_any m_CanGenerate;
-    PROF_LOCKABLE_MUTEX(std::mutex,
-        m_GeneratedQueueLock, "Generated Queue Lock");
-    PROF_LOCKABLE_MUTEX(std::mutex,
-        m_BufferLock, "Buffer Lock");
-    PROF_LOCKABLE_MUTEX(std::mutex,
-        m_QueuedChangesLock, "Queued Changed Lock");
-    PROF_LOCKABLE_MUTEX(std::mutex,
-        m_LoadedLock, "ToBeLoaded Lock");
-    PROF_LOCKABLE_MUTEX(std::mutex,
-        m_EnqueuedLock, "Enqueued Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_GeneratedQueueLock, "Generated Queue Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_BufferLock, "Buffer Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_QueuedChangesLock, "Queued Changed Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_LoadedLock, "ToBeLoaded Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_EnqueuedLock, "Enqueued Lock");
 
     std::deque<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_Enqueued;
@@ -126,8 +126,11 @@ class SuperBrick {
     std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, VoxelOp>> m_QueuedChanges;
 
   private:
-    void transformChange(VoxelChange change, glm::ivec3& brickIndex, glm::ivec3& voxelIndex, VoxelOp& op);
-    void transformChanges(const std::vector<VoxelChange> changes, std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>& groupedChanges);
+    void transformChange(
+        VoxelChange change, glm::ivec3& brickIndex, glm::ivec3& voxelIndex, VoxelOp& op);
+    void transformChanges(const std::vector<VoxelChange> changes,
+        std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>&
+            groupedChanges);
     void setVoxels(const std::vector<VoxelChange>& voxels);
     void generateStaging(size_t size);
 
