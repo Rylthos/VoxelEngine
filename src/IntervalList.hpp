@@ -92,6 +92,8 @@ template <IntervalType T> class IntervalList {
         return size;
     }
 
+    T sizeOfInterval(Interval a) { return a.second - a.first + 1; }
+
   private:
     std::set<Interval> m_Intervals;
 
@@ -102,6 +104,4 @@ template <IntervalType T> class IntervalList {
             || (i.second >= j.first && i.second <= j.second)
             || (i.first <= j.first && i.second >= j.second));
     }
-
-    T sizeOfInterval(Interval a) { return a.second - a.first + 1; }
 };

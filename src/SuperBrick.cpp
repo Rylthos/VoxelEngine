@@ -1,6 +1,7 @@
 #include "SuperBrick.hpp"
 
 #include <pthread.h>
+#include <unordered_map>
 #include <variant>
 #include <vulkan/vulkan_core.h>
 
@@ -211,14 +212,15 @@ SuperBrickStruct SuperBrick::getStruct()
             m_Colours.copyFromBuffer(m_Staging, size);
         }
 
-        // TODO: Improve loading by combining adjacent chunks into one copy
-
-        size_t stagingSize = sizeof(BrickStruct);
+        size_t stagingSize = sizeof(BrickStruct) * m_ToBeLoaded.size();
         generateStaging(stagingSize);
 
         std::vector<glm::vec4> newColours;
         size_t offset = 0;
         std::unordered_map<size_t, std::pair<size_t, size_t>> mapping;
+
+        IntervalList<int> stagingCommit;
+        std::unordered_map<int, size_t> stagingMapping;
 
         for (glm::ivec3 p : m_ToBeLoaded) {
             if (m_GeneratedBricks.contains(p))
@@ -251,11 +253,13 @@ SuperBrickStruct SuperBrick::getStruct()
 
             std::vector<BrickStruct> temp { brickStruct.value() };
 
-            std::memcpy((char*)m_Staging.getAllocationInfo().pMappedData, &brickStruct.value(),
-                sizeof(BrickStruct));
+            std::memcpy(
+                (char*)m_Staging.getAllocationInfo().pMappedData + offset * sizeof(BrickStruct),
+                &brickStruct.value(), sizeof(BrickStruct));
 
-            m_BrickPool.copyFromBuffer(
-                m_Staging, sizeof(BrickStruct), 0, chosenIndex * sizeof(BrickStruct));
+            stagingCommit.addInterval(chosenIndex);
+            stagingMapping[chosenIndex] = offset;
+            offset += 1;
 
             mapping.insert({ newColours.size(), { colourInterval.first, colours.size() } });
             m_AvailableColourIndices.removeInterval(
@@ -265,8 +269,13 @@ SuperBrickStruct SuperBrick::getStruct()
             m_AllocatedColourSizes[p] = { colourInterval.first, colours.size() };
         }
 
-        // TODO: Track Erased colours buffers and allow for those to be refilled
-        // if size permits. Arena Allocator / Malloc
+        for (const auto& m : stagingCommit.getIntervals()) {
+            size_t size = stagingCommit.sizeOfInterval(m);
+            size_t srcOffset = stagingMapping[m.first];
+            size_t dstOffset = m.first;
+            m_BrickPool.copyFromBuffer(m_Staging, sizeof(BrickStruct) * size,
+                srcOffset * sizeof(BrickStruct), dstOffset * sizeof(BrickStruct));
+        }
 
         generateStaging(newColours.size() * sizeof(glm::vec4));
         m_Staging.copyFromData_CPUOnly<glm::vec4>(newColours);
