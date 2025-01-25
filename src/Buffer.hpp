@@ -30,19 +30,22 @@ class Buffer {
 
     VkDeviceAddress getDeviceAddress(VkDevice device) const;
 
-    void copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset = 0,
-        size_t dstOffset = 0);
+    void startCopyFromBuffer();
+    void copyData(const Buffer& buffer, size_t size, size_t srcOffset = 0, size_t dstOffset = 0);
+    void endCopyFromBuffer();
+
+    void copyFromBuffer(
+        const Buffer& buffer, size_t size, size_t srcOffset = 0, size_t dstOffset = 0);
 
     void copyFromBuffer(VkCommandBuffer cmd, const Buffer& buffer, size_t size,
         size_t srcOffset = 0, size_t dstOffset = 0);
 
-    template <typename T>
-    void copyFromData(const std::span<T>& data)
+    template <typename T> void copyFromData(const std::span<T>& data)
     {
         size_t size = data.size() * sizeof(T);
         Buffer stagingBuffer;
-        stagingBuffer.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            VMA_MEMORY_USAGE_CPU_TO_GPU);
+        stagingBuffer.create(
+            m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
         std::memcpy(stagingBuffer.getAllocationInfo().pMappedData, data.data(), size);
 
@@ -51,16 +54,14 @@ class Buffer {
         stagingBuffer.free();
     }
 
-    template <typename T>
-    void copyToVector(std::vector<T>& data)
+    template <typename T> void copyToVector(std::vector<T>& data)
     {
         size_t elements = m_Size / sizeof(T);
         data.resize(elements);
         std::memcpy(data.data(), getAllocationInfo().pMappedData, m_Size);
     }
 
-    template <typename T>
-    void copyFromData_CPUOnly(const std::span<T>& data)
+    template <typename T> void copyFromData_CPUOnly(const std::span<T>& data)
     {
         size_t size = data.size() * sizeof(T);
 

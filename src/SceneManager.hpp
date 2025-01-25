@@ -22,11 +22,7 @@
 #define MAX_PLACEMENT_SIZE 64
 #define MIN_PLACEMENT_SIZE 1
 
-enum class PlacementType : int {
-    Cube = 0,
-    Sphere = 1,
-    NUM_TYPES
-};
+enum class PlacementType : int { Cube = 0, Sphere = 1, NUM_TYPES };
 
 static const char* PlacementTypeToString[] = {
     "Cube",
@@ -114,7 +110,7 @@ class SceneManager : public EventReceiver {
     glm::vec3 m_CurrentColour;
 
     bool m_IncreaseTime = false;
-    float m_Time = 0.f;
+    float m_Time = 1200.f;
     float m_MinutePerSecond = 10.f;
 
     bool m_InfinitePlace = false;

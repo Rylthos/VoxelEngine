@@ -1,5 +1,6 @@
 #include "Buffer.hpp"
 
+#include "ImmediateSubmit.hpp"
 #include "VkCheck.hpp"
 
 #include <spdlog/spdlog.h>
@@ -38,8 +39,8 @@ void Buffer::create(VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlag
     vmaACI.usage = memoryUsage;
     vmaACI.flags = flags;
 
-    VK_CHECK(vmaCreateBuffer(m_Allocator, &bufferCI, &vmaACI, &m_Buffer, &m_Allocation,
-        &m_AllocationInfo));
+    VK_CHECK(vmaCreateBuffer(
+        m_Allocator, &bufferCI, &vmaACI, &m_Buffer, &m_Allocation, &m_AllocationInfo));
 
     spdlog::info("Created buffer with size: {}", m_Size);
 }
@@ -71,8 +72,17 @@ VkDeviceAddress Buffer::getDeviceAddress(VkDevice device) const
     return address;
 }
 
-void Buffer::copyFromBuffer(VkCommandBuffer cmd, const Buffer& buffer, size_t size,
-    size_t srcOffset, size_t dstOffset)
+void Buffer::startCopyFromBuffer() { ImmediateSubmit::start(); }
+
+void Buffer::copyData(const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
+{
+    ImmediateSubmit::execute(
+        [&](VkCommandBuffer cmd) { copyFromBuffer(cmd, buffer, size, srcOffset, dstOffset); });
+}
+void Buffer::endCopyFromBuffer() { ImmediateSubmit::end(); }
+
+void Buffer::copyFromBuffer(
+    VkCommandBuffer cmd, const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
 {
     if (size == 0) {
         return;

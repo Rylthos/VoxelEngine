@@ -437,7 +437,7 @@ void main()
 
             float diffStrength = 1.;
             if (shadow.hasHitBrick && shadow.hasHitVoxel)
-                diffStrength = 0.;
+                diffStrength = 0.3;
 
             colour = (ambient + diffuse * diffStrength) * colour;
         }

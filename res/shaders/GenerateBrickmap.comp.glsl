@@ -66,37 +66,11 @@ void main() {
 
     uv.xz /= 50.;
 
-    // float heightValue = height(vec3(worldPosition));
     float value = height(uv) * 10.;
 
-    // if (uv.y < uv.x) {
-    //     setVoxel(currentIndex, vec3(1.));
-    //     // setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
-    // } else {
-    //     setAir(currentIndex);
-    // }
-
-    // if (uv.y < value) {
-    //     setVoxel(currentIndex, vec3(1.));
-    //     // setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
-    // } else {
-    //     setAir(currentIndex);
-    // }
-
-    if (p_WorldPosition == ivec3(0)) {
+    if (uv.y < value) {
         setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
     } else {
         setAir(currentIndex);
     }
-
-    // if (p_BrickIndex.y % 4 == 0) {
-    //     uint sum = currentIndex.x + currentIndex.y + currentIndex.z;
-    //     if (sum % 5 == 0) {
-    //         setVoxel(currentIndex, vec3(1.));
-    //     } else {
-    //         setAir(currentIndex);
-    //     }
-    // } else {
-    //     setAir(currentIndex);
-    // }
 }

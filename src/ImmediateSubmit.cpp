@@ -1,6 +1,7 @@
 #include "ImmediateSubmit.hpp"
 
 #include "VkCheck.hpp"
+#include <vulkan/vulkan_core.h>
 
 VkFence ImmediateSubmit::m_Fence;
 VkCommandPool ImmediateSubmit::m_CommandPool;
@@ -39,7 +40,7 @@ void ImmediateSubmit::init(VkDevice device, VkQueue graphicsQueue, uint32_t grap
     VK_CHECK(vkCreateFence(device, &fenceCI, nullptr, &m_Fence));
 }
 
-void ImmediateSubmit::submit(std::function<void(VkCommandBuffer cmd)>&& function)
+void ImmediateSubmit::start()
 {
     VK_CHECK(vkResetFences(m_Device, 1, &m_Fence));
     VK_CHECK(vkResetCommandBuffer(m_CommandBuffer, 0));
@@ -52,8 +53,18 @@ void ImmediateSubmit::submit(std::function<void(VkCommandBuffer cmd)>&& function
 
     VK_CHECK(vkBeginCommandBuffer(m_CommandBuffer, &commandBufferBI));
 
-    function(m_CommandBuffer);
+    m_Started = true;
+}
 
+void ImmediateSubmit::execute(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+    assert(m_Started && "Execution not started");
+    function(m_CommandBuffer);
+}
+
+void ImmediateSubmit::end()
+{
+    assert(m_Started && "Execution not started");
     VK_CHECK(vkEndCommandBuffer(m_CommandBuffer));
 
     VkCommandBufferSubmitInfo commandBufferSI {};
@@ -70,6 +81,15 @@ void ImmediateSubmit::submit(std::function<void(VkCommandBuffer cmd)>&& function
 
     VK_CHECK(vkQueueSubmit2(m_GraphicsQueue, 1, &submitInfo, m_Fence));
     VK_CHECK(vkWaitForFences(m_Device, 1, &m_Fence, true, 1e10));
+
+    m_Started = false;
+}
+
+void ImmediateSubmit::submit(std::function<void(VkCommandBuffer cmd)>&& function)
+{
+    start();
+    function(m_CommandBuffer);
+    end();
 }
 
 void ImmediateSubmit::free()

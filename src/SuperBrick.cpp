@@ -269,24 +269,28 @@ SuperBrickStruct SuperBrick::getStruct()
             m_AllocatedColourSizes[p] = { colourInterval.first, colours.size() };
         }
 
+        m_BrickPool.startCopyFromBuffer();
         for (const auto& m : stagingCommit.getIntervals()) {
             size_t size = stagingCommit.sizeOfInterval(m);
             size_t srcOffset = stagingMapping[m.first];
             size_t dstOffset = m.first;
-            m_BrickPool.copyFromBuffer(m_Staging, sizeof(BrickStruct) * size,
+            m_BrickPool.copyData(m_Staging, sizeof(BrickStruct) * size,
                 srcOffset * sizeof(BrickStruct), dstOffset * sizeof(BrickStruct));
         }
+        m_BrickPool.endCopyFromBuffer();
 
         generateStaging(newColours.size() * sizeof(glm::vec4));
         m_Staging.copyFromData_CPUOnly<glm::vec4>(newColours);
 
+        m_BrickPool.startCopyFromBuffer();
         for (const auto& m : mapping) {
             size_t srcOffset = m.first;
             size_t dstOffset = m.second.first;
             size_t size = m.second.second;
-            m_Colours.copyFromBuffer(m_Staging, size * sizeof(glm::vec4),
-                srcOffset * sizeof(glm::vec4), dstOffset * sizeof(glm::vec4));
+            m_Colours.copyData(m_Staging, size * sizeof(glm::vec4), srcOffset * sizeof(glm::vec4),
+                dstOffset * sizeof(glm::vec4));
         }
+        m_BrickPool.endCopyFromBuffer();
         m_CurrentColourCount += newColours.size();
 
         m_ToBeLoaded.clear();
