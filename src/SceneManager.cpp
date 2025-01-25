@@ -187,7 +187,7 @@ void SceneManager::receive(const Event* event)
                     }
                 }
             }
-            m_SuperBrick.changeVoxels(changes);
+            m_SuperBrick.changeVoxels(changes, m_ReplaceVoxels);
             Timer::stopTimer("Modify Voxels");
         }
 
@@ -282,6 +282,7 @@ void SceneManager::receive(const Event* event)
             }
 
             ImGui::Checkbox("Infinite Place", &m_InfinitePlace);
+            ImGui::Checkbox("Replace existing", &m_ReplaceVoxels);
 
             ImGui::Text("Placement Size");
             ImGui::SliderInt(

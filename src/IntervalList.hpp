@@ -73,13 +73,14 @@ template <IntervalType T> class IntervalList {
 
     std::set<Interval> getIntervals() { return m_Intervals; }
 
-    Interval getFirstGreater(T size)
+    std::optional<Interval> getFirstGreater(T size)
     {
         for (const auto& p : m_Intervals) {
             if (sizeOfInterval(p) >= size) {
                 return p;
             }
         }
+        return {};
     }
 
     void clearIntervals() { m_Intervals.clear(); }

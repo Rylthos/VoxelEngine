@@ -24,7 +24,7 @@ class Brick {
     Brick();
 
     void setAir(glm::ivec3 position);
-    void setVoxel(glm::ivec3 position, glm::vec4 colour);
+    void setVoxel(glm::ivec3 position, glm::vec4 colour, bool replace);
     std::optional<glm::vec4> getVoxel(glm::ivec3 position);
 
     std::optional<BrickStruct> getStruct();

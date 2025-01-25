@@ -29,14 +29,19 @@ void Brick::setAir(glm::ivec3 position)
     m_Colours.erase(getColourIndex(position));
 }
 
-void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour)
+void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour, bool replace)
 {
     if (!validPosition(position)) {
         spdlog::error("Invalid set position: {}", glm::to_string(position));
     };
 
     uint64_t mask = position.z * BRICK_SIZE + position.x;
-    m_Brick.solidMask[position.y] |= ((uint64_t)1) << mask;
+    uint64_t bitMask = ((uint64_t)1) << mask;
+    if (!replace && (m_Brick.solidMask[position.y] & bitMask) != 0) {
+        return;
+    }
+
+    m_Brick.solidMask[position.y] |= bitMask;
 
     m_Colours[getColourIndex(position)] = colour;
 }

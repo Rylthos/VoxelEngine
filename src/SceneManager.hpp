@@ -116,6 +116,7 @@ class SceneManager : public EventReceiver {
     bool m_InfinitePlace = false;
     bool m_PlaceVoxel = false;
     bool m_EraseVoxel = false;
+    bool m_ReplaceVoxels = false;
     PlacementType m_CurrentPlacement = PlacementType::Sphere;
     uint32_t m_PlacementSize = MIN_PLACEMENT_SIZE;
 

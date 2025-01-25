@@ -58,10 +58,11 @@ class SuperBrick {
     void addBrickToQueue(uint32_t index);
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
 
-    void placeVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour);
-    void eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex);
+    void placeVoxel(
+        glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour, bool replace = false);
+    void eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool replace = false);
 
-    void changeVoxels(const std::vector<VoxelChange>& voxels);
+    void changeVoxels(const std::vector<VoxelChange>& voxels, bool replace);
 
     SuperBrickStruct getStruct();
 
@@ -131,7 +132,8 @@ class SuperBrick {
     void transformChanges(const std::vector<VoxelChange> changes,
         std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>&
             groupedChanges);
-    void setVoxels(const std::vector<VoxelChange>& voxels);
+    void setVoxels(const std::vector<VoxelChange>& voxels, bool replace);
+
     void generateStaging(size_t size);
 
     void generateBrickLoop(size_t id);

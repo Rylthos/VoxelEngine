@@ -143,19 +143,23 @@ void SuperBrick::addBrickToQueue(uint32_t index)
     addBrickToQueue(position);
 }
 
-void SuperBrick::placeVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour)
+void SuperBrick::placeVoxel(
+    glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour, bool replace)
 {
     std::vector<VoxelChange> temp = { std::make_tuple(brickIndex, voxelIndex, colour) };
-    setVoxels(temp);
+    setVoxels(temp, replace);
 }
 
-void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex)
+void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool replace)
 {
     std::vector<VoxelChange> temp = { std::make_tuple(brickIndex, voxelIndex, 0) };
-    setVoxels(temp);
+    setVoxels(temp, true);
 }
 
-void SuperBrick::changeVoxels(const std::vector<VoxelChange>& voxels) { setVoxels(voxels); }
+void SuperBrick::changeVoxels(const std::vector<VoxelChange>& voxels, bool replace)
+{
+    setVoxels(voxels, replace);
+}
 
 SuperBrickStruct SuperBrick::getStruct()
 {
@@ -240,7 +244,7 @@ SuperBrickStruct SuperBrick::getStruct()
             const auto& colours = brick.getColours();
 
             auto colourInterval = m_AvailableColourIndices.getFirstGreater(colours.size());
-            brickStruct->colourPtr = colourInterval.first;
+            brickStruct->colourPtr = colourInterval->first;
 
             size_t chosenIndex = *m_FreeIndices.begin();
             m_GeneratedBricks[p] = chosenIndex;
@@ -261,12 +265,12 @@ SuperBrickStruct SuperBrick::getStruct()
             stagingMapping[chosenIndex] = offset;
             offset += 1;
 
-            mapping.insert({ newColours.size(), { colourInterval.first, colours.size() } });
+            mapping.insert({ newColours.size(), { colourInterval->first, colours.size() } });
             m_AvailableColourIndices.removeInterval(
-                colourInterval.first, colourInterval.first + colours.size() - 1);
+                colourInterval->first, colourInterval->first + colours.size() - 1);
 
             newColours.insert(newColours.end(), colours.begin(), colours.end());
-            m_AllocatedColourSizes[p] = { colourInterval.first, colours.size() };
+            m_AllocatedColourSizes[p] = { colourInterval->first, colours.size() };
         }
 
         m_BrickPool.startCopyFromBuffer();
@@ -364,7 +368,7 @@ void SuperBrick::transformChanges(const std::vector<VoxelChange> changes,
     }
 }
 
-void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes)
+void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes, bool replace)
 {
     PROF_ZONE_SCOPED;
     std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>> groupedChanges;
@@ -387,7 +391,8 @@ void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes)
             if (std::holds_alternative<ERASE_OP>(change.second)) {
                 m_Bricks.at(brickIndex).setAir(change.first);
             } else {
-                m_Bricks.at(brickIndex).setVoxel(change.first, std::get<PLACE_OP>(change.second));
+                m_Bricks.at(brickIndex)
+                    .setVoxel(change.first, std::get<PLACE_OP>(change.second), replace);
             }
         }
 
@@ -543,7 +548,7 @@ void SuperBrick::generateBrickLoop(size_t id)
                         uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
                         glm::ivec3 voxelIndex = { x, y, z };
                         if (colour_data[index].a >= 0) {
-                            brick.setVoxel(voxelIndex, colour_data[index]);
+                            brick.setVoxel(voxelIndex, colour_data[index], true);
                         }
                     }
                 }
@@ -558,7 +563,7 @@ void SuperBrick::generateBrickLoop(size_t id)
                     if (std::holds_alternative<ERASE_OP>(p.second)) {
                         brick.setAir(p.first);
                     } else if (std::holds_alternative<PLACE_OP>(p.second)) {
-                        brick.setVoxel(p.first, std::get<PLACE_OP>(p.second));
+                        brick.setVoxel(p.first, std::get<PLACE_OP>(p.second), true);
                     }
                 }
 
