@@ -151,10 +151,13 @@ void Engine::cleanup()
 
     vkDestroyQueryPool(m_Device, m_QueryPool, nullptr);
 
+    vkDestroyPipeline(m_Device, m_DeferredPipeline, nullptr);
+    vkDestroyPipelineLayout(m_Device, m_DeferredPipelineLayout, nullptr);
     vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_VoxelPipelineLayout, nullptr);
 
-    vkDestroyDescriptorSetLayout(m_Device, m_VoxelDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_Device, m_GBufferDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_Device, m_AltDescriptorSetLayout, nullptr);
 
     vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
 
@@ -334,20 +337,27 @@ void Engine::initSwapchain()
 
     VkExtent3D drawImageExtent = { m_Window.getSize().x, m_Window.getSize().y, 1 };
 
-    m_DrawImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent,
-        VK_IMAGE_TYPE_2D,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-            | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VkImageType imageType = VK_IMAGE_TYPE_2D;
+    VkImageUsageFlags imageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_GBuffer.position.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent,
+        imageType, imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_GBuffer.normal.create(m_Allocator, VK_FORMAT_R8G8B8A8_SINT, drawImageExtent, imageType,
+        imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_GBuffer.colour.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, imageType,
+        imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    m_DrawImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, imageType,
+        imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_AltImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, m_DrawImage.getExtent(),
-        VK_IMAGE_TYPE_2D,
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-            | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        imageType, imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
+    m_GBuffer.position.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_GBuffer.normal.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_GBuffer.colour.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
     spdlog::info("Createed Swapchain ImageView");
@@ -357,6 +367,10 @@ void Engine::destroySwapchain()
 {
     m_AltImage.free();
     m_DrawImage.free();
+
+    m_GBuffer.colour.free();
+    m_GBuffer.normal.free();
+    m_GBuffer.position.free();
 
     vkDestroySwapchainKHR(m_Device, m_Swapchain, nullptr);
 
@@ -477,7 +491,8 @@ void Engine::initImGui()
 void Engine::initDescriptorPool()
 {
     std::vector<VkDescriptorPoolSize> poolSizes
-        = { { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT } };
+        = { { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT },
+              { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 3 } };
 
     VkDescriptorPoolCreateInfo descriptorPoolCI {};
     descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -493,10 +508,15 @@ void Engine::initDescriptorPool()
 
 void Engine::initDescriptorLayouts()
 {
-    m_VoxelDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
-                                     .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
-                                     .addStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT)
-                                     .build();
+    m_GBufferDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
+                                       .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
+                                       .addStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT)
+                                       .addStorageImage(2, VK_SHADER_STAGE_COMPUTE_BIT)
+                                       .build();
+
+    m_AltDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
+                                   .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
+                                   .build();
     spdlog::info("Created descriptor layouts");
 }
 
@@ -508,11 +528,13 @@ void Engine::initPipelines()
         pushConstant.size = sizeof(VoxelPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+        std::vector<VkDescriptorSetLayout> layouts
+            = { m_GBufferDescriptorSetLayout, m_AltDescriptorSetLayout };
         VkPipelineLayoutCreateInfo computeLayoutCI {};
         computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         computeLayoutCI.pNext = nullptr;
-        computeLayoutCI.setLayoutCount = 1;
-        computeLayoutCI.pSetLayouts = &m_VoxelDescriptorSetLayout;
+        computeLayoutCI.setLayoutCount = layouts.size();
+        computeLayoutCI.pSetLayouts = layouts.data();
         computeLayoutCI.pushConstantRangeCount = 1;
         computeLayoutCI.pPushConstantRanges = &pushConstant;
 
@@ -539,14 +561,74 @@ void Engine::initPipelines()
             m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_VoxelPipeline));
         spdlog::info("Created Background Pipeline and Pipeline Layout");
     }
+
+    {
+        // VkPushConstantRange pushConstant {};
+        // pushConstant.offset = 0;
+        // pushConstant.size = sizeof(VoxelPushConstants);
+        // pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        std::vector<VkDescriptorSetLayout> layouts
+            = { m_GBufferDescriptorSetLayout, m_AltDescriptorSetLayout };
+        VkPipelineLayoutCreateInfo computeLayoutCI {};
+        computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        computeLayoutCI.pNext = nullptr;
+        computeLayoutCI.setLayoutCount = layouts.size();
+        computeLayoutCI.pSetLayouts = layouts.data();
+        // computeLayoutCI.pushConstantRangeCount = 0;
+        // computeLayoutCI.pPushConstantRanges = nullptr;
+
+        VK_CHECK(
+            vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_DeferredPipelineLayout));
+
+        ShaderModule deferredShader;
+        deferredShader.create("res/shaders/Deferred.comp.spv", m_Device);
+
+        VkPipelineShaderStageCreateInfo shaderStageCI {};
+        shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStageCI.pNext = nullptr;
+        shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        shaderStageCI.module = deferredShader.getShaderModule();
+        shaderStageCI.pName = "main";
+
+        VkComputePipelineCreateInfo computePipelineCI {};
+        computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        computePipelineCI.pNext = nullptr;
+        computePipelineCI.layout = m_DeferredPipelineLayout;
+        computePipelineCI.stage = shaderStageCI;
+
+        VK_CHECK(vkCreateComputePipelines(
+            m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_DeferredPipeline));
+        spdlog::info("Created Background Pipeline and Pipeline Layout");
+    }
 }
 
 void Engine::initDescriptorSets()
 {
-    m_VoxelDescriptorSet
-        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
+    // m_VoxelDescriptorSet
+    //     = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
+    //           .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
+    //           .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
+    //           .build()
+    //           .at(0);
+
+    m_GBufferDescriptorSet
+        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_GBufferDescriptorSetLayout)
+              .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.position.getImageView())
+              .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.normal.getImageView())
+              .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.colour.getImageView())
+              .build()
+              .at(0);
+
+    m_DrawImageDescriptorSet
+        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_AltDescriptorSetLayout)
               .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
-              .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
+              .build()
+              .at(0);
+
+    m_AltImageDescriptorSet
+        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_AltDescriptorSetLayout)
+              .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
               .build()
               .at(0);
 
@@ -556,7 +638,9 @@ void Engine::initDescriptorSets()
 void Engine::recreateDescriptorSets()
 {
     spdlog::info("Recreating Descriptor Sets");
-    vkFreeDescriptorSets(m_Device, m_DescriptorPool, 1, &m_VoxelDescriptorSet);
+    std::vector<VkDescriptorSet> descriptorSets
+        = { m_GBufferDescriptorSet, m_DrawImageDescriptorSet, m_AltImageDescriptorSet };
+    vkFreeDescriptorSets(m_Device, m_DescriptorPool, descriptorSets.size(), descriptorSets.data());
     initDescriptorSets();
 }
 
@@ -757,10 +841,15 @@ void Engine::render(float frameDelta)
 
         vkCmdResetQueryPool(commandBuffer, m_QueryPool, frameIndex * 2, 2);
 
+        m_GBuffer.position.transition(
+            commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        m_GBuffer.normal.transition(
+            commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        m_GBuffer.colour.transition(
+            commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
         m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        // m_PaletteManager.getImage().transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED,
-        //     VK_IMAGE_LAYOUT_GENERAL);
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -768,24 +857,49 @@ void Engine::render(float frameDelta)
         vkCmdWriteTimestamp(
             commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, m_QueryPool, frameIndex * 2);
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
+        {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_VoxelPipeline);
 
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-            m_VoxelPipelineLayout, 0, 1, &m_VoxelDescriptorSet, 0, nullptr);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                m_VoxelPipelineLayout, 0, 1, &m_GBufferDescriptorSet, 0, nullptr);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                m_VoxelPipelineLayout, 1, 1, &m_AltImageDescriptorSet, 0, nullptr);
 
-        VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants(frameIndex);
-        pushConstants.cameraPosition = m_Camera.getPosition();
-        glm::uvec2 windowSize = m_Window.getSize();
-        pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
-        pushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
-        pushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
-        pushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
+            VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants(frameIndex);
+            pushConstants.cameraPosition = m_Camera.getPosition();
+            glm::uvec2 windowSize = m_Window.getSize();
+            pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
+            pushConstants.cameraForward = glm::vec4(m_Camera.getForward(), 1.0);
+            pushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.0);
+            pushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.0);
 
-        vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-            sizeof(pushConstants), &pushConstants);
+            vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                sizeof(pushConstants), &pushConstants);
 
-        vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
-            std::ceil(drawExtent.height / 16.0), 1);
+            vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
+                std::ceil(drawExtent.height / 16.0), 1);
+        }
+
+        VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+            .pNext = nullptr,
+            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT };
+
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+        if (!m_RenderAlt) {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_DeferredPipeline);
+
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                m_DeferredPipelineLayout, 0, 1, &m_GBufferDescriptorSet, 0, nullptr);
+
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                m_DeferredPipelineLayout, 1, 1, &m_DrawImageDescriptorSet, 0, nullptr);
+
+            vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
+                std::ceil(drawExtent.height / 16.0), 1);
+        }
 
         vkCmdWriteTimestamp(
             commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, m_QueryPool, frameIndex * 2 + 1);
@@ -808,16 +922,6 @@ void Engine::render(float frameDelta)
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-        // VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-        //                             .pNext = nullptr,
-        //                             .srcAccessMask =
-        //                                 VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-        //                             .dstAccessMask =
-        //                                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT };
-        //
-        // vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-        //                      VK_PIPELINE_STAGE_NONE, 0, 1, &barrier, 0, nullptr, 0, nullptr);
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 

@@ -26,6 +26,12 @@ struct FrameData {
     VkFence renderFence;
 };
 
+struct GBuffer {
+    Image position;
+    Image normal;
+    Image colour;
+};
+
 struct Stats {
     float frameDelta;
 };
@@ -63,16 +69,24 @@ class Engine : EventReceiver {
     std::vector<VkImage> m_SwapchainImages;
     std::vector<VkImageView> m_SwapchainImageViews;
 
+    GBuffer m_GBuffer;
     Image m_DrawImage;
     Image m_AltImage;
 
     bool m_RenderAlt = false;
 
-    VkDescriptorSet m_VoxelDescriptorSet;
-    VkDescriptorSetLayout m_VoxelDescriptorSetLayout;
+    VkDescriptorSetLayout m_GBufferDescriptorSetLayout;
+    VkDescriptorSet m_GBufferDescriptorSet;
+
+    VkDescriptorSetLayout m_AltDescriptorSetLayout;
+    VkDescriptorSet m_AltImageDescriptorSet;
+    VkDescriptorSet m_DrawImageDescriptorSet;
 
     VkPipeline m_VoxelPipeline;
     VkPipelineLayout m_VoxelPipelineLayout;
+
+    VkPipeline m_DeferredPipeline;
+    VkPipelineLayout m_DeferredPipelineLayout;
 
     std::vector<FrameData> m_Frames;
 
