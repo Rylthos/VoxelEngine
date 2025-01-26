@@ -17,6 +17,12 @@
 #include "SceneManager.hpp"
 #include "Window.hpp"
 
+struct DeferredPushConstants {
+    glm::vec4 sunDirection;
+    glm::vec4 skyColour;
+    glm::vec4 lightColour;
+};
+
 struct FrameData {
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -105,6 +111,11 @@ class Engine : EventReceiver {
     const uint32_t MAX_ITERATIONS = 4096;
 
     Stats m_Stats;
+
+    bool m_IncreaseTime = false;
+    float m_Time = 1200.f;
+    float m_MinutePerSecond = 10.f;
+    DeferredPushConstants m_DeferredPushConstants;
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;

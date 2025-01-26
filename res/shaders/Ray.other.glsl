@@ -5,6 +5,15 @@ struct Ray
     vec3 invDir;
 };
 
+Ray createRay(in vec3 position, in vec3 direction) {
+    Ray ray;
+    ray.origin = position;
+    ray.direction = direction;
+    ray.invDir = 1. / direction;
+
+    return ray;
+}
+
 Ray generateRay(vec2 uv, vec3 position, vec3 front, vec3 right, vec3 up, float aspectRatio)
 {
     const float viewportWidth = 2.0;

@@ -88,6 +88,9 @@ void Engine::init()
         &m_SceneManager);
     // EventHandler::subscribe(EventType::ImGuiRender, &m_PaletteManager);
 
+    m_DeferredPushConstants.lightColour = glm::vec4(1.);
+    m_DeferredPushConstants.skyColour = glm::vec4(0.3, 0.73, 1., 1.);
+
     m_RenderAlt = false;
 }
 
@@ -563,10 +566,10 @@ void Engine::initPipelines()
     }
 
     {
-        // VkPushConstantRange pushConstant {};
-        // pushConstant.offset = 0;
-        // pushConstant.size = sizeof(VoxelPushConstants);
-        // pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        VkPushConstantRange pushConstant {};
+        pushConstant.offset = 0;
+        pushConstant.size = sizeof(DeferredPushConstants);
+        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
         std::vector<VkDescriptorSetLayout> layouts
             = { m_GBufferDescriptorSetLayout, m_AltDescriptorSetLayout };
@@ -575,8 +578,8 @@ void Engine::initPipelines()
         computeLayoutCI.pNext = nullptr;
         computeLayoutCI.setLayoutCount = layouts.size();
         computeLayoutCI.pSetLayouts = layouts.data();
-        // computeLayoutCI.pushConstantRangeCount = 0;
-        // computeLayoutCI.pPushConstantRanges = nullptr;
+        computeLayoutCI.pushConstantRangeCount = 1;
+        computeLayoutCI.pPushConstantRanges = &pushConstant;
 
         VK_CHECK(
             vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_DeferredPipelineLayout));
@@ -743,6 +746,41 @@ void Engine::updateImGui()
     }
     ImGui::End();
 
+    if (ImGui::Begin("Time")) {
+
+        ImGui::Text("Time");
+        ImGui::Checkbox("Increase Time", &m_IncreaseTime);
+        ImGui::SliderFloat("##Time", &m_Time, 0., 2399, "%.2f");
+        ImGui::Text("Sun Direction: (%.2f, %.2f, %.2f)", m_DeferredPushConstants.sunDirection.x,
+            m_DeferredPushConstants.sunDirection.y, m_DeferredPushConstants.sunDirection.z);
+
+        ImGui::Text("Minutes Per Second");
+        ImGui::SliderFloat("##MinutesPerSecond", &m_MinutePerSecond, 1., 60., "%.2f");
+
+        {
+            glm::vec4& colour = m_DeferredPushConstants.lightColour;
+            float data[] = { colour.r, colour.g, colour.b };
+            ImGui::Text("Light Colour");
+            ImGui::ColorEdit3("Light Colour", (float*)&data,
+                ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+            colour.r = data[0];
+            colour.g = data[1];
+            colour.b = data[2];
+        }
+
+        {
+            glm::vec4& colour = m_DeferredPushConstants.skyColour;
+            float data[] = { colour.r, colour.g, colour.b };
+            ImGui::Text("Sky Colour");
+            ImGui::ColorEdit3("Sky Colour", (float*)&data,
+                ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+            colour.r = data[0];
+            colour.g = data[1];
+            colour.b = data[2];
+        }
+    }
+    ImGui::End();
+
     Timer::ImGuiRender();
 
     ImGui::ShowDemoWindow();
@@ -755,6 +793,13 @@ void Engine::update(float frameDelta)
     GameUpdate update;
     update.frameDelta = frameDelta;
     EventHandler::dispatchEvent(&update);
+
+    if (m_IncreaseTime)
+        m_Time = fmod(m_Time + frameDelta * m_MinutePerSecond, 2400.);
+
+    float angle = glm::pi<float>() * ((m_Time / 1200.) + 0.5);
+    m_DeferredPushConstants.sunDirection
+        = glm::normalize(glm::vec4(-glm::cos(angle), glm::sin(angle), 0., 0.));
 
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -866,6 +911,7 @@ void Engine::render(float frameDelta)
                 m_VoxelPipelineLayout, 1, 1, &m_AltImageDescriptorSet, 0, nullptr);
 
             VoxelPushConstants pushConstants = m_SceneManager.getVoxelPushConstants(frameIndex);
+            pushConstants.sunDirection = m_DeferredPushConstants.sunDirection;
             pushConstants.cameraPosition = m_Camera.getPosition();
             glm::uvec2 windowSize = m_Window.getSize();
             pushConstants.aspectRatio = (float)windowSize.x / (float)windowSize.y;
@@ -896,6 +942,9 @@ void Engine::render(float frameDelta)
 
             vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                 m_DeferredPipelineLayout, 1, 1, &m_DrawImageDescriptorSet, 0, nullptr);
+
+            vkCmdPushConstants(commandBuffer, m_DeferredPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
+                0, sizeof(DeferredPushConstants), &m_DeferredPushConstants);
 
             vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
                 std::ceil(drawExtent.height / 16.0), 1);

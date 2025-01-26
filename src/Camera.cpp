@@ -81,6 +81,9 @@ void Camera::receive(const Event* event)
             forward = glm::normalize(forward);
         }
 
+        if (ImGui::GetIO().WantCaptureMouse)
+            break;
+
         if (m_PressedKeys[GLFW_KEY_W])
             direction += forward;
         if (m_PressedKeys[GLFW_KEY_S])

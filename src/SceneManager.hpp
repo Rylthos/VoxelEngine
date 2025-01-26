@@ -109,10 +109,6 @@ class SceneManager : public EventReceiver {
 
     glm::vec3 m_CurrentColour;
 
-    bool m_IncreaseTime = false;
-    float m_Time = 1200.f;
-    float m_MinutePerSecond = 10.f;
-
     bool m_InfinitePlace = false;
     bool m_PlaceVoxel = false;
     bool m_EraseVoxel = false;

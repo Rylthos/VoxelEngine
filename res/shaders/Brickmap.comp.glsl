@@ -72,9 +72,6 @@ struct PreviousHit {
     ivec3 voxelHitIndex;
 };
 
-const vec4 cursorColour = vec4(vec3(0.3), 1.);
-const float cursorWidth = 20.;
-
 HitRecord emptyHit()
 {
     HitRecord hit;
@@ -351,46 +348,6 @@ vec3 calculateHitPosition(in HitRecord hit) {
     return hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex + vec3(0.5) + vec3(hit.normal) * 0.5;
 }
 
-bool shouldColourCursor(vec2 uv, vec2 pixelSize) {
-    uv = abs(uv - vec2(0.5));
-
-    vec2 pixelConversion = vec2(uv / pixelSize);
-    bool canRender = true;
-
-    bvec2 outsideBounds = greaterThan(abs(pixelConversion), ivec2(cursorWidth));
-    if (outsideBounds.x || outsideBounds.y) {
-        canRender = false;
-    }
-
-    bool outsideOuterCircle = length(vec2(pixelConversion)) > float(cursorWidth);
-    if (outsideOuterCircle)
-        canRender = false;
-
-    bool insideOuterCircle = length(vec2(pixelConversion)) < float(cursorWidth * 0.8);
-    if (insideOuterCircle)
-        canRender = false;
-
-    float seperation = 0.4;
-    if (pixelConversion.x < cursorWidth * seperation || pixelConversion.y < cursorWidth * seperation)
-    {
-        canRender = false;
-    }
-
-    float middlePointerWidth = 0.055;
-    float middlePointerHeight = 0.60;
-    if (pixelConversion.x < cursorWidth * middlePointerWidth && pixelConversion.y < cursorWidth * middlePointerHeight)
-    {
-        canRender = true;
-    }
-
-    if (pixelConversion.y < cursorWidth * middlePointerWidth && pixelConversion.x < cursorWidth * middlePointerHeight)
-    {
-        canRender = true;
-    }
-
-    return canRender;
-}
-
 void main()
 {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -422,15 +379,7 @@ void main()
         bool inShadow = false;
 
         if (hit.hasHitVoxel) {
-            // const vec4 lightColour = vec4(1.);
-            //
-            // float diff = max(dot(hit.normal, p_SunDir.xyz), 0.0);
-            // vec4 diffuse = lightColour * diff;
-
-            Ray shadowRay;
-            shadowRay.origin = hit.position;
-            shadowRay.direction = p_SunDir.xyz;
-            shadowRay.invDir = 1. / shadowRay.direction;
+            Ray shadowRay = createRay(hit.position, p_SunDir.xyz);
 
             previous.didHit = true;
             previous.voxelHitIndex = hit.voxelHitIndex;
@@ -438,20 +387,11 @@ void main()
             HitRecord shadow = traverseSuperBrick(shadowRay, previous);
 
             inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
-
-            // const float ambientStrength = 0.7;
-            // vec4 ambient = lightColour * ambientStrength;
-            //
-            // float diffStrength = 1.;
-            // if (shadow.hasHitBrick && shadow.hasHitVoxel)
-            //     diffStrength = 0.1;
-
-            // colour = (ambient + diffuse * diffStrength) * colour;
         }
 
         imageStore(o_Position, texelCoord, vec4(hit.position, hit.hasHitVoxel));
         imageStore(o_Normal, texelCoord, ivec4(hit.normal, inShadow));
-        imageStore(o_Colour, texelCoord, hit.colour);
+        imageStore(o_Colour, texelCoord, vec4(hit.colour.rgb, 1.));
     }
 
     if (hit.comparisons >= 0) {
@@ -460,10 +400,6 @@ void main()
         float mixAmount = hit.comparisons / float(p_MaxHeatShown);
 
         imageStore(o_HeatImage, texelCoord, mix(lowestHitColour, highestHitColour, mixAmount));
-    }
-
-    if (shouldColourCursor(uv, vec2(1.) / vec2(size))) {
-        // imageStore(o_Image, texelCoord, mix(colour, cursorColour, 0.7));
     }
 
     if (middle) {
