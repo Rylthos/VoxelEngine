@@ -1,14 +1,15 @@
 #include "Image.hpp"
 
 #include "VkCheck.hpp"
+#include <vulkan/vulkan_core.h>
 
 Image::Image() { }
 
 Image::~Image() { free(); }
 
 void Image::create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, VkImageType type,
-    VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
-    VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels)
+    VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags memoryProperties,
+    uint32_t mipLevels)
 {
     m_Allocator = allocator;
     m_Format = format;
@@ -51,11 +52,32 @@ void Image::createImageView(VkDevice device, VkImageViewType viewType)
     VK_CHECK(vkCreateImageView(m_Device, &imageViewCI, nullptr, &m_ImageView));
 }
 
+void Image::createImageSampler(VkDevice device, VkFilter filter, VkSamplerAddressMode addressMode)
+{
+    m_Device = device;
+    VkSamplerCreateInfo samplerCI {};
+    samplerCI.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerCI.minFilter = filter;
+    samplerCI.magFilter = filter;
+    samplerCI.addressModeU = addressMode;
+    samplerCI.addressModeV = addressMode;
+    samplerCI.addressModeW = addressMode;
+    samplerCI.anisotropyEnable = VK_FALSE;
+    samplerCI.compareEnable = VK_FALSE;
+
+    VK_CHECK(vkCreateSampler(m_Device, &samplerCI, nullptr, &m_Sampler));
+}
+
 void Image::free()
 {
     if (m_ImageView != 0) {
         vkDestroyImageView(m_Device, m_ImageView, nullptr);
         m_ImageView = 0;
+    }
+
+    if (m_Sampler != 0) {
+        vkDestroySampler(m_Device, m_Sampler, nullptr);
+        m_Sampler = 0;
     }
 
     if (m_Image != 0) {
@@ -69,8 +91,8 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImageLayout current, VkI
     Image::transition(commandBuffer, m_Image, current, target);
 }
 
-void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current,
-    VkImageLayout target)
+void Image::transition(
+    VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current, VkImageLayout target)
 {
     VkImageMemoryBarrier2 imageBarrier {};
     imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -104,8 +126,8 @@ void Image::transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayo
 
 void Image::copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer)
 {
-    transition(commandBuffer, m_Image, VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    transition(
+        commandBuffer, m_Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
     VkBufferImageCopy copyRegion {};
     copyRegion.bufferOffset = 0;
@@ -120,8 +142,8 @@ void Image::copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer)
     vkCmdCopyBufferToImage(commandBuffer, buffer.getBuffer(), m_Image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-    transition(commandBuffer, m_Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_GENERAL);
+    transition(
+        commandBuffer, m_Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
 }
 
 void Image::copyToImage(VkCommandBuffer commandBuffer, const Image& image)
@@ -133,8 +155,8 @@ void Image::copyFromImage(VkCommandBuffer commandBuffer, const Image& image)
     Image::copyFromTo(commandBuffer, image.m_Image, m_Image, image.m_Extent, m_Extent);
 }
 
-void Image::copyFromTo(VkCommandBuffer commandBuffer, VkImage src, VkImage dst, VkExtent3D srcSize,
-    VkExtent3D dstSize)
+void Image::copyFromTo(
+    VkCommandBuffer commandBuffer, VkImage src, VkImage dst, VkExtent3D srcSize, VkExtent3D dstSize)
 {
     VkImageBlit2 blitRegion {};
     blitRegion.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2;

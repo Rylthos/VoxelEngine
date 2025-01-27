@@ -36,6 +36,7 @@ struct GBuffer {
     Image position;
     Image normal;
     Image colour;
+    Image occlusion;
 };
 
 struct Stats {
@@ -111,6 +112,9 @@ class Engine : EventReceiver {
     const uint32_t MAX_ITERATIONS = 4096;
 
     Stats m_Stats;
+
+    std::array<glm::vec4, 64> m_SSAOSamples;
+    Image m_SSAONoise;
 
     bool m_IncreaseTime = false;
     float m_Time = 1200.f;

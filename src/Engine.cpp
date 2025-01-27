@@ -6,6 +6,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
 
+#include <random>
 #include <spdlog/fmt/ranges.h>
 
 #include "Constants.hpp"
@@ -92,6 +93,47 @@ void Engine::init()
     m_DeferredPushConstants.skyColour = glm::vec4(0.3, 0.73, 1., 1.);
 
     m_RenderAlt = false;
+
+    {
+        std::uniform_real_distribution<float> randomFloats(
+            0.0, 1.0); // random floats between [0.0, 1.0]
+        std::default_random_engine generator;
+        for (size_t i = 0; i < m_SSAOSamples.size(); i++) {
+            glm::vec4 sample = { randomFloats(generator) * 2.0 - 1.0,
+                randomFloats(generator) * 2.0 - 1.0, randomFloats(generator), 1. };
+            sample = glm::normalize(sample);
+            sample *= randomFloats(generator);
+            float scale = (float)i / (float)m_SSAOSamples.size();
+            scale = 0.1f + 0.9 * scale * scale; // lerp(0.1f, 1.0f, scale * scale);
+            sample *= scale;
+            m_SSAOSamples[i] = sample;
+        }
+
+        std::vector<glm::vec4> ssaoNoise;
+        for (unsigned int i = 0; i < 16; i++) {
+            glm::vec4 noise(
+                randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, 0.0f, 1.);
+            ssaoNoise.push_back(noise);
+        }
+
+        VkExtent3D extent = { .width = 4, .height = 4, .depth = 1 };
+        m_SSAONoise.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, extent, VK_IMAGE_TYPE_2D,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        m_SSAONoise.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+        m_SSAONoise.createImageSampler(m_Device, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+        Buffer temp;
+        temp.create(m_Allocator, ssaoNoise.size() * sizeof(glm::vec4),
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+                | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+        temp.copyFromData_CPUOnly<glm::vec4>(ssaoNoise);
+        ImmediateSubmit::submit(
+            [&](VkCommandBuffer buffer) { m_SSAONoise.copyFromBuffer(buffer, temp); });
+        temp.free();
+    }
 }
 
 void Engine::start()
@@ -143,6 +185,8 @@ void Engine::cleanup()
     std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
 
     vkDeviceWaitIdle(m_Device);
+
+    m_SSAONoise.free();
 
 #ifdef PROF_TRACY
     TracyVkDestroy(g_TracyVkCtx);
@@ -350,6 +394,8 @@ void Engine::initSwapchain()
         imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     m_GBuffer.colour.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, imageType,
         imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_GBuffer.occlusion.create(m_Allocator, VK_FORMAT_R32_SFLOAT, drawImageExtent, imageType,
+        imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_DrawImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, imageType,
         imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -360,6 +406,7 @@ void Engine::initSwapchain()
     m_GBuffer.position.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_GBuffer.normal.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_GBuffer.colour.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_GBuffer.occlusion.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
@@ -371,6 +418,7 @@ void Engine::destroySwapchain()
     m_AltImage.free();
     m_DrawImage.free();
 
+    m_GBuffer.occlusion.free();
     m_GBuffer.colour.free();
     m_GBuffer.normal.free();
     m_GBuffer.position.free();
@@ -495,7 +543,7 @@ void Engine::initDescriptorPool()
 {
     std::vector<VkDescriptorPoolSize> poolSizes
         = { { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT },
-              { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 3 } };
+              { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 4 } };
 
     VkDescriptorPoolCreateInfo descriptorPoolCI {};
     descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -515,6 +563,7 @@ void Engine::initDescriptorLayouts()
                                        .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
                                        .addStorageImage(1, VK_SHADER_STAGE_COMPUTE_BIT)
                                        .addStorageImage(2, VK_SHADER_STAGE_COMPUTE_BIT)
+                                       .addStorageImage(3, VK_SHADER_STAGE_COMPUTE_BIT)
                                        .build();
 
     m_AltDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
@@ -620,6 +669,7 @@ void Engine::initDescriptorSets()
               .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.position.getImageView())
               .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.normal.getImageView())
               .addStorageImage(2, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.colour.getImageView())
+              .addStorageImage(3, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.occlusion.getImageView())
               .build()
               .at(0);
 
@@ -891,6 +941,8 @@ void Engine::render(float frameDelta)
         m_GBuffer.normal.transition(
             commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_GBuffer.colour.transition(
+            commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        m_GBuffer.occlusion.transition(
             commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);

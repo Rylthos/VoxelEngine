@@ -14,10 +14,11 @@ class Image {
     ~Image();
 
     void create(VmaAllocator allocator, VkFormat format, VkExtent3D extent, VkImageType type,
-        VkImageUsageFlags usage, VmaMemoryUsage memoryUsage,
-        VkMemoryPropertyFlags memoryProperties, uint32_t mipLevels = 1);
+        VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkMemoryPropertyFlags memoryProperties,
+        uint32_t mipLevels = 1);
 
     void createImageView(VkDevice device, VkImageViewType viewType);
+    void createImageSampler(VkDevice device, VkFilter filter, VkSamplerAddressMode addressMode);
     void free();
 
     VkImage getImage() const { return m_Image; }
@@ -28,8 +29,8 @@ class Image {
     uint32_t getMiplevels() const { return m_MipLevels; }
 
     void transition(VkCommandBuffer commandBuffer, VkImageLayout current, VkImageLayout target);
-    static void transition(VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current,
-        VkImageLayout target);
+    static void transition(
+        VkCommandBuffer commandBuffer, VkImage image, VkImageLayout current, VkImageLayout target);
 
     void copyFromBuffer(VkCommandBuffer commandBuffer, const Buffer& buffer);
 
@@ -42,6 +43,7 @@ class Image {
   private:
     VkImage m_Image = 0;
     VkImageView m_ImageView = 0;
+    VkSampler m_Sampler = 0;
     VmaAllocation m_Allocation = 0;
 
     uint32_t m_MipLevels;

@@ -16,6 +16,8 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, set = 0, binding = 0) uniform image2D o_Position;
 layout(rgba8i, set = 0, binding = 1) uniform iimage2D o_Normal;
 layout(rgba16f, set = 0, binding = 2) uniform image2D o_Colour;
+layout(r32f, set = 0, binding = 3) uniform image2D o_Occlusion;
+
 layout(rgba16f, set = 1, binding = 0) uniform image2D o_HeatImage;
 
 layout(buffer_reference, std430) buffer FeedbackBuffer {
@@ -352,7 +354,7 @@ void main()
 {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(o_Position);
-    vec2 uv = vec2(texelCoord) / vec2(size);
+    vec2 uv = vec2(texelCoord) / (vec2(size) - 1);
 
     bool middle = false;
     if (texelCoord.x == size.x / 2 && texelCoord.y == size.y / 2) {
@@ -389,7 +391,9 @@ void main()
             inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
         }
 
-        imageStore(o_Position, texelCoord, vec4(hit.position, hit.hasHitVoxel));
+        vec2 shiftedUV = uv * 2. - 1.;
+        vec3 viewSpace = vec3(shiftedUV, length(hit.position - p_CameraPosition));
+        imageStore(o_Position, texelCoord, vec4(viewSpace, hit.hasHitVoxel));
         imageStore(o_Normal, texelCoord, ivec4(hit.normal, inShadow));
         imageStore(o_Colour, texelCoord, vec4(hit.colour.rgb, 1.));
     }
