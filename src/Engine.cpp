@@ -39,19 +39,18 @@ void Engine::init()
     spdlog::set_level(spdlog::level::trace);
     m_Window.create("Voxel Engine", 960, 960);
 
-    m_Camera = Camera(glm::vec3(2.5f, -1.0f, 0.0f), 0.0f, -30.f);
+    m_Camera = Camera(glm::vec3(64.f, 64.f, -80.f), 0., 1.);
 
     // m_PaletteManager.defaultPalette();
     m_SceneManager = SceneManager(&m_PaletteManager, &m_Camera);
 
     initVulkan();
-    // m_PaletteManager.initResources(m_Device, m_Allocator);
-
     initSwapchain();
     initCommandPool();
     ImmediateSubmit::init(m_Device, m_GraphicsQueue.queue, m_GraphicsQueue.queueFamily);
     initSyncStructures();
     initImGui();
+    initSSAO();
     initDescriptorPool();
     initDescriptorLayouts();
     initPipelines();
@@ -93,47 +92,6 @@ void Engine::init()
     m_DeferredPushConstants.skyColour = glm::vec4(0.3, 0.73, 1., 1.);
 
     m_RenderAlt = false;
-
-    {
-        std::uniform_real_distribution<float> randomFloats(
-            0.0, 1.0); // random floats between [0.0, 1.0]
-        std::default_random_engine generator;
-        for (size_t i = 0; i < m_SSAOSamples.size(); i++) {
-            glm::vec4 sample = { randomFloats(generator) * 2.0 - 1.0,
-                randomFloats(generator) * 2.0 - 1.0, randomFloats(generator), 1. };
-            sample = glm::normalize(sample);
-            sample *= randomFloats(generator);
-            float scale = (float)i / (float)m_SSAOSamples.size();
-            scale = 0.1f + 0.9 * scale * scale; // lerp(0.1f, 1.0f, scale * scale);
-            sample *= scale;
-            m_SSAOSamples[i] = sample;
-        }
-
-        std::vector<glm::vec4> ssaoNoise;
-        for (unsigned int i = 0; i < 16; i++) {
-            glm::vec4 noise(
-                randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, 0.0f, 1.);
-            ssaoNoise.push_back(noise);
-        }
-
-        VkExtent3D extent = { .width = 4, .height = 4, .depth = 1 };
-        m_SSAONoise.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, extent, VK_IMAGE_TYPE_2D,
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        m_SSAONoise.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
-        m_SSAONoise.createImageSampler(m_Device, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-
-        Buffer temp;
-        temp.create(m_Allocator, ssaoNoise.size() * sizeof(glm::vec4),
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-                | VMA_ALLOCATION_CREATE_MAPPED_BIT);
-
-        temp.copyFromData_CPUOnly<glm::vec4>(ssaoNoise);
-        ImmediateSubmit::submit(
-            [&](VkCommandBuffer buffer) { m_SSAONoise.copyFromBuffer(buffer, temp); });
-        temp.free();
-    }
 }
 
 void Engine::start()
@@ -186,6 +144,7 @@ void Engine::cleanup()
 
     vkDeviceWaitIdle(m_Device);
 
+    m_SSAOSamples.free();
     m_SSAONoise.free();
 
 #ifdef PROF_TRACY
@@ -200,10 +159,15 @@ void Engine::cleanup()
 
     vkDestroyPipeline(m_Device, m_DeferredPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_DeferredPipelineLayout, nullptr);
+
+    vkDestroyPipeline(m_Device, m_SSAOPipeline, nullptr);
+    vkDestroyPipelineLayout(m_Device, m_SSAOPipelineLayout, nullptr);
+
     vkDestroyPipeline(m_Device, m_VoxelPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_VoxelPipelineLayout, nullptr);
 
     vkDestroyDescriptorSetLayout(m_Device, m_GBufferDescriptorSetLayout, nullptr);
+    vkDestroyDescriptorSetLayout(m_Device, m_NoiseDescriptorSetLayout, nullptr);
     vkDestroyDescriptorSetLayout(m_Device, m_AltDescriptorSetLayout, nullptr);
 
     vkDestroyDescriptorPool(m_Device, m_DescriptorPool, nullptr);
@@ -484,16 +448,16 @@ void Engine::initSyncStructures()
 void Engine::initImGui()
 {
     VkDescriptorPoolSize poolSizes[] = {
-        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLER,                1000 },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1000 },
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,   1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         1000 },
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,   1000 },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,       1000 },
     };
 
     VkDescriptorPoolCreateInfo poolCI {};
@@ -539,18 +503,72 @@ void Engine::initImGui()
     spdlog::info("Initialized ImGui");
 }
 
+void Engine::initSSAO()
+{
+    VkExtent3D extent = { .width = 4, .height = 4, .depth = 1 };
+    m_SSAONoise.create(m_Allocator, VK_FORMAT_R32G32B32A32_SFLOAT, extent, VK_IMAGE_TYPE_2D,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_SSAONoise.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_SSAONoise.createImageSampler(m_Device, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+    m_SSAOSamples.create(m_Allocator, 64 * sizeof(glm::vec4),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
+
+    std::uniform_real_distribution<float> randomFloats(
+        0.0, 1.0); // random floats between [0.0, 1.0]
+    std::default_random_engine generator;
+    std::vector<glm::vec4> samples;
+    for (size_t i = 0; i < 64; i++) {
+        glm::vec4 sample = { randomFloats(generator) * 2.0 - 1.0,
+            randomFloats(generator) * 2.0 - 1.0, randomFloats(generator), 1. };
+        sample = glm::normalize(sample);
+        sample *= randomFloats(generator);
+        float scale = (float)i / 64.;
+        scale = 0.1f + 0.9 * scale * scale; // lerp(0.1f, 1.0f, scale * scale);
+        sample *= scale;
+        samples.push_back(sample);
+    }
+
+    m_SSAOSamples.copyFromData<glm::vec4>(samples);
+
+    std::vector<glm::vec4> ssaoNoise;
+    for (unsigned int i = 0; i < 16; i++) {
+        glm::vec4 noise(
+            randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, 0.0f, 1.);
+        ssaoNoise.push_back(noise);
+    }
+
+    Buffer temp;
+    temp.create(m_Allocator, ssaoNoise.size() * sizeof(glm::vec4), VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VMA_MEMORY_USAGE_AUTO,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+    temp.copyFromData_CPUOnly<glm::vec4>(ssaoNoise);
+    ImmediateSubmit::submit(
+        [&](VkCommandBuffer buffer) { m_SSAONoise.copyFromBuffer(buffer, temp); });
+    temp.free();
+
+    m_SSAOPushConstants.radius = 0.5;
+    m_SSAOPushConstants.bias = 0.0;
+}
+
 void Engine::initDescriptorPool()
 {
-    std::vector<VkDescriptorPoolSize> poolSizes
-        = { { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = FRAMES_IN_FLIGHT },
-              { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 4 } };
+    std::vector<VkDescriptorPoolSize> poolSizes = {
+        { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         .descriptorCount = FRAMES_IN_FLIGHT },
+        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = 4                },
+        { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1                }
+    };
 
     VkDescriptorPoolCreateInfo descriptorPoolCI {};
     descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     descriptorPoolCI.pNext = nullptr;
     descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     descriptorPoolCI.pPoolSizes = poolSizes.data();
-    descriptorPoolCI.maxSets = FRAMES_IN_FLIGHT + 1;
+    descriptorPoolCI.maxSets = FRAMES_IN_FLIGHT + 2;
     descriptorPoolCI.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     VK_CHECK(vkCreateDescriptorPool(m_Device, &descriptorPoolCI, nullptr, &m_DescriptorPool));
@@ -566,9 +584,14 @@ void Engine::initDescriptorLayouts()
                                        .addStorageImage(3, VK_SHADER_STAGE_COMPUTE_BIT)
                                        .build();
 
+    m_NoiseDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
+                                     .addCombinedImageSampler(0, VK_SHADER_STAGE_COMPUTE_BIT)
+                                     .build();
+
     m_AltDescriptorSetLayout = DescriptorLayoutBuilder::start(m_Device)
                                    .addStorageImage(0, VK_SHADER_STAGE_COMPUTE_BIT)
                                    .build();
+
     spdlog::info("Created descriptor layouts");
 }
 
@@ -611,7 +634,47 @@ void Engine::initPipelines()
 
         VK_CHECK(vkCreateComputePipelines(
             m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_VoxelPipeline));
-        spdlog::info("Created Background Pipeline and Pipeline Layout");
+        spdlog::info("Created Geometry Pipeline and Pipeline Layout");
+    }
+
+    {
+        VkPushConstantRange pushConstant {};
+        pushConstant.offset = 0;
+        pushConstant.size = sizeof(SSAOPushConstants);
+        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        std::vector<VkDescriptorSetLayout> layouts
+            = { m_GBufferDescriptorSetLayout, m_NoiseDescriptorSetLayout };
+        VkPipelineLayoutCreateInfo computeLayoutCI {};
+        computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        computeLayoutCI.pNext = nullptr;
+        computeLayoutCI.setLayoutCount = layouts.size();
+        computeLayoutCI.pSetLayouts = layouts.data();
+        computeLayoutCI.pushConstantRangeCount = 1;
+        computeLayoutCI.pPushConstantRanges = &pushConstant;
+
+        VK_CHECK(
+            vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_SSAOPipelineLayout));
+
+        ShaderModule ssaoShader;
+        ssaoShader.create("res/shaders/SSAO.comp.spv", m_Device);
+
+        VkPipelineShaderStageCreateInfo shaderStageCI {};
+        shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStageCI.pNext = nullptr;
+        shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        shaderStageCI.module = ssaoShader.getShaderModule();
+        shaderStageCI.pName = "main";
+
+        VkComputePipelineCreateInfo computePipelineCI {};
+        computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        computePipelineCI.pNext = nullptr;
+        computePipelineCI.layout = m_SSAOPipelineLayout;
+        computePipelineCI.stage = shaderStageCI;
+
+        VK_CHECK(vkCreateComputePipelines(
+            m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_SSAOPipeline));
+        spdlog::info("Created SSAO Pipeline and Pipeline Layout");
     }
 
     {
@@ -651,7 +714,7 @@ void Engine::initPipelines()
 
         VK_CHECK(vkCreateComputePipelines(
             m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_DeferredPipeline));
-        spdlog::info("Created Background Pipeline and Pipeline Layout");
+        spdlog::info("Created Deferred Pipeline and Pipeline Layout");
     }
 }
 
@@ -673,6 +736,13 @@ void Engine::initDescriptorSets()
               .build()
               .at(0);
 
+    m_NoiseDescriptorSet
+        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_NoiseDescriptorSetLayout)
+              .addCombinedImageSampler(
+                  0, VK_IMAGE_LAYOUT_GENERAL, m_SSAONoise.getImageView(), m_SSAONoise.getSampler())
+              .build()
+              .at(0);
+
     m_DrawImageDescriptorSet
         = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_AltDescriptorSetLayout)
               .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
@@ -691,8 +761,8 @@ void Engine::initDescriptorSets()
 void Engine::recreateDescriptorSets()
 {
     spdlog::info("Recreating Descriptor Sets");
-    std::vector<VkDescriptorSet> descriptorSets
-        = { m_GBufferDescriptorSet, m_DrawImageDescriptorSet, m_AltImageDescriptorSet };
+    std::vector<VkDescriptorSet> descriptorSets = { m_GBufferDescriptorSet, m_NoiseDescriptorSet,
+        m_DrawImageDescriptorSet, m_AltImageDescriptorSet };
     vkFreeDescriptorSets(m_Device, m_DescriptorPool, descriptorSets.size(), descriptorSets.data());
     initDescriptorSets();
 }
@@ -831,6 +901,15 @@ void Engine::updateImGui()
     }
     ImGui::End();
 
+    if (ImGui::Begin("SSAO")) {
+        ImGui::Text("Radius");
+        ImGui::SliderFloat("##Radius", &m_SSAOPushConstants.radius, 0.1, 5.);
+
+        ImGui::Text("Bias");
+        ImGui::SliderFloat("##Bias", &m_SSAOPushConstants.bias, 0.0, 1.);
+    }
+    ImGui::End();
+
     Timer::ImGuiRender();
 
     ImGui::ShowDemoWindow();
@@ -930,6 +1009,17 @@ void Engine::render(float frameDelta)
 
     Image& renderImage = m_RenderAlt ? m_AltImage : m_DrawImage;
 
+    VkExtent3D dispatchSize = { .width = (uint32_t)std::ceil(drawExtent.width / 16.0),
+        .height = (uint32_t)std::ceil(drawExtent.height / 16.0),
+        .depth = 1
+
+    };
+
+    VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .pNext = nullptr,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT };
+
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
     {
         PROF_VK_ZONE(commandBuffer, "VkRender");
@@ -974,32 +1064,56 @@ void Engine::render(float frameDelta)
             vkCmdPushConstants(commandBuffer, m_VoxelPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
                 sizeof(pushConstants), &pushConstants);
 
-            vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
-                std::ceil(drawExtent.height / 16.0), 1);
+            vkCmdDispatch(
+                commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
         }
-
-        VkMemoryBarrier barrier = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-            .pNext = nullptr,
-            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT };
 
         vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 
         if (!m_RenderAlt) {
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_DeferredPipeline);
+            {
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_SSAOPipeline);
 
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                m_DeferredPipelineLayout, 0, 1, &m_GBufferDescriptorSet, 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_SSAOPipelineLayout, 0, 1, &m_GBufferDescriptorSet, 0, nullptr);
 
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                m_DeferredPipelineLayout, 1, 1, &m_DrawImageDescriptorSet, 0, nullptr);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_SSAOPipelineLayout, 1, 1, &m_NoiseDescriptorSet, 0, nullptr);
 
-            vkCmdPushConstants(commandBuffer, m_DeferredPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
-                0, sizeof(DeferredPushConstants), &m_DeferredPushConstants);
+                m_SSAOPushConstants.cameraFront = glm::vec4(m_Camera.getForward(), 1.);
+                m_SSAOPushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.);
+                m_SSAOPushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.);
+                m_SSAOPushConstants.samples = m_SSAOSamples.getDeviceAddress(m_Device);
+                // m_SSAOPushConstants.radius = 1.0;
 
-            vkCmdDispatch(commandBuffer, std::ceil(drawExtent.width / 16.0),
-                std::ceil(drawExtent.height / 16.0), 1);
+                vkCmdPushConstants(commandBuffer, m_SSAOPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
+                    0, sizeof(SSAOPushConstants), &m_SSAOPushConstants);
+
+                vkCmdDispatch(
+                    commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
+            }
+
+            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+            {
+                vkCmdBindPipeline(
+                    commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_DeferredPipeline);
+
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_DeferredPipelineLayout, 0, 1, &m_GBufferDescriptorSet, 0, nullptr);
+
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_DeferredPipelineLayout, 1, 1, &m_DrawImageDescriptorSet, 0, nullptr);
+
+                vkCmdPushConstants(commandBuffer, m_DeferredPipelineLayout,
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(DeferredPushConstants),
+                    &m_DeferredPushConstants);
+
+                vkCmdDispatch(
+                    commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
+            }
         }
 
         vkCmdWriteTimestamp(

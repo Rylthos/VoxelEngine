@@ -25,6 +25,7 @@ class Image {
     VkExtent3D getExtent() const { return m_Extent; }
     VkFormat getFormat() const { return m_Format; }
     VkImageView getImageView() const { return m_ImageView; }
+    VkSampler getSampler() const { return m_Sampler; }
     VmaAllocation getAllocation() const { return m_Allocation; }
     uint32_t getMiplevels() const { return m_MipLevels; }
 

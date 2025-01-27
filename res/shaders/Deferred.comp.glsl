@@ -73,6 +73,8 @@ void main()
     ivec4 n = imageLoad(o_Normal, texelCoord);
     vec4 colour = imageLoad(o_Colour, texelCoord);
 
+    float occlusion = imageLoad(o_Occlusion, texelCoord).x;
+
     bool hitVoxel = p.a > 0.;
     vec3 position = p.xyz;
 
@@ -91,7 +93,7 @@ void main()
             diffStrength = 0.1;
         }
 
-        colour = (ambient + diffuse * diffStrength) * colour;
+        colour = (ambient * occlusion + diffuse * diffStrength) * colour;
     } else if (colour.a < 1.) {
         colour = p_SkyColour;
     }
@@ -101,5 +103,7 @@ void main()
         // imageStore(o_Image, texelCoord, mix(colour, cursorColour, 0.7));
     }
 
-    imageStore(o_TargetImage, texelCoord, colour);
+    imageStore(o_TargetImage, texelCoord, vec4(occlusion, 0., 0., 1.));
+    // imageStore(o_TargetImage, texelCoord, p);
+    // imageStore(o_TargetImage, texelCoord, colour);
 }

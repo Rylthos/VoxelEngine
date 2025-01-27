@@ -391,8 +391,14 @@ void main()
             inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
         }
 
-        vec2 shiftedUV = uv * 2. - 1.;
-        vec3 viewSpace = vec3(shiftedUV, length(hit.position - p_CameraPosition));
+        vec3 positionOffset = hit.position - p_CameraPosition;
+        vec3 viewSpace = vec3(
+                dot(p_CameraRight.xyz, positionOffset),
+                dot(p_CameraUp.xyz, positionOffset),
+                dot(p_CameraFront.xyz, positionOffset)
+            );
+        viewSpace.y /= p_AspectRatio;
+
         imageStore(o_Position, texelCoord, vec4(viewSpace, hit.hasHitVoxel));
         imageStore(o_Normal, texelCoord, ivec4(hit.normal, inShadow));
         imageStore(o_Colour, texelCoord, vec4(hit.colour.rgb, 1.));

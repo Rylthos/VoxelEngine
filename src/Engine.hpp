@@ -17,6 +17,15 @@
 #include "SceneManager.hpp"
 #include "Window.hpp"
 
+struct SSAOPushConstants {
+    glm::vec4 cameraFront;
+    glm::vec4 cameraRight;
+    glm::vec4 cameraUp;
+    VkDeviceAddress samples;
+    float radius;
+    float bias;
+};
+
 struct DeferredPushConstants {
     glm::vec4 sunDirection;
     glm::vec4 skyColour;
@@ -85,12 +94,18 @@ class Engine : EventReceiver {
     VkDescriptorSetLayout m_GBufferDescriptorSetLayout;
     VkDescriptorSet m_GBufferDescriptorSet;
 
+    VkDescriptorSetLayout m_NoiseDescriptorSetLayout;
+    VkDescriptorSet m_NoiseDescriptorSet;
+
     VkDescriptorSetLayout m_AltDescriptorSetLayout;
     VkDescriptorSet m_AltImageDescriptorSet;
     VkDescriptorSet m_DrawImageDescriptorSet;
 
     VkPipeline m_VoxelPipeline;
     VkPipelineLayout m_VoxelPipelineLayout;
+
+    VkPipeline m_SSAOPipeline;
+    VkPipelineLayout m_SSAOPipelineLayout;
 
     VkPipeline m_DeferredPipeline;
     VkPipelineLayout m_DeferredPipelineLayout;
@@ -113,13 +128,15 @@ class Engine : EventReceiver {
 
     Stats m_Stats;
 
-    std::array<glm::vec4, 64> m_SSAOSamples;
-    Image m_SSAONoise;
-
     bool m_IncreaseTime = false;
     float m_Time = 1200.f;
     float m_MinutePerSecond = 10.f;
     DeferredPushConstants m_DeferredPushConstants;
+
+    // std::array<glm::vec4, 64> m_SSAOSamples;
+    Image m_SSAONoise;
+    Buffer m_SSAOSamples;
+    SSAOPushConstants m_SSAOPushConstants;
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;
@@ -137,6 +154,8 @@ class Engine : EventReceiver {
     void initSyncStructures();
 
     void initImGui();
+
+    void initSSAO();
 
     void initDescriptorPool();
     void initDescriptorLayouts();
