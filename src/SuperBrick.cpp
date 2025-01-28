@@ -231,7 +231,9 @@ SuperBrickStruct SuperBrick::getStruct()
             stagingMapping[chosenIndex] = offset;
             offset += 1;
 
-            mapping.insert({ colourOffset, { colourInterval->first, colours.size() } });
+            mapping.insert({
+                colourOffset, { colourInterval->first, colours.size() }
+            });
             m_AvailableColourIndices.removeInterval(
                 colourInterval->first, colourInterval->first + colours.size() - 1);
 
@@ -347,7 +349,9 @@ void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes, bool replace
         if (!m_Bricks.contains(brickIndex)) {
             std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);
             for (const auto& change : brickChanges.second) {
-                m_QueuedChanges[brickIndex].insert({ change.first, change.second });
+                m_QueuedChanges[brickIndex].insert({
+                    change.first, { change.second, replace }
+                });
             }
 
             continue;
@@ -464,7 +468,7 @@ void SuperBrick::generateBrickLoop(size_t id)
 {
     Buffer generatedData;
     Buffer generatedColour;
-    generatedData.create(m_Allocator, sizeof(uint32_t) + sizeof(uint64_t) * 8,
+    generatedData.create(m_Allocator, sizeof(GenerationData),
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
@@ -569,15 +573,16 @@ void SuperBrick::generateBrickLoop(size_t id)
         }
         VK_CHECK(vkWaitForFences(m_Device, 1, &generationFence, true, 1e10));
 
-        const uint32_t* data = (const uint32_t*)(generatedData.getAllocationInfo().pMappedData);
-        const uint32_t solidVoxels = *data;
-        const uint64_t* mask = (const uint64_t*)(data + 1);
+        const GenerationData* data
+            = (const GenerationData*)(generatedData.getAllocationInfo().pMappedData);
+        // const uint32_t solidVoxels = *data;
+        // const uint64_t* mask = (const uint64_t*)(data + 1);
 
         const glm::vec4* colour_data
             = (const glm::vec4*)(generatedColour.getAllocationInfo().pMappedData);
 
         Brick brick;
-        if (solidVoxels != 0) {
+        if (data->solidVoxels != 0) {
             for (int y = 0; y < BRICK_SIZE; y++) {
                 for (int z = 0; z < BRICK_SIZE; z++) {
                     for (int x = 0; x < BRICK_SIZE; x++) {
@@ -596,10 +601,11 @@ void SuperBrick::generateBrickLoop(size_t id)
             if (m_QueuedChanges.contains(position)) {
                 auto copy = m_QueuedChanges[position];
                 for (auto p : copy) {
-                    if (std::holds_alternative<ERASE_OP>(p.second)) {
+                    if (std::holds_alternative<ERASE_OP>(p.second.first)) {
                         brick.setAir(p.first);
-                    } else if (std::holds_alternative<PLACE_OP>(p.second)) {
-                        brick.setVoxel(p.first, std::get<PLACE_OP>(p.second), true);
+                    } else if (std::holds_alternative<PLACE_OP>(p.second.first)) {
+                        brick.setVoxel(
+                            p.first, std::get<PLACE_OP>(p.second.first), p.second.second);
                     }
                 }
 

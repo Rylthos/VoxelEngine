@@ -1,5 +1,6 @@
 #include "Brick.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -15,6 +16,8 @@ Brick::Brick()
     m_Brick.lodR = 0;
     m_Brick.lodG = 0;
     m_Brick.lodB = 0;
+
+    m_LODSum = glm::vec3(0.);
 }
 
 void Brick::setAir(glm::ivec3 position)
@@ -26,7 +29,12 @@ void Brick::setAir(glm::ivec3 position)
     uint64_t mask = position.z * BRICK_SIZE + position.x;
     m_Brick.solidMask[position.y] &= ~((uint64_t)1 << mask);
 
-    m_Colours.erase(getColourIndex(position));
+    size_t index = getColourIndex(position);
+    if (m_Colours.contains(index)) {
+        glm::vec3 colour = m_Colours[index];
+        m_LODSum -= colour;
+    }
+    m_Colours.erase(index);
 }
 
 void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour, bool replace)
@@ -44,6 +52,8 @@ void Brick::setVoxel(glm::ivec3 position, glm::vec4 colour, bool replace)
     m_Brick.solidMask[position.y] |= bitMask;
 
     m_Colours[getColourIndex(position)] = colour;
+
+    m_LODSum += colour;
 }
 
 std::optional<glm::vec4> Brick::getVoxel(glm::ivec3 position)
@@ -70,12 +80,13 @@ std::optional<BrickStruct> Brick::getStruct()
             break;
         }
     }
+
+    m_Brick.lodR = (int)std::clamp(m_LODSum.r / m_Colours.size(), 0.f, 1.f) * 255;
+    m_Brick.lodG = (int)std::clamp(m_LODSum.g / m_Colours.size(), 0.f, 1.f) * 255;
+    m_Brick.lodB = (int)std::clamp(m_LODSum.b / m_Colours.size(), 0.f, 1.f) * 255;
+
     if (isAir)
         return {};
-
-    m_Brick.lodR = 0;
-    m_Brick.lodG = 255;
-    m_Brick.lodB = 255;
 
     return std::optional(m_Brick);
 }

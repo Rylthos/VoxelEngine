@@ -17,6 +17,9 @@ layout(buffer_reference, std430) buffer ColourBuffer {
 
 layout(buffer_reference, std430) buffer GenerationData {
     uint32_t numSolidVoxels;
+    int colourSumR;
+    int colourSumG;
+    int colourSumB;
     uint64_t solidMask[8];
 };
 
@@ -39,6 +42,10 @@ void setVoxel(in uvec3 position, in vec3 colour) {
     atomicAdd(p_Data.solidMask[position.y], mask);
     p_Colours.colours[getIndex(position)] = vec4(colour, 1.);
     atomicAdd(p_Data.numSolidVoxels, 1);
+
+    atomicAdd(p_Data.colourSumR, int(clamp(colour.r * 255., 0., 255.)));
+    atomicAdd(p_Data.colourSumG, int(clamp(colour.g * 255., 0., 255.)));
+    atomicAdd(p_Data.colourSumB, int(clamp(colour.b * 255., 0., 255.)));
 }
 
 void setAir(in uvec3 position) {

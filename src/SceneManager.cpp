@@ -20,9 +20,7 @@
 // #include "ChunkGenerator.hpp"
 
 SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
-    : m_Dimension(1 << 8)
-    , m_PaletteManager(paletteManager)
-    , m_Camera(camera)
+    : m_Dimension(1 << 8), m_PaletteManager(paletteManager), m_Camera(camera)
 
 {
     m_VoxelPushConstants.maxIterations = 1024;
@@ -98,6 +96,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_CurrentColour = glm::vec3(1.);
 
     m_VoxelPushConstants.sunDirection = glm::vec4(0, -1, 0, 1);
+    m_VoxelPushConstants.lodDistance = 500.f;
 }
 
 void SceneManager::freeResources()
@@ -219,6 +218,9 @@ void SceneManager::receive(const Event* event)
                 m_SuperBrick.reset();
             }
 
+            ImGui::Text("LOD Distance");
+            ImGui::SliderFloat("##LODDistance", &m_VoxelPushConstants.lodDistance, 10.f, 1000.f);
+
             ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
             ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
             ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
@@ -227,6 +229,8 @@ void SceneManager::receive(const Event* event)
             ImGui::Text(
                 "Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
             ImGui::Text("Colours Indices Free: %ld", m_SuperBrick.getCurrentColourIndexSize());
+
+            ImGui::Text("Queued Changes: %ld", m_SuperBrick.getQueuedChanges());
 
             ImGui::Text("Max Heat");
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);

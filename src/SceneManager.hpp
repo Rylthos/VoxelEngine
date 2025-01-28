@@ -55,7 +55,7 @@ struct VoxelPushConstants {
     float size;
     uint32_t maxDepthShown = 5;
     uint32_t lod;
-    uint32_t _1;
+    float lodDistance;
 
     uint32_t maxHeatShown;
     uint32_t flags;

@@ -40,7 +40,7 @@ layout(push_constant) uniform constants {
     float p_Size;
     uint32_t p_MaxDepthShown;
     uint32_t p_LOD;
-    uint32_t _1;
+    float p_LODDistance;
 
     uint32_t p_MaxHeatShown;
     uint32_t p_Flags;
@@ -314,6 +314,8 @@ HitRecord traverseSuperBrick(in Ray ray, in PreviousHit previous)
             {
                 vec3 brickMinBound = brickIndex * BRICK_SIZE;
 
+                float brickDistance = length(brickIndex * BRICK_SIZE - p_CameraPosition);
+
                 hit.normal = normal;
                 if (previous.didHit && brickIndex == previous.brickHitIndex) {
                     previous.shouldCheck = true;
@@ -322,7 +324,14 @@ HitRecord traverseSuperBrick(in Ray ray, in PreviousHit previous)
                 }
                 hit.hasHitBrick = true;
                 hit.brickHitIndex = brickIndex;
-                traverseBrick(ray, brickPointer, brickMinBound, iterations, hit, previous);
+
+                if (brickDistance > p_LODDistance) {
+                    Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
+                    hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
+                    return hit;
+                } else {
+                    traverseBrick(ray, brickPointer, brickMinBound, iterations, hit, previous);
+                }
 
                 if (hit.hasHitBrick && hit.hasHitVoxel) {
                     return hit;

@@ -32,6 +32,14 @@ struct SuperBrickEntry {
     uint32_t _ : 16;
 };
 
+struct GenerationData {
+    uint32_t solidVoxels;
+    int colourSumR;
+    int colourSumG;
+    int colourSumB;
+    uint64_t solidMask[8];
+};
+
 struct SuperBrickStruct {
     std::array<SuperBrickEntry, 16 * 16 * 16> data;
     VkDeviceAddress bricks;
@@ -75,6 +83,7 @@ class SuperBrick {
     size_t getCurrentColourAllocation() { return m_CurrentColourCount; }
     size_t getCurrentColourAllocationSize() { return m_MaxColours; }
     size_t getCurrentColourIndexSize() { return m_AvailableColourIndices.totalFree(); }
+    size_t getQueuedChanges() { return m_QueuedChanges.size(); }
 
   private:
     bool m_Initialized = false;
@@ -117,7 +126,8 @@ class SuperBrick {
     std::deque<glm::ivec3> m_ToBeGenerated;
     std::unordered_set<glm::ivec3> m_Enqueued;
 
-    std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, VoxelOp>> m_QueuedChanges;
+    std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, std::pair<VoxelOp, bool>>>
+        m_QueuedChanges;
 
   private:
     void transformChange(

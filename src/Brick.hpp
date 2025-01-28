@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <bitset>
 #include <cstdint>
 #include <map>
@@ -34,6 +35,8 @@ class Brick {
   private:
     BrickStruct m_Brick;
     std::map<int, glm::vec4> m_Colours;
+
+    glm::vec3 m_LODSum;
 
   private:
     bool validPosition(glm::ivec3 pos);

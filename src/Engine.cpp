@@ -284,10 +284,11 @@ void Engine::initVulkan()
               .set_required_features_13(features13)
               .set_required_features_12(features12)
               .set_required_features_11(features11)
+              .set_required_features_11(features11)
               .set_required_features(features)
               .add_required_extension(VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME)
-              // .add_required_extension(VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME)
               .add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
+              .add_required_extension(VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME)
               .set_surface(m_Surface)
               .select();
 
