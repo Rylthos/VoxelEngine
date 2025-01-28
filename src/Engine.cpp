@@ -517,19 +517,18 @@ void Engine::initSSAO()
             | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY);
 
-    std::uniform_real_distribution<float> randomFloats(
-        0.0, 1.0); // random floats between [0.0, 1.0]
+    std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
     std::default_random_engine generator;
     std::vector<glm::vec4> samples;
     for (size_t i = 0; i < 64; i++) {
-        glm::vec4 sample = { randomFloats(generator) * 2.0 - 1.0,
-            randomFloats(generator) * 2.0 - 1.0, randomFloats(generator), 1. };
+        glm::vec3 sample = { randomFloats(generator) * 2.0 - 1.0,
+            randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) };
         sample = glm::normalize(sample);
         sample *= randomFloats(generator);
         float scale = (float)i / 64.;
         scale = 0.1f + 0.9 * scale * scale; // lerp(0.1f, 1.0f, scale * scale);
         sample *= scale;
-        samples.push_back(sample);
+        samples.push_back(glm::vec4(sample, 1.));
     }
 
     m_SSAOSamples.copyFromData<glm::vec4>(samples);
@@ -537,7 +536,7 @@ void Engine::initSSAO()
     std::vector<glm::vec4> ssaoNoise;
     for (unsigned int i = 0; i < 16; i++) {
         glm::vec4 noise(
-            randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, 0.0f, 1.);
+            randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) * 2.0 - 1.0, 1.0f, 1.);
         ssaoNoise.push_back(noise);
     }
 

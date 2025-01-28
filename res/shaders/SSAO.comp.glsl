@@ -51,6 +51,7 @@ void main()
         imageStore(o_Occlusion, texelCoord, vec4(-1));
         return;
     }
+    vec3 viewPos = changeBasis(pos);
 
     vec3 normal = imageLoad(o_Normal, texelCoord).xyz;
 
@@ -58,15 +59,15 @@ void main()
 
     vec3 tangent = normalize(randomVec - normal * dot(randomVec, normal));
     vec3 bitangent = cross(normal, tangent);
-    mat3 TBN = mat3(changeBasis(tangent), changeBasis(bitangent), changeBasis(normal));
+    mat3 TBN = mat3(tangent, bitangent, normal);
 
     float occlusion = 0.;
-    const int steps = 1;
+    const int steps = KERNEL_SIZE;
     int included = 0;
     for (int i = 0; i < steps; i++)
     {
         vec3 samplePos = TBN * p_Samples.samples[i].xyz;
-        samplePos = pos + samplePos * p_Radius;
+        samplePos = changeBasis(pos + samplePos * p_Radius);
 
         float denom = dot(vec3(0, 0, 1), samplePos);
         float t = 1. / denom;
@@ -75,19 +76,13 @@ void main()
         uv.y = -uv.y;
         uv = (uv + 1.) / 2.;
 
-        // if (uv.x < 0. || uv.y < 0. || uv.x > 1. || uv.y > 1.)
-        //     continue;
-
         ivec2 texel = ivec2(uv * size);
-        float sampleDepth = imageLoad(o_Position, texel).z;
-
-        imageStore(o_Colour, texelCoord, vec4(texel, 0., 1.));
+        float sampleDepth = changeBasis(imageLoad(o_Position, texel).xyz).z;
 
         const float bias = 0.;
 
-        // float rangeCheck = smoothstep(0., 1., p_Radius / abs(pos.z - sampleDepth));
-        // occlusion += ((sampleDepth >= samplePos.z + bias) ? 1. : 0.) * rangeCheck;
-        occlusion += ((sampleDepth < samplePos.z + bias) ? 1. : 0.);
+        float rangeCheck = smoothstep(0., 1., p_Radius / abs(viewPos.z - sampleDepth));
+        occlusion += ((sampleDepth < samplePos.z + bias) ? 1. : 0.) * rangeCheck;
         included += 1;
     }
     occlusion = 1. - (occlusion / included);

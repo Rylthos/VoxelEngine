@@ -103,7 +103,7 @@ void main()
         // imageStore(o_Image, texelCoord, mix(colour, cursorColour, 0.7));
     }
 
-    imageStore(o_TargetImage, texelCoord, vec4(occlusion, 0., 0., 1.));
+    // imageStore(o_TargetImage, texelCoord, vec4(occlusion, 0., 0., 1.));
     // imageStore(o_TargetImage, texelCoord, p);
-    // imageStore(o_TargetImage, texelCoord, colour);
+    imageStore(o_TargetImage, texelCoord, colour);
 }
