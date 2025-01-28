@@ -8,15 +8,11 @@
 #include "Ray.other.glsl"
 #include "BrickmapData.other.glsl"
 
+#include "GBufferLayout.other.glsl"
+
 #define PER_PIXEL
 
 layout(local_size_x = 16, local_size_y = 16) in;
-
-// layout(rgba16f, set = 0, binding = 0) uniform image2D o_Image;
-layout(rgba16f, set = 0, binding = 0) uniform image2D o_Position;
-layout(rgba8i, set = 0, binding = 1) uniform iimage2D o_Normal;
-layout(rgba16f, set = 0, binding = 2) uniform image2D o_Colour;
-layout(r32f, set = 0, binding = 3) uniform image2D o_Occlusion;
 
 layout(rgba16f, set = 1, binding = 0) uniform image2D o_HeatImage;
 
@@ -365,7 +361,7 @@ void main()
     imageStore(o_Position, texelCoord, vec4(0));
     imageStore(o_Normal, texelCoord, ivec4(0));
     imageStore(o_Colour, texelCoord, vec4(0));
-    // imageStore(o_Image, texelCoord, vec4(clearColour, 0.0));
+    imageStore(o_Occlusion, texelCoord, vec4(1));
 
     Ray ray = generateRay(uv,
             p_CameraPosition, vec3(p_CameraFront),
@@ -392,13 +388,6 @@ void main()
         }
 
         vec3 positionOffset = hit.position - p_CameraPosition;
-        // vec3 viewSpace = vec3(
-        //     dot(p_CameraRight.xyz, positionOffset),
-        //     dot(p_CameraUp.xyz, positionOffset),
-        //     dot(p_CameraFront.xyz, positionOffset)
-        // );
-        // viewSpace.y /= p_AspectRatio;
-
         imageStore(o_Position, texelCoord, vec4(positionOffset, hit.hasHitVoxel));
         imageStore(o_Normal, texelCoord, ivec4(hit.normal, inShadow));
         imageStore(o_Colour, texelCoord, vec4(hit.colour.rgb, 1.));

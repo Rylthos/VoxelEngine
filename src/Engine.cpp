@@ -160,6 +160,9 @@ void Engine::cleanup()
     vkDestroyPipeline(m_Device, m_DeferredPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_DeferredPipelineLayout, nullptr);
 
+    vkDestroyPipeline(m_Device, m_SSAOBlurPipeline, nullptr);
+    vkDestroyPipelineLayout(m_Device, m_SSAOBlurPipelineLayout, nullptr);
+
     vkDestroyPipeline(m_Device, m_SSAOPipeline, nullptr);
     vkDestroyPipelineLayout(m_Device, m_SSAOPipelineLayout, nullptr);
 
@@ -360,6 +363,8 @@ void Engine::initSwapchain()
         imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     m_GBuffer.occlusion.create(m_Allocator, VK_FORMAT_R32_SFLOAT, drawImageExtent, imageType,
         imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    m_SSAOBlurTemp.create(m_Allocator, VK_FORMAT_R32_SFLOAT, drawImageExtent, imageType, imageFlags,
+        VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     m_DrawImage.create(m_Allocator, VK_FORMAT_R16G16B16A16_SFLOAT, drawImageExtent, imageType,
         imageFlags, VMA_MEMORY_USAGE_GPU_ONLY, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -371,6 +376,7 @@ void Engine::initSwapchain()
     m_GBuffer.normal.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_GBuffer.colour.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_GBuffer.occlusion.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
+    m_SSAOBlurTemp.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_DrawImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
     m_AltImage.createImageView(m_Device, VK_IMAGE_VIEW_TYPE_2D);
 
@@ -382,6 +388,7 @@ void Engine::destroySwapchain()
     m_AltImage.free();
     m_DrawImage.free();
 
+    m_SSAOBlurTemp.free();
     m_GBuffer.occlusion.free();
     m_GBuffer.colour.free();
     m_GBuffer.normal.free();
@@ -550,15 +557,15 @@ void Engine::initSSAO()
         [&](VkCommandBuffer buffer) { m_SSAONoise.copyFromBuffer(buffer, temp); });
     temp.free();
 
-    m_SSAOPushConstants.radius = 0.5;
-    m_SSAOPushConstants.bias = 0.0;
+    m_SSAOPushConstants.radius = 2.5;
+    m_SSAOPushConstants.bias = 0.01;
 }
 
 void Engine::initDescriptorPool()
 {
     std::vector<VkDescriptorPoolSize> poolSizes = {
         { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         .descriptorCount = FRAMES_IN_FLIGHT },
-        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = 4                },
+        { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = 6                },
         { .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1                }
     };
 
@@ -567,7 +574,7 @@ void Engine::initDescriptorPool()
     descriptorPoolCI.pNext = nullptr;
     descriptorPoolCI.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     descriptorPoolCI.pPoolSizes = poolSizes.data();
-    descriptorPoolCI.maxSets = FRAMES_IN_FLIGHT + 2;
+    descriptorPoolCI.maxSets = FRAMES_IN_FLIGHT + 4;
     descriptorPoolCI.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     VK_CHECK(vkCreateDescriptorPool(m_Device, &descriptorPoolCI, nullptr, &m_DescriptorPool));
@@ -679,6 +686,46 @@ void Engine::initPipelines()
     {
         VkPushConstantRange pushConstant {};
         pushConstant.offset = 0;
+        pushConstant.size = sizeof(SSAOBlurPushConstants);
+        pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        std::vector<VkDescriptorSetLayout> layouts
+            = { m_GBufferDescriptorSetLayout, m_AltDescriptorSetLayout };
+        VkPipelineLayoutCreateInfo computeLayoutCI {};
+        computeLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        computeLayoutCI.pNext = nullptr;
+        computeLayoutCI.setLayoutCount = layouts.size();
+        computeLayoutCI.pSetLayouts = layouts.data();
+        computeLayoutCI.pushConstantRangeCount = 1;
+        computeLayoutCI.pPushConstantRanges = &pushConstant;
+
+        VK_CHECK(
+            vkCreatePipelineLayout(m_Device, &computeLayoutCI, nullptr, &m_SSAOBlurPipelineLayout));
+
+        ShaderModule ssaoShader;
+        ssaoShader.create("res/shaders/SSAOBlur.comp.spv", m_Device);
+
+        VkPipelineShaderStageCreateInfo shaderStageCI {};
+        shaderStageCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStageCI.pNext = nullptr;
+        shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        shaderStageCI.module = ssaoShader.getShaderModule();
+        shaderStageCI.pName = "main";
+
+        VkComputePipelineCreateInfo computePipelineCI {};
+        computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        computePipelineCI.pNext = nullptr;
+        computePipelineCI.layout = m_SSAOBlurPipelineLayout;
+        computePipelineCI.stage = shaderStageCI;
+
+        VK_CHECK(vkCreateComputePipelines(
+            m_Device, VK_NULL_HANDLE, 1, &computePipelineCI, nullptr, &m_SSAOBlurPipeline));
+        spdlog::info("Created SSAO Blur Pipeline and Pipeline Layout");
+    }
+
+    {
+        VkPushConstantRange pushConstant {};
+        pushConstant.offset = 0;
         pushConstant.size = sizeof(DeferredPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
@@ -719,13 +766,6 @@ void Engine::initPipelines()
 
 void Engine::initDescriptorSets()
 {
-    // m_VoxelDescriptorSet
-    //     = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_VoxelDescriptorSetLayout)
-    //           .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_DrawImage.getImageView())
-    //           .addStorageImage(1, VK_IMAGE_LAYOUT_GENERAL, m_AltImage.getImageView())
-    //           .build()
-    //           .at(0);
-
     m_GBufferDescriptorSet
         = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_GBufferDescriptorSetLayout)
               .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_GBuffer.position.getImageView())
@@ -754,6 +794,12 @@ void Engine::initDescriptorSets()
               .build()
               .at(0);
 
+    m_SSAOBlurImageDescriptorSet
+        = DescriptorSetBuilder::start(m_Device, m_DescriptorPool, m_AltDescriptorSetLayout)
+              .addStorageImage(0, VK_IMAGE_LAYOUT_GENERAL, m_SSAOBlurTemp.getImageView())
+              .build()
+              .at(0);
+
     spdlog::info("Created descriptors");
 }
 
@@ -761,7 +807,7 @@ void Engine::recreateDescriptorSets()
 {
     spdlog::info("Recreating Descriptor Sets");
     std::vector<VkDescriptorSet> descriptorSets = { m_GBufferDescriptorSet, m_NoiseDescriptorSet,
-        m_DrawImageDescriptorSet, m_AltImageDescriptorSet };
+        m_DrawImageDescriptorSet, m_SSAOBlurImageDescriptorSet, m_AltImageDescriptorSet };
     vkFreeDescriptorSets(m_Device, m_DescriptorPool, descriptorSets.size(), descriptorSets.data());
     initDescriptorSets();
 }
@@ -901,11 +947,14 @@ void Engine::updateImGui()
     ImGui::End();
 
     if (ImGui::Begin("SSAO")) {
+        ImGui::Checkbox("SSAO", &m_SSAOEnabled);
+        ImGui::Checkbox("SSAO Blur", &m_SSAOBlurEnabled);
+
         ImGui::Text("Radius");
-        ImGui::SliderFloat("##Radius", &m_SSAOPushConstants.radius, 0.1, 5.);
+        ImGui::SliderFloat("##Radius", &m_SSAOPushConstants.radius, 0.0, 5.);
 
         ImGui::Text("Bias");
-        ImGui::SliderFloat("##Bias", &m_SSAOPushConstants.bias, 0.0, 1.);
+        ImGui::SliderFloat("##Bias", &m_SSAOPushConstants.bias, 0.0, 0.5);
     }
     ImGui::End();
 
@@ -1033,6 +1082,8 @@ void Engine::render(float frameDelta)
             commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_GBuffer.occlusion.transition(
             commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+        m_SSAOBlurTemp.transition(
+            commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
         m_DrawImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
         m_AltImage.transition(commandBuffer, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -1071,7 +1122,7 @@ void Engine::render(float frameDelta)
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 
         if (!m_RenderAlt) {
-            {
+            if (m_SSAOEnabled) {
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_SSAOPipeline);
 
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -1084,17 +1135,50 @@ void Engine::render(float frameDelta)
                 m_SSAOPushConstants.cameraRight = glm::vec4(m_Camera.getRight(), 1.);
                 m_SSAOPushConstants.cameraUp = glm::vec4(m_Camera.getUp(), 1.);
                 m_SSAOPushConstants.samples = m_SSAOSamples.getDeviceAddress(m_Device);
-                // m_SSAOPushConstants.radius = 1.0;
 
                 vkCmdPushConstants(commandBuffer, m_SSAOPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT,
                     0, sizeof(SSAOPushConstants), &m_SSAOPushConstants);
 
                 vkCmdDispatch(
                     commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
+
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
             }
 
-            vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+            if (m_SSAOEnabled && m_SSAOBlurEnabled) {
+                vkCmdBindPipeline(
+                    commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, m_SSAOBlurPipeline);
+
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_SSAOBlurPipelineLayout, 0, 1, &m_GBufferDescriptorSet, 0, nullptr);
+
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    m_SSAOBlurPipelineLayout, 1, 1, &m_SSAOBlurImageDescriptorSet, 0, nullptr);
+
+                SSAOBlurPushConstants pushConstants;
+                pushConstants.axis = 0;
+
+                vkCmdPushConstants(commandBuffer, m_SSAOBlurPipelineLayout,
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SSAOBlurPushConstants), &pushConstants);
+
+                vkCmdDispatch(
+                    commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
+
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+
+                pushConstants.axis = 1;
+
+                vkCmdPushConstants(commandBuffer, m_SSAOBlurPipelineLayout,
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SSAOBlurPushConstants), &pushConstants);
+
+                vkCmdDispatch(
+                    commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
+
+                vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+            }
 
             {
                 vkCmdBindPipeline(

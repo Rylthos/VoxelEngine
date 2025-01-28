@@ -26,6 +26,10 @@ struct SSAOPushConstants {
     float bias;
 };
 
+struct SSAOBlurPushConstants {
+    int axis;
+};
+
 struct DeferredPushConstants {
     glm::vec4 sunDirection;
     glm::vec4 skyColour;
@@ -100,12 +104,16 @@ class Engine : EventReceiver {
     VkDescriptorSetLayout m_AltDescriptorSetLayout;
     VkDescriptorSet m_AltImageDescriptorSet;
     VkDescriptorSet m_DrawImageDescriptorSet;
+    VkDescriptorSet m_SSAOBlurImageDescriptorSet;
 
     VkPipeline m_VoxelPipeline;
     VkPipelineLayout m_VoxelPipelineLayout;
 
     VkPipeline m_SSAOPipeline;
     VkPipelineLayout m_SSAOPipelineLayout;
+
+    VkPipeline m_SSAOBlurPipeline;
+    VkPipelineLayout m_SSAOBlurPipelineLayout;
 
     VkPipeline m_DeferredPipeline;
     VkPipelineLayout m_DeferredPipelineLayout;
@@ -134,9 +142,12 @@ class Engine : EventReceiver {
     DeferredPushConstants m_DeferredPushConstants;
 
     // std::array<glm::vec4, 64> m_SSAOSamples;
+    bool m_SSAOEnabled = true;
+    bool m_SSAOBlurEnabled = true;
     Image m_SSAONoise;
     Buffer m_SSAOSamples;
     SSAOPushConstants m_SSAOPushConstants;
+    Image m_SSAOBlurTemp;
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;
