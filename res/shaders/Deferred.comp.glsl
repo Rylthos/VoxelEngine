@@ -72,6 +72,7 @@ void main()
     vec4 p = imageLoad(o_Position, texelCoord);
     ivec4 n = imageLoad(o_Normal, texelCoord);
     vec4 colour = imageLoad(o_Colour, texelCoord);
+    vec3 c = colour.rgb;
 
     float occlusion = imageLoad(o_Occlusion, texelCoord).x;
 
@@ -103,7 +104,5 @@ void main()
         // imageStore(o_Image, texelCoord, mix(colour, cursorColour, 0.7));
     }
 
-    // imageStore(o_TargetImage, texelCoord, vec4(occlusion, 0., 0., 1.));
-    // imageStore(o_TargetImage, texelCoord, p);
     imageStore(o_TargetImage, texelCoord, colour);
 }
