@@ -148,6 +148,7 @@ class Engine : EventReceiver {
     Buffer m_SSAOSamples;
     SSAOPushConstants m_SSAOPushConstants;
     Image m_SSAOBlurTemp;
+    uint32_t m_SSAOKernelSize = 32;
 
     SceneManager m_SceneManager;
     PaletteManager m_PaletteManager;

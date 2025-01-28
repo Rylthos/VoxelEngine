@@ -527,7 +527,7 @@ void Engine::initSSAO()
     std::uniform_real_distribution<float> randomFloats(0.0, 1.0);
     std::default_random_engine generator;
     std::vector<glm::vec4> samples;
-    for (size_t i = 0; i < 64; i++) {
+    for (size_t i = 0; i < m_SSAOKernelSize; i++) {
         glm::vec3 sample = { randomFloats(generator) * 2.0 - 1.0,
             randomFloats(generator) * 2.0 - 1.0, randomFloats(generator) };
         sample = glm::normalize(sample);
@@ -649,6 +649,17 @@ void Engine::initPipelines()
         pushConstant.size = sizeof(SSAOPushConstants);
         pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
+        VkSpecializationMapEntry entry;
+        entry.constantID = 0;
+        entry.offset = 0;
+        entry.size = sizeof(m_SSAOKernelSize);
+        VkSpecializationInfo spec_info;
+
+        spec_info.mapEntryCount = 1;
+        spec_info.pMapEntries = &entry;
+        spec_info.dataSize = sizeof(m_SSAOKernelSize);
+        spec_info.pData = &m_SSAOKernelSize;
+
         std::vector<VkDescriptorSetLayout> layouts
             = { m_GBufferDescriptorSetLayout, m_NoiseDescriptorSetLayout };
         VkPipelineLayoutCreateInfo computeLayoutCI {};
@@ -671,6 +682,7 @@ void Engine::initPipelines()
         shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shaderStageCI.module = ssaoShader.getShaderModule();
         shaderStageCI.pName = "main";
+        shaderStageCI.pSpecializationInfo = &spec_info;
 
         VkComputePipelineCreateInfo computePipelineCI {};
         computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;

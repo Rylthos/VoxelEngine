@@ -4,16 +4,16 @@
 #extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_debug_printf : enable
 
+layout(constant_id = 0) const int KERNEL_SIZE = 64;
+
 layout(local_size_x = 16, local_size_y = 16) in;
 
 #include "GBufferLayout.other.glsl"
 
 layout(set = 1, binding = 0) uniform sampler2D i_Noise;
 
-#define KERNEL_SIZE 64
-
 layout(buffer_reference, std430) readonly buffer SampleBuffer {
-    vec4 samples[];
+    vec4 samples[KERNEL_SIZE];
 };
 
 layout(push_constant) uniform constants
@@ -60,11 +60,9 @@ void main()
     mat3 TBN = mat3(tangent, bitangent, normal);
 
     float occlusion = 0.;
-    const int steps = KERNEL_SIZE;
-    int included = 0;
     vec3 samplePos;
     float t;
-    for (int i = 0; i < steps; i++)
+    for (int i = 0; i < KERNEL_SIZE; i++)
     {
         samplePos = TBN * p_Samples.samples[i].xyz;
         samplePos = changeBasis(pos + samplePos * p_Radius);
@@ -93,8 +91,7 @@ void main()
 
         float rangeCheck = smoothstep(0., 1., p_Radius / abs(viewPos.z - sampleDepth));
         occlusion += ((sampleDepth < samplePos.z + p_Bias) ? 1. : 0.) * rangeCheck;
-        included += 1;
     }
-    occlusion = 1. - (occlusion / included);
+    occlusion = 1. - (occlusion / KERNEL_SIZE);
     imageStore(o_Occlusion, texelCoord, vec4(occlusion));
 }
