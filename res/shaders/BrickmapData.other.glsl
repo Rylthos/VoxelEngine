@@ -1,3 +1,4 @@
+#define VOXEL_SIZE 0.125
 #define BRICK_SIZE 8
 #define SUPER_BRICK_SIZE 16
 

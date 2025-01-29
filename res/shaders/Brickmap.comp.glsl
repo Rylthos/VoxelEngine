@@ -37,7 +37,7 @@ layout(push_constant) uniform constants {
 
     vec4 p_SunDir;
 
-    float p_Size;
+    float _1;
     uint32_t p_MaxDepthShown;
     uint32_t p_LOD;
     float p_LODDistance;
@@ -162,7 +162,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
 {
     Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[pointer];
 
-    const vec3 maxBound = minBound + vec3(BRICK_SIZE);
+    const vec3 maxBound = minBound + vec3(BRICK_SIZE * VOXEL_SIZE);
 
     float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
@@ -176,7 +176,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
 
     vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.001, 0.);
 
-    vec3 entryPos = (rayStart - minBound) / 1.;
+    vec3 entryPos = (rayStart - minBound) / VOXEL_SIZE;
 
     ivec3 voxelIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
@@ -210,7 +210,7 @@ void traverseBrick(Ray ray, uint32_t pointer, vec3 minBound, inout int iteration
             hit.hasHitVoxel = true;
             hit.normal = normal;
             #ifdef PER_PIXEL
-            hit.position = rayStart + removeInf(ray.direction * traversal);
+            hit.position = rayStart + removeInf(ray.direction * traversal * VOXEL_SIZE);
             #else
             hit.position = hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex + hit.normal * 0.5;
             #endif
@@ -239,7 +239,7 @@ HitRecord traverseSuperBrick(in Ray ray, in PreviousHit previous)
 
     float tMin, tMax;
     const vec3 minBound = vec3(0);
-    const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE;
+    const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE * VOXEL_SIZE;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
     hit.position = vec3(-1.);
@@ -252,7 +252,7 @@ HitRecord traverseSuperBrick(in Ray ray, in PreviousHit previous)
     vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
     // vec3 rayEnd = ray.origin + ray.direction * tMax;
 
-    vec3 entryPos = (rayStart - minBound) / BRICK_SIZE;
+    vec3 entryPos = (rayStart - minBound) / (BRICK_SIZE * VOXEL_SIZE);
 
     ivec3 brickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(SUPER_BRICK_SIZE));
     ivec3 stepDirection = dir_sign(ray.direction);
@@ -312,9 +312,10 @@ HitRecord traverseSuperBrick(in Ray ray, in PreviousHit previous)
         } else { // Brick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                vec3 brickMinBound = brickIndex * BRICK_SIZE;
+                vec3 brickMinBound = brickIndex * BRICK_SIZE * VOXEL_SIZE;
 
-                float brickDistance = length(brickIndex * BRICK_SIZE - p_CameraPosition);
+                vec3 brickCenter = (brickIndex * BRICK_SIZE + vec3(BRICK_SIZE / 2)) * VOXEL_SIZE;
+                float brickDistance = length(brickCenter - p_CameraPosition);
 
                 hit.normal = normal;
                 if (previous.didHit && brickIndex == previous.brickHitIndex) {
@@ -352,7 +353,7 @@ HitRecord traverseSuperBrick(in Ray ray, in PreviousHit previous)
 }
 
 vec3 calculateHitPosition(in HitRecord hit) {
-    return hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex + vec3(0.5) + vec3(hit.normal) * 0.5;
+    return hit.brickHitIndex * BRICK_SIZE * VOXEL_SIZE + (hit.voxelHitIndex + 0.5 + hit.normal * 0.5) * VOXEL_SIZE;
 }
 
 void main()
