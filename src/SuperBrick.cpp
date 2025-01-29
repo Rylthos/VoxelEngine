@@ -349,9 +349,7 @@ void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes, bool replace
         if (!m_Bricks.contains(brickIndex)) {
             std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);
             for (const auto& change : brickChanges.second) {
-                m_QueuedChanges[brickIndex].insert({
-                    change.first, { change.second, replace }
-                });
+                m_QueuedChanges[brickIndex][change.first] = { change.second, replace };
             }
 
             continue;
