@@ -1,6 +1,7 @@
 #define VOXEL_SIZE 0.125
 #define BRICK_SIZE 8
 #define SUPER_BRICK_SIZE 16
+#define CHUNK_SIZE 16
 
 #define SUPER_BRICK_IS_LOADED_OFFSET 0
 #define SUPER_BRICK_IS_LOADED_SIZE 1
@@ -45,5 +46,17 @@ layout(buffer_reference, std430) buffer ToBeLoadedBuffer {
 };
 
 layout(buffer_reference, std430) buffer SuperBrickBuffer {
-    SuperBrick superBrick;
+    SuperBrick superBrick[];
+};
+
+struct Chunk {
+    // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
+    // Unloaded:     LOD: 8 | LOD: 8 | LOD:     12 | Flags: 3 | 0
+
+    uint32_t data[16 * 16 * 16];
+    SuperBrickBuffer superBricks;
+};
+
+layout(buffer_reference, std430) buffer ChunkBuffer {
+    Chunk chunks;
 };

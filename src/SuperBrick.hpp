@@ -41,7 +41,7 @@ struct GenerationData {
 };
 
 struct SuperBrickStruct {
-    std::array<SuperBrickEntry, 16 * 16 * 16> data;
+    std::array<SuperBrickEntry, SUPERBRICK_SIZE * SUPERBRICK_SIZE * SUPERBRICK_SIZE> data;
     VkDeviceAddress bricks;
     VkDeviceAddress colour;
 };
@@ -64,6 +64,10 @@ class SuperBrick {
 
     void addBrickToQueue(glm::ivec3 position);
     void addBrickToQueue(uint32_t index);
+
+    bool isLoaded(glm::ivec3 position);
+    bool isLoaded(uint32_t index);
+
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
 
     void placeVoxel(

@@ -145,6 +145,18 @@ void SuperBrick::addBrickToQueue(uint32_t index)
     addBrickToQueue(position);
 }
 
+bool SuperBrick::isLoaded(glm::ivec3 position) { return m_Bricks.contains(position); }
+
+bool SuperBrick::isLoaded(uint32_t index)
+{
+    glm::ivec3 position { 0 };
+    position.x = index % SUPERBRICK_SIZE;
+    position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
+    position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
+
+    return isLoaded(position);
+}
+
 void SuperBrick::placeVoxel(
     glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour, bool replace)
 {

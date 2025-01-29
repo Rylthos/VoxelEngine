@@ -6,6 +6,7 @@
 #include "Chunk.hpp"
 #include "PaletteManager.hpp"
 
+#if 0
 class VoxLoader {
   public:
     VoxLoader(Chunk* chunk, PaletteManager* paletteManager);
@@ -33,3 +34,4 @@ class VoxLoader {
     uint32_t readU32(std::ifstream& file);
     uint8_t readU8(std::ifstream& file);
 };
+#endif

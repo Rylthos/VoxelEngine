@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Buffer.hpp"
+#include "Chunk.hpp"
 #include "Constants.hpp"
 #include "Timer.hpp"
 
@@ -65,9 +66,11 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_Initialized = true;
     spdlog::info("Initliazing Scene Manager");
 
-    m_SuperBrick.init(device, allocator, computeQueue);
+    m_Chunk.init(device, allocator, computeQueue);
 
-    m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
+    // m_SuperBrick.init(device, allocator, computeQueue);
+    //
+    // m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
 
     m_MaxLoaded = 256;
     size_t loadedSize = sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded;
@@ -81,7 +84,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
     }
 
-    m_SuperBrickBuffer.create(m_Allocator, sizeof(SuperBrickStruct),
+    // m_SuperBrickBuffer.create(m_Allocator, sizeof(SuperBrickStruct),
+    m_ChunkBuffer.create(m_Allocator, sizeof(ChunkStruct),
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
@@ -179,7 +183,7 @@ void SceneManager::receive(const Event* event)
                     }
                 }
             }
-            m_SuperBrick.changeVoxels(changes, m_ReplaceVoxels);
+            // m_SuperBrick.changeVoxels(changes, m_ReplaceVoxels);
             Timer::stopTimer("Modify Voxels");
         }
 
@@ -211,22 +215,22 @@ void SceneManager::receive(const Event* event)
     case EventType::ImGuiRender: {
         if (ImGui::Begin("Scene")) {
             if (ImGui::Button("Reset")) {
-                m_SuperBrick.reset();
+                // m_SuperBrick.reset();
             }
 
             ImGui::Text("LOD Distance");
             ImGui::SliderFloat("##LODDistance", &m_VoxelPushConstants.lodDistance, 10.f, 1000.f);
 
-            ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
-            ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
-            ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
-            ImGui::Text("Allocation Size: %ld", m_SuperBrick.getCurrentAllocation());
-            ImGui::Text("Colours Allocated: %ld", m_SuperBrick.getCurrentColourAllocation());
-            ImGui::Text(
-                "Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
-            ImGui::Text("Colours Indices Free: %ld", m_SuperBrick.getCurrentColourIndexSize());
-
-            ImGui::Text("Queued Changes: %ld", m_SuperBrick.getQueuedChanges());
+            // ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
+            // ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
+            // ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
+            // ImGui::Text("Allocation Size: %ld", m_SuperBrick.getCurrentAllocation());
+            // ImGui::Text("Colours Allocated: %ld", m_SuperBrick.getCurrentColourAllocation());
+            // ImGui::Text(
+            //     "Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
+            // ImGui::Text("Colours Indices Free: %ld", m_SuperBrick.getCurrentColourIndexSize());
+            //
+            // ImGui::Text("Queued Changes: %ld", m_SuperBrick.getQueuedChanges());
 
             ImGui::Text("Max Heat");
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
@@ -297,8 +301,6 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
     checkChunks(currentFrame);
 
-    m_VoxelPushConstants.size = Voxel::VOXEL_SIZE;
-
     std::vector<uint32_t> data = { m_MaxLoaded, 0 };
     createStaging(sizeof(uint32_t) * 2);
     m_Staging.copyFromData_CPUOnly<uint32_t>(data);
@@ -306,12 +308,12 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
     createStaging(sizeof(SuperBrickStruct));
 
-    std::vector<SuperBrickStruct> temp = { m_SuperBrick.getStruct() };
-    m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
-    m_SuperBrickBuffer.copyFromBuffer(m_Staging, sizeof(SuperBrickStruct));
+    std::vector<ChunkStruct> temp = { m_Chunk.getStruct() };
+    m_Staging.copyFromData_CPUOnly<ChunkStruct>(temp);
+    m_ChunkBuffer.copyFromBuffer(m_Staging, sizeof(ChunkStruct));
 
     m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
-    m_VoxelPushConstants.superBrick = m_SuperBrickBuffer.getDeviceAddress(m_Device);
+    m_VoxelPushConstants.chunk = m_ChunkBuffer.getDeviceAddress(m_Device);
     m_VoxelPushConstants.feedbackBuffer = m_FeedbackBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
@@ -319,11 +321,11 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
 glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
 {
-    float chunkSize = m_Dimension * Voxel::VOXEL_SIZE;
+    // float chunkSize = m_Dimension * Voxel::VOXEL_SIZE;
 
-    glm::ivec3 chunkIndex = glm::floor(position / chunkSize);
+    // glm::ivec3 chunkIndex = glm::floor(position / chunkSize);
 
-    return chunkIndex;
+    // return chunkIndex;
 }
 
 void SceneManager::checkChunks(uint32_t currentFrame)
@@ -339,15 +341,17 @@ void SceneManager::checkChunks(uint32_t currentFrame)
     if (data[1] != 0) {
         for (uint32_t i = 2; i < length; i++) {
             uint32_t index = data[i];
-            m_SuperBrick.addBrickToQueue(index);
+            // m_SuperBrick.addBrickToQueue(index);
         }
     }
 }
 
 void SceneManager::freeBuffers()
 {
-    m_SuperBrickBuffer.free();
-    m_SuperBrick.free();
+    m_ChunkBuffer.free();
+    m_Chunk.free();
+    // m_SuperBrickBuffer.free();
+    // m_SuperBrick.free();
     m_FeedbackBuffer.free();
 
     m_Staging.free();

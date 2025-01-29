@@ -63,7 +63,7 @@ struct VoxelPushConstants {
     uint32_t _2;
 
     VkDeviceAddress toBeLoaded;
-    VkDeviceAddress superBrick;
+    VkDeviceAddress chunk;
     VkDeviceAddress feedbackBuffer;
 };
 
@@ -101,8 +101,10 @@ class SceneManager : public EventReceiver {
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    SuperBrick m_SuperBrick;
-    Buffer m_SuperBrickBuffer;
+    Chunk m_Chunk;
+    Buffer m_ChunkBuffer;
+    // SuperBrick m_SuperBrick;
+    // Buffer m_SuperBrickBuffer;
 
     Buffer m_FeedbackBuffer;
     Feedback m_Feedback;

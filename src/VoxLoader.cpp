@@ -4,6 +4,8 @@
 
 #include <spdlog/spdlog.h>
 
+#if 0
+
 #define MAX_LOG 9
 
 typedef std::array<char, 5> VoxID;
@@ -136,3 +138,5 @@ uint32_t VoxLoader::readU32(std::ifstream& file)
 }
 
 uint8_t VoxLoader::readU8(std::ifstream& file) { return readBytes<1>(file).at(0); }
+
+#endif

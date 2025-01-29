@@ -3,42 +3,48 @@
 #include <glm/glm.hpp>
 #include <vk_mem_alloc.h>
 
-#include "Buffer.hpp"
-#include "Voxel.hpp"
+#include "SuperBrick.hpp"
+
+#define CHUNK_SIZE 16
+
+struct ChunkEntry {
+    uint32_t loaded : 1;
+    uint32_t requested : 1;
+    uint32_t empty_flag : 1;
+    uint32_t unused : 1;
+    uint32_t pointer : 12;
+    uint32_t _ : 16;
+};
+
+struct ChunkStruct {
+    std::array<ChunkEntry, CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE> data;
+    VkDeviceAddress pointers;
+};
 
 class Chunk {
   public:
     Chunk();
-    Chunk(glm::ivec3 chunkPosition, uint32_t dimension);
-    Chunk(Chunk& chunk);
-    Chunk(Chunk&& chunk);
 
-    Chunk& operator=(const Chunk& other);
+    void init(VkDevice device, VmaAllocator allocator, Queue* computeQueue);
 
-    VkDeviceAddress getBufferAddress(VkDevice device) { return m_SVO.getDeviceAddress(device); }
+    void free();
 
-    uint32_t getDimensions() { return m_Dimension; }
+    void enqueuBrick(uint32_t superBrickIndex, uint32_t brickIndex);
 
-    Buffer* getSVOBuffer() { return &m_SVO; }
-    std::vector<Voxel>& getVoxels() { return m_Voxels; }
-
-    void setVoxel(glm::uvec3 position, Voxel data);
-    Voxel getVoxel(glm::uvec3 position);
-
-    void setIsGenerated(bool generated) { m_Generated = generated; }
-    bool isGenerated() { return m_Generated; }
-
-    glm::ivec3& getPosition() { return m_ChunkPosition; }
+    ChunkStruct getStruct();
 
   private:
-    bool m_Initialized = false;
-    bool m_Generated = false;
+    std::unordered_map<glm::ivec3, SuperBrick> m_SuperBricks;
+    ChunkStruct m_ChunkStruct;
 
     VmaAllocator m_Allocator;
+    VkDevice m_Device;
 
-    glm::ivec3 m_ChunkPosition;
-    uint32_t m_Dimension;
+    Buffer m_SuperBrickLocations;
+    Buffer m_Staging;
 
-    std::vector<Voxel> m_Voxels;
-    Buffer m_SVO;
+    bool m_Generated = false;
+
+  private:
+    void createStaging(size_t size);
 };

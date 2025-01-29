@@ -1,51 +1,69 @@
 #include "Chunk.hpp"
-
-#include "MortenEncode.hpp"
+#include "SuperBrick.hpp"
+#include "VkBootstrap.h"
+#include <vulkan/vulkan_core.h>
 
 Chunk::Chunk() { }
 
-Chunk::Chunk(glm::ivec3 chunkPosition, uint32_t dimension)
-    : m_ChunkPosition(chunkPosition)
-    , m_Dimension(dimension)
+void Chunk::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
 {
-    m_Voxels.assign(m_Dimension * m_Dimension * m_Dimension, { .colourIndex = 1 });
+    m_Allocator = allocator;
+    m_Device = device;
+
+    glm::ivec3 firstIndex = { 0, 0, 0 };
+    m_SuperBricks[firstIndex].init(device, allocator, computeQueue);
+    m_SuperBricks[firstIndex].addBrickToQueue(0);
+
+    for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE; i++) {
+        m_ChunkStruct.data[i] = {};
+        m_ChunkStruct.data[i].loaded = 1;
+        m_ChunkStruct.data[i].empty_flag = 1;
+    }
+
+    m_SuperBrickLocations.create(allocator, sizeof(SuperBrickStruct) * 1,
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+            | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY);
 }
 
-Chunk::Chunk(Chunk& other)
+void Chunk::free()
 {
-    m_Allocator = other.m_Allocator;
-    m_ChunkPosition = other.m_ChunkPosition;
-    m_Dimension = other.m_Dimension;
+    for (auto& brick : m_SuperBricks) {
+        brick.second.free();
+    }
+
+    m_SuperBrickLocations.free();
+    m_Staging.free();
 }
 
-Chunk::Chunk(Chunk&& other)
+ChunkStruct Chunk::getStruct()
 {
-    m_Allocator = std::move(other.m_Allocator);
-    m_ChunkPosition = std::move(other.m_ChunkPosition);
-    m_Dimension = std::move(other.m_Dimension);
+
+    if (m_SuperBricks[{ 0, 0, 0 }].isLoaded(0) && !m_Generated) {
+        m_Generated = true;
+
+        createStaging(sizeof(SuperBrickStruct));
+
+        std::vector<SuperBrickStruct> temp { m_SuperBricks[{ 0, 0, 0 }].getStruct() };
+
+        m_ChunkStruct.data[0].empty_flag = 0;
+        m_ChunkStruct.data[0].pointer = 0;
+
+        m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
+        m_SuperBrickLocations.copyFromBuffer(m_Staging, sizeof(SuperBrickStruct) * 1);
+        m_ChunkStruct.pointers = m_SuperBrickLocations.getDeviceAddress(m_Device);
+    }
+    return m_ChunkStruct;
 }
 
-Chunk& Chunk::operator=(const Chunk& other)
+void Chunk::createStaging(size_t size)
 {
-    m_Allocator = other.m_Allocator;
-    m_ChunkPosition = other.m_ChunkPosition;
-    m_Dimension = other.m_Dimension;
+    if (m_Staging.getSize() >= size) {
+        return;
+    }
 
-    return *this;
-}
+    m_Staging.free();
 
-void Chunk::setVoxel(glm::uvec3 position, Voxel data)
-{
-    const uint64_t code = Morten::encode(position);
-    assert(code < m_Voxels.size() && "Position exceeds voxel limits");
-
-    m_Voxels.at(code) = data;
-}
-
-Voxel Chunk::getVoxel(glm::uvec3 position)
-{
-    const uint64_t code = Morten::encode(position);
-    assert(code < m_Voxels.size() && "Position exceeds voxel limits");
-
-    return m_Voxels.at(code);
+    m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 }
