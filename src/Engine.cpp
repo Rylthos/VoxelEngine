@@ -558,8 +558,10 @@ void Engine::initSSAO()
         [&](VkCommandBuffer buffer) { m_SSAONoise.copyFromBuffer(buffer, temp); });
     temp.free();
 
-    m_SSAOPushConstants.radius = 2.5;
+    m_SSAOPushConstants.radius = 1.0;
     m_SSAOPushConstants.bias = 0.01;
+
+    m_SSAOBlurPushConstants.blurSize = 2;
 }
 
 void Engine::initDescriptorPool()
@@ -968,6 +970,9 @@ void Engine::updateImGui()
 
         ImGui::Text("Bias");
         ImGui::SliderFloat("##Bias", &m_SSAOPushConstants.bias, 0.0, 0.5);
+
+        ImGui::Text("Blur Radius");
+        ImGui::SliderInt("##BlurRadius", &m_SSAOBlurPushConstants.blurSize, 0, 5);
     }
     ImGui::End();
 
@@ -1169,11 +1174,11 @@ void Engine::render(float frameDelta)
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                     m_SSAOBlurPipelineLayout, 1, 1, &m_SSAOBlurImageDescriptorSet, 0, nullptr);
 
-                SSAOBlurPushConstants pushConstants;
-                pushConstants.axis = 0;
+                m_SSAOBlurPushConstants.axis = 0;
 
                 vkCmdPushConstants(commandBuffer, m_SSAOBlurPipelineLayout,
-                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SSAOBlurPushConstants), &pushConstants);
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SSAOBlurPushConstants),
+                    &m_SSAOBlurPushConstants);
 
                 vkCmdDispatch(
                     commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);
@@ -1181,10 +1186,11 @@ void Engine::render(float frameDelta)
                 vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 
-                pushConstants.axis = 1;
+                m_SSAOBlurPushConstants.axis = 1;
 
                 vkCmdPushConstants(commandBuffer, m_SSAOBlurPipelineLayout,
-                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SSAOBlurPushConstants), &pushConstants);
+                    VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(SSAOBlurPushConstants),
+                    &m_SSAOBlurPushConstants);
 
                 vkCmdDispatch(
                     commandBuffer, dispatchSize.width, dispatchSize.height, dispatchSize.depth);

@@ -28,6 +28,7 @@ struct SSAOPushConstants {
 
 struct SSAOBlurPushConstants {
     int axis;
+    int blurSize;
 };
 
 struct DeferredPushConstants {
@@ -147,6 +148,7 @@ class Engine : EventReceiver {
     Image m_SSAONoise;
     Buffer m_SSAOSamples;
     SSAOPushConstants m_SSAOPushConstants;
+    SSAOBlurPushConstants m_SSAOBlurPushConstants;
     Image m_SSAOBlurTemp;
     uint32_t m_SSAOKernelSize = 64;
 
