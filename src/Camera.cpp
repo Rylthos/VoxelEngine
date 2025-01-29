@@ -9,26 +9,15 @@
 
 #include <imgui.h>
 
-Camera::Camera()
-    : m_Position { 0.f, 0.f, 0.f }
-    , m_Yaw { 0.f }
-    , m_Pitch { 0.f }
-{
-    updateAxis();
-}
+Camera::Camera() : m_Position { 0.f, 0.f, 0.f }, m_Yaw { 0.f }, m_Pitch { 0.f } { updateAxis(); }
 
-Camera::Camera(glm::vec3 position)
-    : m_Position { position }
-    , m_Yaw { 0.f }
-    , m_Pitch { 0.f }
+Camera::Camera(glm::vec3 position) : m_Position { position }, m_Yaw { 0.f }, m_Pitch { 0.f }
 {
     updateAxis();
 }
 
 Camera::Camera(glm::vec3 position, float yaw, float pitch)
-    : m_Position { position }
-    , m_Yaw { yaw }
-    , m_Pitch { pitch }
+    : m_Position { position }, m_Yaw { yaw }, m_Pitch { pitch }
 {
     updateAxis();
 }
@@ -97,7 +86,7 @@ void Camera::receive(const Event* event)
         if (m_PressedKeys[GLFW_KEY_LEFT_CONTROL])
             direction -= m_WorldUp;
         if (m_PressedKeys[GLFW_KEY_LEFT_SHIFT])
-            speed *= m_Speedup;
+            speed *= m_MovementMultiplier;
 
         m_Position += direction * speed * gu->frameDelta;
 
@@ -123,8 +112,11 @@ void Camera::receive(const Event* event)
 
             ImGui::Checkbox("Lock XZ Movement", &m_LockXZPlaneMovement);
 
-            ImGui::Text("Speedup Movement Speed");
-            ImGui::SliderFloat("##MovementSpeed", &m_Speedup, 0.5f, 15.0f);
+            ImGui::Text("Movement Speed");
+            ImGui::SliderFloat("##MovementSpeed", &m_MovementSpeed, 1.0f, 25.0f);
+
+            ImGui::Text("Speedup Movement Multiplier");
+            ImGui::SliderFloat("##MovementMultiplier", &m_MovementMultiplier, 0.5f, 15.0f);
         }
         ImGui::End();
     }
