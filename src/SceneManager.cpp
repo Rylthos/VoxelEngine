@@ -133,13 +133,9 @@ void SceneManager::receive(const Event* event)
             rightLength = m_PlacementSize / 2;
         }
 
-        glm::ivec3 offset = glm::ivec3(
-            glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
+        // glm::ivec3 offset = glm::ivec3(
+        //     glm::vec3(m_Feedback.voxelNormal) * ((float)(m_PlacementSize + 1.f) / 2.f));
         glm::ivec3 center = m_Feedback.voxelIndex;
-
-        if (m_PlaceVoxel) {
-            center += offset;
-        }
 
         if (m_Feedback.hasHitBrick && m_Feedback.hasHitVoxel && (m_PlaceVoxel || m_EraseVoxel)) {
             PROF_ZONE_SCOPED;
