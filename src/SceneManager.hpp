@@ -32,14 +32,15 @@ static const char* PlacementTypeToString[] = {
 enum VoxelPushConstantFlags { PCF_SHOW_HEAT_MAP = 1 << 0 };
 
 struct Feedback {
+    glm::ivec3 chunkIndex;
+    bool hasHitChunk;
     glm::ivec3 superBrickIndex;
-    int hasHitBrick;
+    bool hasHitSuperBrick;
     glm::ivec3 brickIndex;
-    int hasHitVoxel;
+    bool hasHitBrick;
     glm::ivec3 voxelIndex;
-    int _1;
+    bool hasHitVoxel;
     glm::ivec3 voxelNormal;
-    int _2;
 };
 
 struct VoxelPushConstants {

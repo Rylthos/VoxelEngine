@@ -17,14 +17,15 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, set = 1, binding = 0) uniform image2D o_HeatImage;
 
 layout(buffer_reference, std430) buffer FeedbackBuffer {
+    ivec3 chunkIndex;
+    bool hasHitChunk;
     ivec3 superBrickIndex;
-    int hasHitBrick;
+    bool hasHitSuperBrick;
     ivec3 brickIndex;
-    int hasHitVoxel;
+    bool hasHitBrick;
     ivec3 voxelIndex;
-    int _3;
+    bool hasHitVoxel;
     ivec3 voxelNormal;
-    int _4;
 };
 
 layout(push_constant) uniform constants {
@@ -53,45 +54,38 @@ layout(push_constant) uniform constants {
 };
 
 struct HitRecord {
-    bool hasHitBrick;
     bool hasHitVoxel;
+    bool hasHitBrick;
+    bool hasHitSuperBrick;
+    bool hasHitChunk;
     ivec3 voxelHitIndex;
     ivec3 brickHitIndex;
+    ivec3 superBrickHitIndex;
+    ivec3 chunkHitIndex;
     ivec3 normal;
     vec4 colour;
     vec3 position;
     int comparisons;
 };
 
-struct PreviousHit {
-    bool didHit;
-    bool shouldCheck;
-    ivec3 brickHitIndex;
-    ivec3 voxelHitIndex;
-};
-
 HitRecord emptyHit()
 {
     HitRecord hit;
-    hit.hasHitBrick = false;
+
     hit.hasHitVoxel = false;
+    hit.hasHitBrick = false;
+    hit.hasHitSuperBrick = false;
+    hit.hasHitChunk = false;
+
     hit.comparisons = -1;
     hit.colour = vec4(1., 0., 1., 1.);
 
     hit.voxelHitIndex = ivec3(0);
     hit.brickHitIndex = ivec3(0);
+    hit.superBrickHitIndex = ivec3(0);
+    hit.chunkHitIndex = ivec3(0);
+
     hit.normal = ivec3(0);
-
-    return hit;
-}
-
-PreviousHit emptyPreviousHit()
-{
-    PreviousHit hit;
-    hit.didHit = false;
-    hit.shouldCheck = false;
-    hit.brickHitIndex = ivec3(-1);
-    hit.voxelHitIndex = ivec3(-1);
 
     return hit;
 }
@@ -159,17 +153,15 @@ vec3 removeInf(vec3 a)
     );
 }
 
-void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations, inout HitRecord hit, in PreviousHit previous)
+void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     const vec3 maxBound = minBound + vec3(BRICK_SIZE * VOXEL_SIZE);
 
     float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectBound) {
-        hit.hasHitBrick = false;
-        return;
-    }
+    if (!intersectBound) return;
+    hit.hasHitBrick = true;
 
     vec3 invDir = ray.invDir;
 
@@ -202,11 +194,11 @@ void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations,
         int bitMask = voxelIndex.z * BRICK_SIZE
                 + voxelIndex.x;
 
-        if (((brick.solidMask[y] >> bitMask) & 0x1) == 1 && !(previous.shouldCheck && previous.voxelHitIndex == voxelIndex))
+        if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
             hit.colour = calculateColour(brick, voxelIndex);
-            hit.voxelHitIndex = voxelIndex;
             hit.hasHitVoxel = true;
+            hit.voxelHitIndex = voxelIndex;
             hit.normal = normal;
             #ifdef PER_PIXEL
             hit.position = rayStart + removeInf(ray.direction * traversal * VOXEL_SIZE);
@@ -227,18 +219,18 @@ void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations,
         hasStepped = true;
     }
 
-    hit.hasHitVoxel = false;
     hit.hasHitBrick = false;
     return;
 }
 
-void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, inout int iterations, inout HitRecord hit, in PreviousHit previous)
+void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     float tMin, tMax;
     const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE * VOXEL_SIZE;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
     if (!intersectBound) return;
+    hit.hasHitSuperBrick = true;
 
     vec3 invDir = ray.invDir;
 
@@ -281,7 +273,6 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
             Brick brick = p_Chunk.chunks.superBricks.superBrick[superbrickIndex].bricksBuffer.bricks[brickPointer];
 
             hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
-            hit.hasHitBrick = true;
 
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return;
@@ -312,19 +303,14 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
                 float brickDistance = length(brickCenter - p_CameraPosition);
 
                 hit.normal = normal;
-                if (previous.didHit && brickIndex == previous.brickHitIndex) {
-                    previous.shouldCheck = true;
-                } else {
-                    previous.shouldCheck = false;
-                }
-                hit.hasHitBrick = true;
+
                 hit.brickHitIndex = brickIndex;
 
                 if (brickDistance > p_LODDistance) {
                     hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
                     return;
                 } else {
-                    traverseBrick(ray, brick, brickMinBound, iterations, hit, previous);
+                    traverseBrick(ray, brick, brickMinBound, iterations, hit);
                 }
 
                 if (hit.hasHitBrick && hit.hasHitVoxel) {
@@ -341,10 +327,10 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
         normal = -(stepDirection * stepAxis);
     }
 
-    hit.hasHitBrick = false;
+    hit.hasHitSuperBrick = false;
 }
 
-HitRecord traverseChunk(in Ray ray, in PreviousHit previous)
+HitRecord traverseChunk(in Ray ray)
 {
     HitRecord hit = emptyHit();
 
@@ -355,6 +341,7 @@ HitRecord traverseChunk(in Ray ray, in PreviousHit previous)
 
     hit.position = vec3(-1.);
     if (!intersectBound) return hit;
+    hit.hasHitChunk = true;
 
     hit.comparisons = 0;
 
@@ -417,7 +404,7 @@ HitRecord traverseChunk(in Ray ray, in PreviousHit previous)
             //     }
             // }
 
-            return hit;
+            // return hit;
         } else { // SuperBrick is already loaded
             if (is_empty == 0) // Not Empty
             {
@@ -427,6 +414,7 @@ HitRecord traverseChunk(in Ray ray, in PreviousHit previous)
                 // float brickDistance = length(brickCenter - p_CameraPosition);
 
                 hit.normal = normal;
+
                 // if (previous.didHit && brickIndex == previous.brickHitIndex) {
                 //     previous.shouldCheck = true;
                 // } else {
@@ -441,10 +429,10 @@ HitRecord traverseChunk(in Ray ray, in PreviousHit previous)
                 //     hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
                 //     return hit;
                 // } else {
-                traverseSuperBrick(ray, index, superbrickMinbound, iterations, hit, previous);
+                traverseSuperBrick(ray, index, superbrickMinbound, iterations, hit);
                 // }
 
-                if (hit.hasHitBrick && hit.hasHitVoxel) {
+                if (hit.hasHitSuperBrick && hit.hasHitBrick && hit.hasHitVoxel) {
                     return hit;
                 }
             }
@@ -458,13 +446,15 @@ HitRecord traverseChunk(in Ray ray, in PreviousHit previous)
         normal = -(stepDirection * stepAxis);
     }
 
-    hit.hasHitBrick = false;
+    hit.hasHitChunk = false;
     return hit;
 }
 
 vec3 calculateHitPosition(in HitRecord hit) {
     return hit.brickHitIndex * BRICK_SIZE * VOXEL_SIZE + (hit.voxelHitIndex + 0.5 + hit.normal * 0.5) * VOXEL_SIZE;
 }
+
+#define HAS_HIT(hit) hit.hasHitVoxel && hit.hasHitBrick && hit.hasHitSuperBrick && hit.hasHitChunk
 
 void main()
 {
@@ -489,8 +479,7 @@ void main()
             vec3(p_CameraUp), p_AspectRatio);
 
     ivec3 brickIndex;
-    PreviousHit previous = emptyPreviousHit();
-    HitRecord hit = traverseChunk(ray, previous);
+    HitRecord hit = traverseChunk(ray);
 
     vec4 colour = vec4(0.);
     if (hit.hasHitBrick) {
@@ -499,10 +488,7 @@ void main()
         if (hit.hasHitVoxel) {
             Ray shadowRay = createRay(hit.position, p_SunDir.xyz);
 
-            previous.didHit = true;
-            previous.voxelHitIndex = hit.voxelHitIndex;
-            previous.brickHitIndex = hit.brickHitIndex;
-            HitRecord shadow = traverseChunk(shadowRay, previous);
+            HitRecord shadow = traverseChunk(shadowRay);
 
             inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
         }
@@ -522,11 +508,14 @@ void main()
     }
 
     if (middle) {
-        p_Feedback.hasHitBrick = int(hit.hasHitBrick);
-        p_Feedback.hasHitVoxel = int(hit.hasHitVoxel);
-        p_Feedback.superBrickIndex = ivec3(0);
+        p_Feedback.chunkIndex = hit.chunkHitIndex;
+        p_Feedback.hasHitChunk = hit.hasHitChunk;
+        p_Feedback.superBrickIndex = hit.superBrickHitIndex;
+        p_Feedback.hasHitSuperBrick = hit.hasHitSuperBrick;
         p_Feedback.brickIndex = hit.brickHitIndex;
+        p_Feedback.hasHitBrick = hit.hasHitBrick;
         p_Feedback.voxelIndex = hit.voxelHitIndex;
+        p_Feedback.hasHitVoxel = hit.hasHitVoxel;
         p_Feedback.voxelNormal = hit.normal;
     }
 }

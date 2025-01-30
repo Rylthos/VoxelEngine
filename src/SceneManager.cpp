@@ -236,12 +236,17 @@ void SceneManager::receive(const Event* event)
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
 
             ImGui::Text("Hit Data");
+            ImGui::Text("Hitting Chunk: %d", m_Feedback.hasHitChunk);
+            ImGui::Text("Hitting Super Brick: %d", m_Feedback.hasHitSuperBrick);
             ImGui::Text("Hitting Brick: %d", m_Feedback.hasHitBrick);
             ImGui::Text("Hitting Voxel: %d", m_Feedback.hasHitVoxel);
+            ImGui::Text("");
+            ImGui::Text("Chunk Index: %s", glm::to_string(m_Feedback.chunkIndex).c_str());
             ImGui::Text(
                 "Super brick Index: %s", glm::to_string(m_Feedback.superBrickIndex).c_str());
             ImGui::Text("Brick Index: %s", glm::to_string(m_Feedback.brickIndex).c_str());
             ImGui::Text("Voxel Index: %s", glm::to_string(m_Feedback.voxelIndex).c_str());
+            ImGui::Text("");
             ImGui::Text("Voxel Normal: %s", glm::to_string(m_Feedback.voxelNormal).c_str());
         }
         ImGui::End();
