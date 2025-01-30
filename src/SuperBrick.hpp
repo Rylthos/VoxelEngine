@@ -46,15 +46,6 @@ struct SuperBrickStruct {
     VkDeviceAddress colour;
 };
 
-struct GenerationPushConstants {
-    glm::ivec3 brickIndex;
-    int _1;
-    glm::ivec3 worldPosition;
-    int _2;
-    VkDeviceAddress data;
-    VkDeviceAddress colours;
-};
-
 class SuperBrick {
   public:
     SuperBrick();
@@ -145,6 +136,4 @@ class SuperBrick {
 
     void resizeColours(bool preserveStaging = false);
     void resizeBricks(bool preserveStaging = false);
-
-    void generateBrickLoop(size_t id);
 };

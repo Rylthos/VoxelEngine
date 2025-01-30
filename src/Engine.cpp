@@ -1,5 +1,6 @@
 #include "Engine.hpp"
 
+#include "Chunk.hpp"
 #include "IntervalList.hpp"
 #include "VkBootstrap.h"
 #include "imgui.h"
@@ -9,6 +10,7 @@
 #include <random>
 #include <spdlog/fmt/ranges.h>
 
+#include "ChunkGenerator.hpp"
 #include "Constants.hpp"
 #include "Descriptors.hpp"
 #include "PipelineBuilder.hpp"
@@ -72,6 +74,7 @@ void Engine::init()
         myvkGetPhysicalDeviceCalibrateableTimeDomainsEXT, myvkGetCalibratedTimestampsEXT);
 #endif
 
+    ChunkGenerator::init(m_Device, m_Allocator, &m_ComputeQueue);
     m_SceneManager.initResources(m_Device, m_Allocator, &m_ComputeQueue);
 
     // m_PaletteManager.updateImage();
@@ -151,6 +154,7 @@ void Engine::cleanup()
     TracyVkDestroy(g_TracyVkCtx);
 #endif
 
+    ChunkGenerator::free();
     m_SceneManager.freeResources();
 
     ImmediateSubmit::free();
