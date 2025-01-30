@@ -4,6 +4,7 @@
 
 #include <glm/gtx/string_cast.hpp>
 #include <iterator>
+#include <memory>
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
@@ -73,11 +74,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     // m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
 
     m_MaxLoaded = 256;
-    size_t loadedSize = sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded;
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-        createStaging(loadedSize);
-
-        m_ToBeLoaded[i].create(m_Allocator, sizeof(uint32_t) * 2 + sizeof(uint32_t) * m_MaxLoaded,
+        m_ToBeLoaded[i].create(m_Allocator, sizeof(uint32_t) * 2 + sizeof(LoadedData) * m_MaxLoaded,
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
                 | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VMA_MEMORY_USAGE_AUTO,
@@ -342,10 +340,15 @@ void SceneManager::checkChunks(uint32_t currentFrame)
     const uint32_t* data
         = (const uint32_t*)m_ToBeLoaded[currentFrame].getAllocationInfo().pMappedData;
 
-    uint32_t length = std::min((uint32_t)data[0], data[1] + 2);
+    const LoadedData* loaded = reinterpret_cast<const LoadedData*>((const uint32_t*)data + 2);
+
+    uint32_t length = std::min((uint32_t)data[0], data[1]);
     if (data[1] != 0) {
-        for (uint32_t i = 2; i < length; i++) {
-            uint32_t index = data[i];
+        for (uint32_t i = 0; i < length; i++) {
+            const LoadedData l = loaded[i];
+            spdlog::info("Loading: {} | {} | {} | {}", l.loadSuperBrick,
+                glm::to_string(l.superBrickIndex), l.loadBrick, glm::to_string(l.brickIndex));
+            // uint32_t index = loaded[i];
             // m_SuperBrick.addBrickToQueue(index);
         }
     }

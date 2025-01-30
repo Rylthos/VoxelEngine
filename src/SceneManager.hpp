@@ -43,6 +43,13 @@ struct Feedback {
     glm::ivec3 voxelNormal;
 };
 
+struct LoadedData {
+    glm::ivec3 superBrickIndex;
+    bool loadSuperBrick;
+    glm::ivec3 brickIndex;
+    bool loadBrick;
+};
+
 struct VoxelPushConstants {
     glm::vec3 cameraPosition;
     float aspectRatio;

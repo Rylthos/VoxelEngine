@@ -120,7 +120,7 @@ ivec3 calculateNormalFromBounds(Ray ray, float t, vec3 minBound, vec3 maxBound) 
     return ivec3(0.);
 }
 
-vec4 calculateColour(in Brick brick, in ivec3 brickIndex) {
+vec4 calculateColour(in uint32_t superBrickIndex, in Brick brick, in ivec3 brickIndex) {
     uint index = 0;
     for (int i = 0; i < brickIndex.y; i++)
     {
@@ -139,6 +139,8 @@ vec4 calculateColour(in Brick brick, in ivec3 brickIndex) {
         index += bitCount(((lower >> bitMask) << bitMask) ^ lower);
     }
 
+    return p_Chunk.chunks.superBricks.superBrick[superBrickIndex].colourBuffers.colours[brick.colourPointer + index];
+
     // return vec4(index, vec3(brickIndex));
     // return p_SuperBrick.superBrick.colourBuffers.colours[brick.colourPointer + index];
     return vec4(1.);
@@ -153,7 +155,7 @@ vec3 removeInf(vec3 a)
     );
 }
 
-void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations, inout HitRecord hit)
+void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     const vec3 maxBound = minBound + vec3(BRICK_SIZE * VOXEL_SIZE);
 
@@ -196,7 +198,7 @@ void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations,
 
         if (((brick.solidMask[y] >> bitMask) & 0x1) == 1)
         {
-            hit.colour = calculateColour(brick, voxelIndex);
+            hit.colour = calculateColour(superBrickIndex, brick, voxelIndex);
             hit.hasHitVoxel = true;
             hit.voxelHitIndex = voxelIndex;
             hit.normal = normal;
@@ -223,7 +225,7 @@ void traverseBrick(Ray ray, in Brick brick, vec3 minBound, inout int iterations,
     return;
 }
 
-void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, inout int iterations, inout HitRecord hit)
+void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     float tMin, tMax;
     const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE * VOXEL_SIZE;
@@ -262,7 +264,7 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
             break;
         }
 
-        uint32_t data = p_Chunk.chunks.superBricks.superBrick[superbrickIndex].data[index];
+        uint32_t data = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index];
 
         uint32_t is_loaded = bitfieldExtract(data, SUPER_BRICK_IS_LOADED_OFFSET, SUPER_BRICK_IS_LOADED_SIZE);
         uint32_t is_empty = bitfieldExtract(data, SUPER_BRICK_IS_EMPTY_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
@@ -270,7 +272,7 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
         uint32_t brickPointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            Brick brick = p_Chunk.chunks.superBricks.superBrick[superbrickIndex].bricksBuffer.bricks[brickPointer];
+            Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
 
             hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
 
@@ -279,15 +281,17 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
             }
 
             uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            uint32_t previous = atomicExchange(p_Chunk.chunks.superBricks.superBrick[superbrickIndex].data[index], new_data);
+            uint32_t previous = atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], new_data);
 
             uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             if (previously_requested == 0) {
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
-                    p_ToBeLoaded.toBeLoaded[writePointer] = index;
+                    p_ToBeLoaded.toBeLoaded[writePointer].loadBrick = true;
+                    p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = brickIndex;
+                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = superBrick;
                 } else {
-                    atomicExchange(p_Chunk.chunks.superBricks.superBrick[superbrickIndex].data[index], previous);
+                    atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], previous);
                 }
             }
 
@@ -295,7 +299,7 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
         } else { // Brick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                Brick brick = p_Chunk.chunks.superBricks.superBrick[superbrickIndex].bricksBuffer.bricks[brickPointer];
+                Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
 
                 vec3 brickMinBound = brickIndex * BRICK_SIZE * VOXEL_SIZE;
 
@@ -310,7 +314,7 @@ void traverseSuperBrick(in Ray ray, uint32_t superbrickIndex, vec3 minBound, ino
                     hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
                     return;
                 } else {
-                    traverseBrick(ray, brick, brickMinBound, iterations, hit);
+                    traverseBrick(ray, brick, superBrickIndex, brickMinBound, iterations, hit);
                 }
 
                 if (hit.hasHitBrick && hit.hasHitVoxel) {
@@ -385,26 +389,27 @@ HitRecord traverseChunk(in Ray ray)
 
         if (is_loaded == 0) {
             // hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
-            // hit.hasHitBrick = true;
+            hit.hasHitSuperBrick = true;
 
-            // if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
-            //     return hit;
-            // }
-            //
-            // uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            // uint32_t previous = atomicExchange(p_SuperBrick.superBrick.data[index], new_data);
-            //
-            // uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            // if (previously_requested == 0) {
-            //     uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
-            //     if (writePointer < p_ToBeLoaded.maxSize) {
-            //         p_ToBeLoaded.toBeLoaded[writePointer] = index;
-            //     } else {
-            //         atomicExchange(p_SuperBrick.superBrick.data[index], previous);
-            //     }
-            // }
+            if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+                return hit;
+            }
 
-            // return hit;
+            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
+
+            uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            if (previously_requested == 0) {
+                uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
+                if (writePointer < p_ToBeLoaded.maxSize) {
+                    p_ToBeLoaded.toBeLoaded[writePointer].loadSuperBrick = true;
+                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = brickIndex;
+                } else {
+                    atomicExchange(p_Chunk.chunks.data[index], previous);
+                }
+            }
+
+            return hit;
         } else { // SuperBrick is already loaded
             if (is_empty == 0) // Not Empty
             {
@@ -429,7 +434,7 @@ HitRecord traverseChunk(in Ray ray)
                 //     hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
                 //     return hit;
                 // } else {
-                traverseSuperBrick(ray, index, superbrickMinbound, iterations, hit);
+                traverseSuperBrick(ray, index, brickIndex, superbrickMinbound, iterations, hit);
                 // }
 
                 if (hit.hasHitSuperBrick && hit.hasHitBrick && hit.hasHitVoxel) {

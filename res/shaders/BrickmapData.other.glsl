@@ -39,10 +39,17 @@ struct SuperBrick {
     ColourBuffers colourBuffers;
 };
 
+struct Loaded {
+    ivec3 superBrickIndex;
+    bool loadSuperBrick;
+    ivec3 brickIndex;
+    bool loadBrick;
+};
+
 layout(buffer_reference, std430) buffer ToBeLoadedBuffer {
     uint32_t maxSize;
     uint32_t currentPointer;
-    uint32_t toBeLoaded[];
+    Loaded toBeLoaded[];
 };
 
 layout(buffer_reference, std430) buffer SuperBrickBuffer {
