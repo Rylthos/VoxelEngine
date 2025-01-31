@@ -84,6 +84,9 @@ void ChunkGenerator::requestBrick(
 {
     glm::ivec3 worldIndex = localToWorldIndex(chunkIndex, superBrickIndex, brickIndex);
 
+    spdlog::info("Loading: {} | {} | {} -> {}", glm::to_string(chunkIndex),
+        glm::to_string(superBrickIndex), glm::to_string(brickIndex), glm::to_string(worldIndex));
+
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_GeneratedQueueLock);
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(s_EnqueuedLock);
 
@@ -171,6 +174,9 @@ void ChunkGenerator::generationLoop(size_t id)
                     break;
             }
 
+            if (!s_Running)
+                break;
+
             position = s_ToBeGenerated.front();
             s_ToBeGenerated.pop_front();
         }
@@ -194,8 +200,9 @@ void ChunkGenerator::generationLoop(size_t id)
                     commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_GeneratePipeline);
 
                 GenerationPushConstants pushConstants;
-                pushConstants.brickIndex = position;
-                pushConstants.worldPosition = position * BRICK_SIZE;
+                auto local = worldToLocalIndex(position);
+                pushConstants.brickIndex = std::get<2>(local);
+                pushConstants.worldPosition = position;
                 pushConstants.data = generatedData.getDeviceAddress(s_Device);
                 pushConstants.colours = generatedColour.getDeviceAddress(s_Device);
 

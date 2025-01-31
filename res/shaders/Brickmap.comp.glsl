@@ -379,25 +379,22 @@ HitRecord traverseChunk(in Ray ray)
         uint32_t pointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            hit.hasHitSuperBrick = true;
-
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return hit;
             }
 
-            // uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            // uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
-            //
-            // uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            // if (previously_requested == 0) {
-            //     uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
-            //     if (writePointer < p_ToBeLoaded.maxSize) {
-            //         p_ToBeLoaded.toBeLoaded[writePointer].loadSuperBrick = 1;
-            //         p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = brickIndex;
-            //     } else {
-            //         atomicExchange(p_Chunk.chunks.data[index], previous);
-            //     }
-            // }
+            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
+
+            uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            if (previously_requested == 0) {
+                uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
+                if (writePointer < p_ToBeLoaded.maxSize) {
+                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(brickIndex, 1);
+                } else {
+                    atomicExchange(p_Chunk.chunks.data[index], previous);
+                }
+            }
 
             return hit;
         } else { // SuperBrick is already loaded

@@ -337,9 +337,12 @@ void SceneManager::checkChunks(uint32_t currentFrame)
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
             if (l.brickIndex.a != 0) {
-                ChunkGenerator::requestBrick({ 0, 0, 0 }, l.superBrickIndex, l.brickIndex);
+                ChunkGenerator::requestBrick(
+                    { 0, 0, 0 }, glm::ivec3(l.superBrickIndex), glm::ivec3(l.brickIndex));
             } else if (l.superBrickIndex.a != 0) {
-                m_Chunks[{ 0, 0, 0 }].loadSuperBrick(l.superBrickIndex);
+                // spdlog::error(
+                //     "Load superbrick : {}", glm::to_string(glm::ivec3(l.superBrickIndex)));
+                // m_Chunks[{ 0, 0, 0 }].loadSuperBrick(glm::ivec3(l.superBrickIndex));
             }
         }
     }

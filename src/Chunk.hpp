@@ -37,6 +37,11 @@ class Chunk {
 
   private:
     std::unordered_map<glm::ivec3, SuperBrick> m_SuperBricks;
+    std::unordered_map<glm::ivec3, uint16_t> m_SuperBrickIndices;
+    std::unordered_set<glm::ivec3> m_ToBeLoaded;
+    std::unordered_set<glm::ivec3> m_ToBeUpdated;
+    std::set<uint16_t> m_FreeIndices;
+
     ChunkStruct m_ChunkStruct;
 
     VmaAllocator m_Allocator;
@@ -45,14 +50,19 @@ class Chunk {
     Buffer m_SuperBrickLocations;
     Buffer m_Staging;
 
-    std::unordered_set<glm::ivec3> m_ToBeLoaded;
+    size_t m_CurrentPoolSize = 256;
+
     PROF_LOCKABLE_MUTEX(std::mutex, m_BufferLock, "Buffer Lock");
     PROF_LOCKABLE_MUTEX(std::mutex, m_LoadedLock, "ToBeLoaded Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_UpdatedLock, "ToBeUpdated Lock");
 
   private:
     size_t positionToIndex(glm::ivec3 index)
     {
         return index.x + index.z * SUPERBRICK_SIZE + index.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
     }
+
+    void growPool(bool preserveStaging);
+
     void createStaging(size_t size);
 };
