@@ -29,7 +29,9 @@ class Chunk {
 
     void free();
 
-    void enqueuBrick(uint32_t superBrickIndex, uint32_t brickIndex);
+    void loadSuperBrick(glm::ivec3 index);
+
+    void loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3>, Brick& brick);
 
     ChunkStruct getStruct();
 
@@ -43,8 +45,14 @@ class Chunk {
     Buffer m_SuperBrickLocations;
     Buffer m_Staging;
 
-    bool m_Generated = false;
+    std::unordered_set<glm::ivec3> m_ToBeLoaded;
+    PROF_LOCKABLE_MUTEX(std::mutex, m_BufferLock, "Buffer Lock");
+    PROF_LOCKABLE_MUTEX(std::mutex, m_LoadedLock, "ToBeLoaded Lock");
 
   private:
+    size_t positionToIndex(glm::ivec3 index)
+    {
+        return index.x + index.z * SUPERBRICK_SIZE + index.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
+    }
     void createStaging(size_t size);
 };

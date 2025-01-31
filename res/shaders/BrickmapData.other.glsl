@@ -40,15 +40,15 @@ struct SuperBrick {
 };
 
 struct Loaded {
-    ivec3 superBrickIndex;
-    bool loadSuperBrick;
-    ivec3 brickIndex;
-    bool loadBrick;
+    ivec4 superBrickIndex;
+    ivec4 brickIndex;
 };
 
 layout(buffer_reference, std430) buffer ToBeLoadedBuffer {
     uint32_t maxSize;
     uint32_t currentPointer;
+    uint32_t unused1;
+    uint32_t unused2;
     Loaded toBeLoaded[];
 };
 

@@ -10,6 +10,7 @@
 
 #include "Buffer.hpp"
 #include "Chunk.hpp"
+#include "ChunkGenerator.hpp"
 #include "Constants.hpp"
 #include "Timer.hpp"
 
@@ -67,22 +68,16 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_Initialized = true;
     spdlog::info("Initliazing Scene Manager");
 
-    m_Chunk.init(device, allocator, computeQueue);
+    m_Chunks[{ 0, 0, 0 }].init(device, allocator, computeQueue);
 
-    // m_SuperBrick.init(device, allocator, computeQueue);
-    //
-    // m_SuperBrick.addBrickToQueue({ 0, 0, 0 });
-
-    m_MaxLoaded = 256;
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-        m_ToBeLoaded[i].create(m_Allocator, sizeof(uint32_t) * 2 + sizeof(LoadedData) * m_MaxLoaded,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-                | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        m_ToBeLoaded[i].create(m_Allocator, sizeof(uint32_t) * 4 + sizeof(LoadedData) * MAX_LOADED,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VMA_MEMORY_USAGE_AUTO,
             VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
     }
 
-    // m_SuperBrickBuffer.create(m_Allocator, sizeof(SuperBrickStruct),
     m_ChunkBuffer.create(m_Allocator, sizeof(ChunkStruct),
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -99,6 +94,8 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
 
     m_VoxelPushConstants.sunDirection = glm::vec4(0, -1, 0, 1);
     m_VoxelPushConstants.lodDistance = 500.f;
+
+    ChunkGenerator::addChunks(&m_Chunks);
 }
 
 void SceneManager::freeResources()
@@ -304,14 +301,16 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
     checkChunks(currentFrame);
 
-    std::vector<uint32_t> data = { m_MaxLoaded, 0 };
-    createStaging(sizeof(uint32_t) * 2);
-    m_Staging.copyFromData_CPUOnly<uint32_t>(data);
-    m_ToBeLoaded[currentFrame].copyFromBuffer(m_Staging, sizeof(uint32_t) * 2, 0);
+    {
+        std::vector<uint32_t> temp = { MAX_LOADED, 0 };
+        createStaging(sizeof(uint32_t) * 2);
+        m_Staging.copyFromData_CPUOnly<uint32_t>(temp);
+        m_ToBeLoaded[currentFrame].copyFromBuffer(m_Staging, sizeof(uint32_t) * 2);
+    }
 
     createStaging(sizeof(SuperBrickStruct));
 
-    std::vector<ChunkStruct> temp = { m_Chunk.getStruct() };
+    std::vector<ChunkStruct> temp = { m_Chunks[{ 0, 0, 0 }].getStruct() };
     m_Staging.copyFromData_CPUOnly<ChunkStruct>(temp);
     m_ChunkBuffer.copyFromBuffer(m_Staging, sizeof(ChunkStruct));
 
@@ -320,15 +319,6 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
     m_VoxelPushConstants.feedbackBuffer = m_FeedbackBuffer.getDeviceAddress(m_Device);
 
     return m_VoxelPushConstants;
-}
-
-glm::ivec3 SceneManager::worldToChunkPos(glm::vec3 position)
-{
-    // float chunkSize = m_Dimension * Voxel::VOXEL_SIZE;
-
-    // glm::ivec3 chunkIndex = glm::floor(position / chunkSize);
-
-    // return chunkIndex;
 }
 
 void SceneManager::checkChunks(uint32_t currentFrame)
@@ -340,16 +330,17 @@ void SceneManager::checkChunks(uint32_t currentFrame)
     const uint32_t* data
         = (const uint32_t*)m_ToBeLoaded[currentFrame].getAllocationInfo().pMappedData;
 
-    const LoadedData* loaded = reinterpret_cast<const LoadedData*>((const uint32_t*)data + 2);
+    const LoadedData* loaded = (const LoadedData*)(data + 4);
 
-    uint32_t length = std::min((uint32_t)data[0], data[1]);
-    if (data[1] != 0) {
+    uint32_t length = std::min(data[0], data[1]);
+    if (length != 0) {
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
-            spdlog::info("Loading: {} | {} | {} | {}", l.loadSuperBrick,
-                glm::to_string(l.superBrickIndex), l.loadBrick, glm::to_string(l.brickIndex));
-            // uint32_t index = loaded[i];
-            // m_SuperBrick.addBrickToQueue(index);
+            if (l.brickIndex.a != 0) {
+                ChunkGenerator::requestBrick({ 0, 0, 0 }, l.superBrickIndex, l.brickIndex);
+            } else if (l.superBrickIndex.a != 0) {
+                m_Chunks[{ 0, 0, 0 }].loadSuperBrick(l.superBrickIndex);
+            }
         }
     }
 }
@@ -357,9 +348,10 @@ void SceneManager::checkChunks(uint32_t currentFrame)
 void SceneManager::freeBuffers()
 {
     m_ChunkBuffer.free();
-    m_Chunk.free();
-    // m_SuperBrickBuffer.free();
-    // m_SuperBrick.free();
+    for (auto& chunk : m_Chunks) {
+        chunk.second.free();
+    }
+
     m_FeedbackBuffer.free();
 
     m_Staging.free();

@@ -140,10 +140,6 @@ vec4 calculateColour(in uint32_t superBrickIndex, in Brick brick, in ivec3 brick
     }
 
     return p_Chunk.chunks.superBricks.superBrick[superBrickIndex].colourBuffers.colours[brick.colourPointer + index];
-
-    // return vec4(index, vec3(brickIndex));
-    // return p_SuperBrick.superBrick.colourBuffers.colours[brick.colourPointer + index];
-    return vec4(1.);
 }
 
 vec3 removeInf(vec3 a)
@@ -272,10 +268,6 @@ void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, 
         uint32_t brickPointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
-
-            hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
-
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return;
             }
@@ -285,11 +277,11 @@ void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, 
 
             uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             if (previously_requested == 0) {
+                debugPrintfEXT("Unloaded Brick: %v3d", brickIndex);
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
-                    p_ToBeLoaded.toBeLoaded[writePointer].loadBrick = true;
-                    p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = brickIndex;
-                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = superBrick;
+                    p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = ivec4(brickIndex, 1);
+                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(superBrick, 0);
                 } else {
                     atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], previous);
                 }
@@ -352,7 +344,6 @@ HitRecord traverseChunk(in Ray ray)
     vec3 invDir = ray.invDir;
 
     vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
-    // vec3 rayEnd = ray.origin + ray.direction * tMax;
 
     vec3 entryPos = (rayStart - minBound) / (SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE);
 
@@ -388,26 +379,25 @@ HitRecord traverseChunk(in Ray ray)
         uint32_t pointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            // hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
             hit.hasHitSuperBrick = true;
 
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return hit;
             }
 
-            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
-
-            uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            if (previously_requested == 0) {
-                uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
-                if (writePointer < p_ToBeLoaded.maxSize) {
-                    p_ToBeLoaded.toBeLoaded[writePointer].loadSuperBrick = true;
-                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = brickIndex;
-                } else {
-                    atomicExchange(p_Chunk.chunks.data[index], previous);
-                }
-            }
+            // uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            // uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
+            //
+            // uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            // if (previously_requested == 0) {
+            //     uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
+            //     if (writePointer < p_ToBeLoaded.maxSize) {
+            //         p_ToBeLoaded.toBeLoaded[writePointer].loadSuperBrick = 1;
+            //         p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = brickIndex;
+            //     } else {
+            //         atomicExchange(p_Chunk.chunks.data[index], previous);
+            //     }
+            // }
 
             return hit;
         } else { // SuperBrick is already loaded
@@ -415,27 +405,9 @@ HitRecord traverseChunk(in Ray ray)
             {
                 vec3 superbrickMinbound = brickIndex * SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE;
 
-                // vec3 brickCenter = (brickIndex * BRICK_SIZE + vec3(BRICK_SIZE / 2)) * VOXEL_SIZE;
-                // float brickDistance = length(brickCenter - p_CameraPosition);
-
                 hit.normal = normal;
 
-                // if (previous.didHit && brickIndex == previous.brickHitIndex) {
-                //     previous.shouldCheck = true;
-                // } else {
-                //     previous.shouldCheck = false;
-                // }
-
-                // hit.hasHitBrick = true;
-                // hit.brickHitIndex = brickIndex;
-
-                // if (brickDistance > p_LODDistance) {
-                //     // Brick brick = p_SuperBrick.superBrick.bricksBuffer.bricks[brickPointer];
-                //     hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
-                //     return hit;
-                // } else {
                 traverseSuperBrick(ray, index, brickIndex, superbrickMinbound, iterations, hit);
-                // }
 
                 if (hit.hasHitSuperBrick && hit.hasHitBrick && hit.hasHitVoxel) {
                     return hit;
@@ -454,12 +426,6 @@ HitRecord traverseChunk(in Ray ray)
     hit.hasHitChunk = false;
     return hit;
 }
-
-vec3 calculateHitPosition(in HitRecord hit) {
-    return hit.brickHitIndex * BRICK_SIZE * VOXEL_SIZE + (hit.voxelHitIndex + 0.5 + hit.normal * 0.5) * VOXEL_SIZE;
-}
-
-#define HAS_HIT(hit) hit.hasHitVoxel && hit.hasHitBrick && hit.hasHitSuperBrick && hit.hasHitChunk
 
 void main()
 {

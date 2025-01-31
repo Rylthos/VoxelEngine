@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_map>
 #include <vulkan/vulkan.h>
 
 #include <condition_variable>
@@ -31,9 +32,16 @@ class ChunkGenerator {
     static void init(VkDevice m_Device, VmaAllocator allocator, Queue* computeQueue);
     static void free();
 
+    static void addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks);
+
+    static void requestBrick(
+        glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex);
+
   private:
     inline static VkDevice s_Device;
     inline static VmaAllocator s_Allocator;
+
+    inline static std::unordered_map<glm::ivec3, Chunk>* s_Chunks;
 
     inline static Queue* s_ComputeQueue;
     inline static VkPipeline s_GeneratePipeline;
@@ -45,14 +53,16 @@ class ChunkGenerator {
 
     inline static std::condition_variable_any s_CanGenerate;
     inline static PROF_LOCKABLE_MUTEX(std::mutex, s_GeneratedQueueLock, "Generated Queue Lock");
-    inline static PROF_LOCKABLE_MUTEX(std::mutex, s_BufferLock, "Buffer Lock");
-    inline static PROF_LOCKABLE_MUTEX(std::mutex, s_QueuedChangesLock, "Queued Changed Lock");
-    inline static PROF_LOCKABLE_MUTEX(std::mutex, s_LoadedLock, "ToBeLoaded Lock");
     inline static PROF_LOCKABLE_MUTEX(std::mutex, s_EnqueuedLock, "Enqueued Lock");
 
     inline static std::deque<glm::ivec3> s_ToBeGenerated;
     inline static std::unordered_set<glm::ivec3> s_Enqueued;
 
   private:
+    static glm::ivec3 localToWorldIndex(
+        glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex);
+
+    static std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> worldToLocalIndex(glm::ivec3 worldIndex);
+
     static void generationLoop(size_t id);
 };

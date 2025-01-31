@@ -22,6 +22,8 @@
 #define MAX_PLACEMENT_SIZE 64
 #define MIN_PLACEMENT_SIZE 1
 
+#define MAX_LOADED 256
+
 enum class PlacementType : int { Cube = 0, Sphere = 1, NUM_TYPES };
 
 static const char* PlacementTypeToString[] = {
@@ -44,10 +46,8 @@ struct Feedback {
 };
 
 struct LoadedData {
-    glm::ivec3 superBrickIndex;
-    bool loadSuperBrick;
-    glm::ivec3 brickIndex;
-    bool loadBrick;
+    glm::ivec4 superBrickIndex;
+    glm::ivec4 brickIndex;
 };
 
 struct VoxelPushConstants {
@@ -103,13 +103,12 @@ class SceneManager : public EventReceiver {
     VkDevice m_Device;
     VmaAllocator m_Allocator;
 
-    uint32_t m_MaxLoaded = 0;
     std::array<Buffer, FRAMES_IN_FLIGHT> m_ToBeLoaded;
     Buffer m_Staging;
 
     VoxelPushConstants m_VoxelPushConstants;
 
-    Chunk m_Chunk;
+    std::unordered_map<glm::ivec3, Chunk> m_Chunks;
     Buffer m_ChunkBuffer;
     // SuperBrick m_SuperBrick;
     // Buffer m_SuperBrickBuffer;
@@ -127,7 +126,6 @@ class SceneManager : public EventReceiver {
     uint32_t m_PlacementSize = MIN_PLACEMENT_SIZE;
 
   private:
-    glm::ivec3 worldToChunkPos(glm::vec3 position);
     void checkChunks(uint32_t currentFrame);
     void freeBuffers();
 

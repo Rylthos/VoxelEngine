@@ -50,14 +50,10 @@ class SuperBrick {
   public:
     SuperBrick();
 
-    void init(VkDevice device, VmaAllocator allocator, Queue* computeQueue);
+    void init(VkDevice device, VmaAllocator allocator);
     void free();
 
-    void addBrickToQueue(glm::ivec3 position);
-    void addBrickToQueue(uint32_t index);
-
-    bool isLoaded(glm::ivec3 position);
-    bool isLoaded(uint32_t index);
+    void loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick);
 
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
 
@@ -68,17 +64,6 @@ class SuperBrick {
     void changeVoxels(const std::vector<VoxelChange>& voxels, bool replace);
 
     SuperBrickStruct getStruct();
-
-    void reset();
-
-    size_t getBricksSize() { return m_GeneratedBricks.size(); }
-    size_t getQueued() { return m_ToBeGenerated.size(); }
-    size_t getFreeIndices() { return m_FreeIndices.size(); }
-    size_t getCurrentAllocation() { return m_CurrentPoolSize; }
-    size_t getCurrentColourAllocation() { return m_CurrentColourCount; }
-    size_t getCurrentColourAllocationSize() { return m_MaxColours; }
-    size_t getCurrentColourIndexSize() { return m_AvailableColourIndices.totalFree(); }
-    size_t getQueuedChanges() { return m_QueuedChanges.size(); }
 
   private:
     bool m_Initialized = false;
@@ -103,23 +88,9 @@ class SuperBrick {
     VkDevice m_Device;
     VmaAllocator m_Allocator;
 
-    Queue* m_ComputeQueue;
-    VkPipeline m_GeneratePipeline;
-    VkPipelineLayout m_GeneratePipelineLayout;
-
-    bool m_Running = false;
-    std::vector<std::thread> m_GenerationThreads;
-    size_t m_NumGenerationThreads = 4;
-
-    std::condition_variable_any m_CanGenerate;
-    PROF_LOCKABLE_MUTEX(std::mutex, m_GeneratedQueueLock, "Generated Queue Lock");
     PROF_LOCKABLE_MUTEX(std::mutex, m_BufferLock, "Buffer Lock");
     PROF_LOCKABLE_MUTEX(std::mutex, m_QueuedChangesLock, "Queued Changed Lock");
     PROF_LOCKABLE_MUTEX(std::mutex, m_LoadedLock, "ToBeLoaded Lock");
-    PROF_LOCKABLE_MUTEX(std::mutex, m_EnqueuedLock, "Enqueued Lock");
-
-    std::deque<glm::ivec3> m_ToBeGenerated;
-    std::unordered_set<glm::ivec3> m_Enqueued;
 
     std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, std::pair<VoxelOp, bool>>>
         m_QueuedChanges;

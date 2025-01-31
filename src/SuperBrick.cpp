@@ -20,11 +20,10 @@
 
 SuperBrick::SuperBrick() { }
 
-void SuperBrick::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
+void SuperBrick::init(VkDevice device, VmaAllocator allocator)
 {
     m_Device = device;
     m_Allocator = allocator;
-    m_ComputeQueue = computeQueue;
 
     for (size_t i = 0; i < m_CurrentPoolSize; i++) {
         m_FreeIndices.insert(i);
@@ -62,46 +61,19 @@ void SuperBrick::free()
     m_Colours.free();
 }
 
-void SuperBrick::addBrickToQueue(glm::ivec3 position)
+void SuperBrick::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick)
 {
-    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_GeneratedQueueLock);
-    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_EnqueuedLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
 
-    if (m_Bricks.contains(position))
+    glm::ivec3 brickIndex = std::get<2>(position);
+
+    if (m_Bricks.contains(brickIndex)) {
         return;
+    }
 
-    if (m_Enqueued.contains(position))
-        return;
-
-    if (m_ToBeLoaded.contains(position))
-        return;
-
-    m_Enqueued.insert(position);
-    m_ToBeGenerated.push_back(position);
-
-    m_CanGenerate.notify_one();
-}
-
-void SuperBrick::addBrickToQueue(uint32_t index)
-{
-    glm::ivec3 position { 0 };
-    position.x = index % SUPERBRICK_SIZE;
-    position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
-    position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
-
-    addBrickToQueue(position);
-}
-
-bool SuperBrick::isLoaded(glm::ivec3 position) { return m_Bricks.contains(position); }
-
-bool SuperBrick::isLoaded(uint32_t index)
-{
-    glm::ivec3 position { 0 };
-    position.x = index % SUPERBRICK_SIZE;
-    position.z = (index / SUPERBRICK_SIZE) % SUPERBRICK_SIZE;
-    position.y = (index / (SUPERBRICK_SIZE * SUPERBRICK_SIZE)) % SUPERBRICK_SIZE;
-
-    return isLoaded(position);
+    m_Bricks[brickIndex] = brick;
+    m_ToBeLoaded.insert(brickIndex);
 }
 
 void SuperBrick::placeVoxel(
@@ -231,31 +203,6 @@ SuperBrickStruct SuperBrick::getStruct()
         m_Struct.colour = m_Colours.getDeviceAddress(m_Device);
     }
     return m_Struct;
-}
-
-void SuperBrick::reset()
-{
-    m_CurrentPoolSize = 512;
-
-    m_FreeIndices.clear();
-    for (size_t i = 0; i < m_CurrentPoolSize; i++) {
-        m_FreeIndices.insert(i);
-    }
-
-    m_BrickPool.free();
-    m_BrickPool.create(m_Allocator, m_CurrentPoolSize * sizeof(BrickStruct),
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-            | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VMA_MEMORY_USAGE_GPU_ONLY);
-    m_Bricks.clear();
-    m_ToBeLoaded.clear();
-    m_GeneratedBricks.clear();
-    m_ToBeGenerated.clear();
-    m_Enqueued.clear();
-
-    for (size_t i = 0; i < m_Struct.data.size(); i++) {
-        m_Struct.data[i] = {};
-    }
 }
 
 void SuperBrick::transformChange(

@@ -10,6 +10,7 @@
 #include "Profilling.hpp"
 #include "SceneManager.hpp"
 #include "ShaderModule.hpp"
+#include "SuperBrick.hpp"
 #include "Timer.hpp"
 #include "VkCheck.hpp"
 
@@ -74,6 +75,42 @@ void ChunkGenerator::free()
 
     vkDestroyPipeline(s_Device, s_GeneratePipeline, nullptr);
     vkDestroyPipelineLayout(s_Device, s_GeneratePipelineLayout, nullptr);
+}
+
+void ChunkGenerator::addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks) { s_Chunks = chunks; }
+
+void ChunkGenerator::requestBrick(
+    glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex)
+{
+    glm::ivec3 worldIndex = localToWorldIndex(chunkIndex, superBrickIndex, brickIndex);
+
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_GeneratedQueueLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(s_EnqueuedLock);
+
+    if (s_Enqueued.contains(worldIndex))
+        return;
+
+    s_Enqueued.insert(worldIndex);
+    s_ToBeGenerated.push_back(worldIndex);
+
+    s_CanGenerate.notify_one();
+}
+
+glm::ivec3 ChunkGenerator::localToWorldIndex(
+    glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex)
+{
+    return chunkIndex * CHUNK_SIZE * SUPERBRICK_SIZE + superBrickIndex * SUPERBRICK_SIZE
+        + brickIndex;
+}
+
+std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> ChunkGenerator::worldToLocalIndex(
+    glm::ivec3 worldIndex)
+{
+    glm::ivec3 brickIndex = worldIndex % SUPERBRICK_SIZE;
+    glm::ivec3 superBrickIndex = (worldIndex / SUPERBRICK_SIZE) % CHUNK_SIZE;
+    glm::ivec3 chunkIndex = (worldIndex / (SUPERBRICK_SIZE * CHUNK_SIZE));
+
+    return { chunkIndex, superBrickIndex, brickIndex };
 }
 
 void ChunkGenerator::generationLoop(size_t id)
@@ -207,7 +244,6 @@ void ChunkGenerator::generationLoop(size_t id)
         }
 
         {
-            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(s_QueuedChangesLock);
             // if (s_QueuedChanges.contains(position)) {
             //     auto copy = m_QueuedChanges[position];
             //     for (auto p : copy) {
@@ -229,12 +265,13 @@ void ChunkGenerator::generationLoop(size_t id)
         //     m_Bricks[position] = brick;
         // }
 
-        // {
-        //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_LoadedLock);
-        //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_EnqueuedLock);
-        //     m_ToBeLoaded.insert(position);
-        //     m_Enqueued.erase(position);
-        // }
+        {
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_EnqueuedLock);
+            s_Enqueued.erase(position);
+        }
+
+        auto localPosition = worldToLocalIndex(position);
+        (*s_Chunks)[std::get<0>(localPosition)].loadBrick(localPosition, brick);
     }
 
     vkDestroyFence(s_Device, generationFence, nullptr);

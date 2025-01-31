@@ -1,6 +1,9 @@
 #include "Chunk.hpp"
 #include "SuperBrick.hpp"
 #include "VkBootstrap.h"
+
+#include <spdlog/spdlog.h>
+
 #include <vulkan/vulkan_core.h>
 
 Chunk::Chunk() { }
@@ -10,15 +13,18 @@ void Chunk::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
     m_Allocator = allocator;
     m_Device = device;
 
-    glm::ivec3 firstIndex = { 0, 0, 0 };
-    m_SuperBricks[firstIndex].init(device, allocator, computeQueue);
-    m_SuperBricks[firstIndex].addBrickToQueue(0);
-
     for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE; i++) {
-        m_ChunkStruct.data[i] = {};
-        m_ChunkStruct.data[i].loaded = 1;
-        m_ChunkStruct.data[i].empty_flag = 1;
+        m_ChunkStruct.data[i] = {
+            .loaded = 1,
+            .empty_flag = 1,
+        };
     }
+    m_ChunkStruct.data[0] = {
+        .loaded = 0,
+        .empty_flag = 0,
+    };
+
+    loadSuperBrick({ 0, 0, 0 });
 
     m_SuperBrickLocations.create(allocator, sizeof(SuperBrickStruct) * 1,
         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
@@ -36,23 +42,75 @@ void Chunk::free()
     m_Staging.free();
 }
 
+void Chunk::loadSuperBrick(glm::ivec3 index)
+{
+    if (index != glm::ivec3 { 0, 0, 0 })
+        return;
+
+    if (m_ChunkStruct.data[positionToIndex(index)].loaded)
+        return;
+
+    if (m_ToBeLoaded.contains(index))
+        return;
+
+    if (m_SuperBricks.contains(index))
+        return;
+
+    m_ToBeLoaded.insert(index);
+
+    m_SuperBricks[index].init(m_Device, m_Allocator);
+}
+
+void Chunk::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick)
+{
+    if (std::get<1>(position) != glm::ivec3 { 0, 0, 0 })
+        return;
+
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
+
+    m_SuperBricks[std::get<1>(position)].loadBrick(position, brick);
+    m_ToBeLoaded.insert(std::get<1>(position));
+}
+
 ChunkStruct Chunk::getStruct()
 {
-
-    if (m_SuperBricks[{ 0, 0, 0 }].isLoaded(0) && !m_Generated) {
-        m_Generated = true;
+    if (m_ToBeLoaded.size() != 0) {
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
 
         createStaging(sizeof(SuperBrickStruct));
 
-        std::vector<SuperBrickStruct> temp { m_SuperBricks[{ 0, 0, 0 }].getStruct() };
+        for (const auto& pos : m_ToBeLoaded) {
+            if (pos != glm::ivec3 { 0, 0, 0 })
+                continue;
 
-        m_ChunkStruct.data[0].empty_flag = 0;
-        m_ChunkStruct.data[0].pointer = 0;
+            size_t index = positionToIndex(pos);
 
-        m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
-        m_SuperBrickLocations.copyFromBuffer(m_Staging, sizeof(SuperBrickStruct) * 1);
+            SuperBrickStruct superBrick = m_SuperBricks[pos].getStruct();
+
+            bool isEmpty = true;
+            for (size_t i = 0; i < superBrick.data.size(); i++) {
+                if (superBrick.data[i].empty_flag == 0) {
+                    isEmpty = false;
+                    break;
+                }
+            }
+
+            m_ChunkStruct.data[index].loaded = 1;
+            m_ChunkStruct.data[index].empty_flag = isEmpty;
+            m_ChunkStruct.data[index].pointer = 0;
+            if (!isEmpty) {
+                std::vector<SuperBrickStruct> temp { superBrick };
+                m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
+                m_SuperBrickLocations.copyFromBuffer(m_Staging, sizeof(SuperBrickStruct) * 1);
+            }
+        }
+        m_ToBeLoaded.clear();
+
         m_ChunkStruct.pointers = m_SuperBrickLocations.getDeviceAddress(m_Device);
     }
+
     return m_ChunkStruct;
 }
 
