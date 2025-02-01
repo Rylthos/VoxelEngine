@@ -27,8 +27,6 @@ void Chunk::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
         m_FreeIndices.insert(i);
     }
 
-    loadSuperBrick({ 0, 0, 0 });
-
     m_SuperBrickLocations.create(allocator, sizeof(SuperBrickStruct) * m_CurrentPoolSize,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -58,14 +56,11 @@ void Chunk::loadSuperBrick(glm::ivec3 index)
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_UpdatedLock);
 
-    if (m_SuperBrickIndices.contains(index))
+    if (m_SuperBrickIndices.contains(index) || m_ToBeLoaded.contains(index)
+        || m_SuperBricks.contains(index)) {
+        spdlog::info("Already generated brick");
         return;
-
-    if (m_ToBeLoaded.contains(index))
-        return;
-
-    if (m_SuperBricks.contains(index))
-        return;
+    }
 
     m_ToBeLoaded.insert(index);
     m_SuperBricks[index].init(m_Device, m_Allocator);
@@ -78,7 +73,7 @@ void Chunk::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, B
 
     glm::ivec3 superBrickPosition = std::get<1>(position);
     if (!m_SuperBricks.contains(superBrickPosition)) {
-        spdlog::error("Loading brick before loaded: {}", glm::to_string(superBrickPosition));
+        spdlog::critical("Loading brick before loaded: {}", glm::to_string(superBrickPosition));
 
         return;
     }
@@ -117,6 +112,7 @@ ChunkStruct Chunk::getStruct()
                 m_ChunkStruct.data[index].empty_flag = 1;
                 continue;
             }
+            m_ChunkStruct.data[index].empty_flag = 0;
 
             if (m_FreeIndices.size() == 0) {
                 growPool(false);
@@ -127,7 +123,6 @@ ChunkStruct Chunk::getStruct()
             m_SuperBrickIndices[pos] = chosenIndex;
 
             m_ChunkStruct.data[index].pointer = chosenIndex;
-            m_ChunkStruct.data[index].requested = 0;
 
             std::vector<SuperBrickStruct> temp { superBrick };
             m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
@@ -157,18 +152,17 @@ ChunkStruct Chunk::getStruct()
 
             m_ChunkStruct.data[index].loaded = 1;
 
-            if (isEmpty) {
-                m_ChunkStruct.data[index].empty_flag = 1;
-                if (m_SuperBrickIndices.contains(pos)) {
-                    m_FreeIndices.insert(m_SuperBrickIndices[pos]);
-                    m_SuperBrickIndices.erase(pos);
-                }
-                continue;
-            }
+            // if (isEmpty) {
+            //     m_ChunkStruct.data[index].empty_flag = 1;
+            //     if (m_SuperBrickIndices.contains(pos)) {
+            //         m_FreeIndices.insert(m_SuperBrickIndices[pos]);
+            //         m_SuperBrickIndices.erase(pos);
+            //     }
+            //     continue;
+            // }
 
             uint16_t location = m_SuperBrickIndices[pos];
 
-            m_ChunkStruct.data[index].requested = 0;
             m_ChunkStruct.data[index].pointer = location;
             m_ChunkStruct.data[index].empty_flag = 0;
 

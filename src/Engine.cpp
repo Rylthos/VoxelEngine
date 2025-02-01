@@ -1079,8 +1079,8 @@ void Engine::render(float frameDelta)
 
     Image& renderImage = m_RenderAlt ? m_AltImage : m_DrawImage;
 
-    VkExtent3D dispatchSize = { .width = (uint32_t)std::ceil(drawExtent.width / 16.0),
-        .height = (uint32_t)std::ceil(drawExtent.height / 16.0),
+    VkExtent3D dispatchSize = { .width = (uint32_t)std::ceil(drawExtent.width / 8.0),
+        .height = (uint32_t)std::ceil(drawExtent.height / 8.0),
         .depth = 1
 
     };

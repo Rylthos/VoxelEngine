@@ -12,7 +12,7 @@
 
 #define PER_PIXEL
 
-layout(local_size_x = 16, local_size_y = 16) in;
+layout(local_size_x = 8, local_size_y = 8) in;
 
 layout(rgba16f, set = 1, binding = 0) uniform image2D o_HeatImage;
 
@@ -65,6 +65,7 @@ struct HitRecord {
     ivec3 normal;
     vec4 colour;
     vec3 position;
+    vec3 temp;
     int comparisons;
 };
 
@@ -86,6 +87,8 @@ HitRecord emptyHit()
     hit.chunkHitIndex = ivec3(0);
 
     hit.normal = ivec3(0);
+
+    hit.temp = vec3(-10.);
 
     return hit;
 }
@@ -151,14 +154,18 @@ vec3 removeInf(vec3 a)
     );
 }
 
-void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 minBound, inout int iterations, inout HitRecord hit)
+void traverseBrick(in Ray ray, in uint32_t superBrickIndex, in uint32_t brickPointer, in vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     const vec3 maxBound = minBound + vec3(BRICK_SIZE * VOXEL_SIZE);
 
     float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectBound) return;
+    if (!intersectBound) {
+        debugPrintfEXT("Failed Intersection Brick: %d | Min Bound: %v3f | Max bound: %v3f", superBrickIndex, minBound, maxBound);
+        hit.temp = vec3(-9);
+        return;
+    }
     hit.hasHitBrick = true;
 
     vec3 invDir = ray.invDir;
@@ -168,14 +175,17 @@ void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 mi
     vec3 entryPos = (rayStart - minBound) / VOXEL_SIZE;
 
     ivec3 voxelIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(BRICK_SIZE));
-    ivec3 stepDirection = dir_sign(ray.direction);
-    vec3 stepSize = invDir * stepDirection;
+    const ivec3 stepDirection = dir_sign(ray.direction);
+    const vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (voxelIndex - entryPos + max(stepDirection, 0)) * invDir;
-    ivec3 stepAxis = ivec3(0, 0, 0);
+
+    hit.temp = voxelIndex;
 
     bool hasStepped = false;
     ivec3 normal = hit.normal;
     float traversal = 0.;
+
+    const Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
 
     int count = 0;
     for (; iterations < p_MaxIterations; iterations++)
@@ -204,9 +214,8 @@ void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 mi
         }
 
         float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
-        stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
+        ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
-        // totalDistTraveled += stepSize * stepAxis;
         traversal = dot(removeInf(nextDist * stepAxis), vec3(1.));
         nextDist += stepSize * stepAxis;
         voxelIndex += stepDirection * stepAxis;
@@ -218,45 +227,48 @@ void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 mi
     return;
 }
 
-void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, vec3 minBound, inout int iterations, inout HitRecord hit)
+void traverseSuperBrick(in Ray ray, in uint32_t superBrickIndex, in ivec3 superBrick, in vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE * VOXEL_SIZE;
 
     float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectBound) return;
+    if (!intersectBound) {
+        debugPrintfEXT("Failed Intersection: %v3d | Min Bound: %v3f | Max bound: %v3f", superBrickIndex, minBound, maxBound);
+        hit.temp = vec3(-8);
+        return;
+    }
     hit.hasHitSuperBrick = true;
 
-    vec3 invDir = ray.invDir;
+    const vec3 invDir = ray.invDir;
 
-    vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
+    const vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
 
     vec3 entryPos = (rayStart - minBound) / (BRICK_SIZE * VOXEL_SIZE);
 
     ivec3 brickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(SUPER_BRICK_SIZE));
-    ivec3 stepDirection = dir_sign(ray.direction);
-    vec3 stepSize = invDir * stepDirection;
+    const ivec3 stepDirection = dir_sign(ray.direction);
+    const vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (brickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
     ivec3 normal = hit.normal;
 
     for (; iterations < p_MaxIterations; iterations++)
     {
-        bvec3 lower = lessThan(brickIndex, vec3(0));
-        bvec3 higher = greaterThanEqual(brickIndex, vec3(SUPER_BRICK_SIZE));
+        bvec3 lower = lessThan(brickIndex, ivec3(0));
+        bvec3 higher = greaterThanEqual(brickIndex, ivec3(SUPER_BRICK_SIZE));
         if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
+        {
+            hit.temp.x = -7;
             break;
+        }
 
         hit.comparisons++;
 
         uint32_t index = brickIndex.y * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE
                 + brickIndex.z * SUPER_BRICK_SIZE
                 + brickIndex.x;
-
-        if (index >= SUPER_BRICK_SIZE * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE) {
-            break;
-        }
 
         uint32_t data = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index];
 
@@ -265,12 +277,16 @@ void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, 
 
         uint32_t brickPointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
+        hit.hasHitBrick = true;
+        hit.hasHitVoxel = true;
+        hit.colour = vec4(vec3(brickIndex) / CHUNK_SIZE, 1.);
+
+        return;
+
         if (is_loaded == 0) {
             if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return;
             }
-
-            debugPrintfEXT("Requesting: %v3d | Data: %d", brickIndex, data);
 
             uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             uint32_t previous = atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], new_data);
@@ -286,36 +302,32 @@ void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, 
                 }
             }
 
+            hit.temp.y = 1;
+
             return;
         } else { // Brick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
-
-                vec3 brickMinBound = minBound + brickIndex * BRICK_SIZE * VOXEL_SIZE;
-
-                vec3 brickCenter = (brickIndex * BRICK_SIZE + vec3(BRICK_SIZE / 2)) * VOXEL_SIZE;
-                float brickDistance = length(brickCenter - p_CameraPosition);
+                const vec3 brickMinBound = minBound + brickIndex * BRICK_SIZE * VOXEL_SIZE;
 
                 hit.normal = normal;
+                hit.brickHitIndex = ivec3(brickMinBound);
 
-                hit.brickHitIndex = brickIndex;
+                traverseBrick(ray, superBrickIndex, brickPointer, brickMinBound, iterations, hit);
 
-                if (brickDistance > p_LODDistance) {
-                    hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
-                    return;
-                } else {
-                    traverseBrick(ray, brick, superBrickIndex, brickMinBound, iterations, hit);
-                }
-
-                if (hit.hasHitBrick && hit.hasHitVoxel) {
+                if (hit.hasHitBrick) {
                     return;
                 }
+
+                hit.temp.y = 2;
+            } else {
+                hit.temp.y = 3;
+                hit.temp.z = data;
             }
         }
 
-        float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
-        ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
+        const float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
+        const ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
         brickIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
@@ -340,14 +352,13 @@ HitRecord traverseChunk(in Ray ray)
 
     hit.comparisons = 0;
 
-    vec3 invDir = ray.invDir;
+    const vec3 invDir = ray.invDir;
 
-    vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
-
-    vec3 entryPos = (rayStart - minBound) / (SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE);
+    const vec3 rayStart = ray.origin + ray.direction * max(tMin + 0.0001, 0);
+    const vec3 entryPos = (rayStart - minBound) / (SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE);
 
     ivec3 brickIndex = clamp(ivec3(entryPos), ivec3(0), ivec3(CHUNK_SIZE));
-    ivec3 stepDirection = dir_sign(ray.direction);
+    const ivec3 stepDirection = dir_sign(ray.direction);
     vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (brickIndex - entryPos + max(stepDirection, 0)) * invDir;
 
@@ -378,27 +389,25 @@ HitRecord traverseChunk(in Ray ray)
         uint32_t pointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            if (brickIndex.y != 0 || brickIndex.z != 0) {} else {
-                if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
-                    return hit;
-                }
-
-                uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-                uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
-
-                uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-                if (previously_requested == 0) {
-                    uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
-                    if (writePointer < p_ToBeLoaded.maxSize) {
-                        p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = ivec4(0);
-                        p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(brickIndex, 1);
-                    } else {
-                        atomicExchange(p_Chunk.chunks.data[index], previous);
-                    }
-                }
-
+            if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return hit;
             }
+
+            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
+
+            uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            if (previously_requested == 0) {
+                uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
+                if (writePointer < p_ToBeLoaded.maxSize) {
+                    p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = ivec4(0);
+                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(brickIndex, 1);
+                } else {
+                    atomicExchange(p_Chunk.chunks.data[index], previous);
+                }
+            }
+
+            return hit;
         } else { // SuperBrick is already loaded
             if (is_empty == 0) // Not Empty
             {
@@ -409,14 +418,14 @@ HitRecord traverseChunk(in Ray ray)
 
                 traverseSuperBrick(ray, index, brickIndex, superbrickMinbound, iterations, hit);
 
-                if (hit.hasHitSuperBrick && hit.hasHitBrick && hit.hasHitVoxel) {
+                if (hit.hasHitSuperBrick) {
                     return hit;
                 }
             }
         }
 
-        float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
-        ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
+        const float closestDist = min(min(nextDist.x, nextDist.y), nextDist.z);
+        const ivec3 stepAxis = ivec3(lessThanEqual(nextDist, vec3(closestDist)));
 
         brickIndex += stepDirection * stepAxis;
         nextDist += stepSize * stepAxis;
@@ -469,8 +478,6 @@ void main()
         imageStore(o_Normal, texelCoord, ivec4(hit.normal, inShadow));
         imageStore(o_Colour, texelCoord, vec4(hit.colour.rgb, 1.));
     }
-
-    imageStore(o_Normal, texelCoord, ivec4(hit.normal, 0));
 
     if (hit.comparisons >= 0) {
         vec4 lowestHitColour = vec4(0.5, 0., 0.5, 1.0);
