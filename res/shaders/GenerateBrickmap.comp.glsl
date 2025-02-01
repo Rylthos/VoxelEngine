@@ -16,15 +16,12 @@ layout(buffer_reference, std430) buffer ColourBuffer {
 };
 
 layout(buffer_reference, std430) buffer GenerationData {
-    uint32_t numSolidVoxels;
     int colourSumR;
     int colourSumG;
     int colourSumB;
-    uint64_t solidMask[8];
 };
 
 layout(push_constant) uniform constants {
-    // uint32_t p_Seed;
     ivec3 p_BrickIndex;
     int _1;
     ivec3 p_WorldPosition;
@@ -38,10 +35,10 @@ uint getIndex(in uvec3 position) {
 }
 
 void setVoxel(in uvec3 position, in vec3 colour) {
-    uint mask = position.x + position.z * 8;
-    atomicAdd(p_Data.solidMask[position.y], mask);
+    // uint mask = position.x + position.z * 8;
+    // atomicAdd(p_Data.solidMask[position.y], mask);
     p_Colours.colours[getIndex(position)] = vec4(colour, 1.);
-    atomicAdd(p_Data.numSolidVoxels, 1);
+    // atomicAdd(p_Data.numSolidVoxels, 1);
 
     atomicAdd(p_Data.colourSumR, int(clamp(colour.r * 255., 0., 255.)));
     atomicAdd(p_Data.colourSumG, int(clamp(colour.g * 255., 0., 255.)));
@@ -67,13 +64,13 @@ void main() {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
 
     ivec3 worldPosition = p_WorldPosition + ivec3(currentIndex);
-    vec3 uv = vec3(worldPosition);
-    uv.y -= 40.;
-    uv.y = -(uv.y / 1.5);
-
-    uv.xz /= 50.;
-
-    float value = height(uv) * 10.;
+    // vec3 uv = vec3(worldPosition);
+    // uv.y -= 40.;
+    // uv.y = -(uv.y / 1.5);
+    //
+    // uv.xz /= 50.;
+    //
+    // float value = height(uv) * 10.;
 
     setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
 

@@ -5,6 +5,7 @@
 
 #include <format>
 
+#include "Brick.hpp"
 #include "Chunk.hpp"
 #include "Descriptors.hpp"
 #include "Profilling.hpp"
@@ -84,8 +85,9 @@ void ChunkGenerator::requestBrick(
 {
     glm::ivec3 worldIndex = localToWorldIndex(chunkIndex, superBrickIndex, brickIndex);
 
-    spdlog::info("Loading: {} | {} | {} -> {}", glm::to_string(chunkIndex),
-        glm::to_string(superBrickIndex), glm::to_string(brickIndex), glm::to_string(worldIndex));
+    if ((*s_Chunks)[chunkIndex].hasGenerated(superBrickIndex, brickIndex)) {
+        return;
+    }
 
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_GeneratedQueueLock);
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(s_EnqueuedLock);
@@ -236,41 +238,22 @@ void ChunkGenerator::generationLoop(size_t id)
             = (const glm::vec4*)(generatedColour.getAllocationInfo().pMappedData);
 
         Brick brick;
-        if (data->solidVoxels != 0) {
-            for (int y = 0; y < BRICK_SIZE; y++) {
-                for (int z = 0; z < BRICK_SIZE; z++) {
-                    for (int x = 0; x < BRICK_SIZE; x++) {
-                        uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
-                        glm::ivec3 voxelIndex = { x, y, z };
-                        if (colour_data[index].a >= 0) {
-                            brick.setVoxel(voxelIndex, colour_data[index], true);
-                        }
+        for (int y = 0; y < BRICK_SIZE; y++) {
+            for (int z = 0; z < BRICK_SIZE; z++) {
+                for (int x = 0; x < BRICK_SIZE; x++) {
+                    uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
+                    glm::ivec3 voxelIndex = { x, y, z };
+                    if (colour_data[index].a >= 0) {
+                        brick.setVoxel(voxelIndex, colour_data[index], true);
                     }
                 }
             }
         }
 
-        {
-            // if (s_QueuedChanges.contains(position)) {
-            //     auto copy = m_QueuedChanges[position];
-            //     for (auto p : copy) {
-            //         if (std::holds_alternative<ERASE_OP>(p.second.first)) {
-            //             brick.setAir(p.first);
-            //         } else if (std::holds_alternative<PLACE_OP>(p.second.first)) {
-            //             brick.setVoxel(
-            //                 p.first, std::get<PLACE_OP>(p.second.first), p.second.second);
-            //         }
-            //     }
-            //
-            //     m_QueuedChanges.erase(position);
-            // }
-        }
-        Timer::stopTimer(timerString);
+        memset((void*)data, 0, sizeof(GenerationData));
+        memset((void*)colour_data, 0, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE);
 
-        // {
-        //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(s_BufferLock);
-        //     m_Bricks[position] = brick;
-        // }
+        Timer::stopTimer(timerString);
 
         {
             std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_EnqueuedLock);

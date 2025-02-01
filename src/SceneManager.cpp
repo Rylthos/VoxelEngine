@@ -216,6 +216,7 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("LOD Distance");
             ImGui::SliderFloat("##LODDistance", &m_VoxelPushConstants.lodDistance, 10.f, 1000.f);
 
+            ImGui::Text("Generation Queue: %ld", ChunkGenerator::getQueueSize());
             // ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
             // ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
             // ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
@@ -337,12 +338,16 @@ void SceneManager::checkChunks(uint32_t currentFrame)
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
             if (l.brickIndex.a != 0) {
+                spdlog::info("Loading Brick: {} | {}",
+                    glm::to_string(glm::ivec3(l.superBrickIndex)),
+                    glm::to_string(glm::ivec3(l.brickIndex)));
                 ChunkGenerator::requestBrick(
                     { 0, 0, 0 }, glm::ivec3(l.superBrickIndex), glm::ivec3(l.brickIndex));
             } else if (l.superBrickIndex.a != 0) {
-                // spdlog::error(
-                //     "Load superbrick : {}", glm::to_string(glm::ivec3(l.superBrickIndex)));
-                // m_Chunks[{ 0, 0, 0 }].loadSuperBrick(glm::ivec3(l.superBrickIndex));
+                spdlog::info(
+                    "Loading Super brick: {}", glm::to_string(glm::ivec3(l.superBrickIndex)));
+
+                m_Chunks[{ 0, 0, 0 }].loadSuperBrick(glm::ivec3(l.superBrickIndex));
             }
         }
     }

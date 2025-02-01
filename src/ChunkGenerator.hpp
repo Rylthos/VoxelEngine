@@ -25,6 +25,12 @@ struct GenerationPushConstants {
     VkDeviceAddress colours;
 };
 
+struct GenerationData {
+    int colourSumR;
+    int colourSumG;
+    int colourSumB;
+};
+
 class ChunkGenerator {
   public:
     ChunkGenerator() = delete;
@@ -36,6 +42,8 @@ class ChunkGenerator {
 
     static void requestBrick(
         glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex);
+
+    static size_t getQueueSize() { return s_ToBeGenerated.size(); }
 
   private:
     inline static VkDevice s_Device;

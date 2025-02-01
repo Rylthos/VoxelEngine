@@ -28,7 +28,6 @@ void Chunk::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
     }
 
     loadSuperBrick({ 0, 0, 0 });
-    loadSuperBrick({ 1, 0, 0 });
 
     m_SuperBrickLocations.create(allocator, sizeof(SuperBrickStruct) * m_CurrentPoolSize,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
@@ -44,6 +43,14 @@ void Chunk::free()
 
     m_SuperBrickLocations.free();
     m_Staging.free();
+}
+
+bool Chunk::hasGenerated(glm::ivec3 chunkIndex, glm::ivec3 brickIndex)
+{
+    if (!m_SuperBricks.contains(chunkIndex))
+        return false;
+
+    return m_SuperBricks[chunkIndex].hasGenerated(brickIndex);
 }
 
 void Chunk::loadSuperBrick(glm::ivec3 index)
@@ -98,6 +105,11 @@ ChunkStruct Chunk::getStruct()
                     isEmpty = false;
                     break;
                 }
+
+                if (superBrick.data[i].loaded == 0) {
+                    isEmpty = false;
+                    break;
+                }
             }
 
             m_ChunkStruct.data[index].loaded = 1;
@@ -115,6 +127,7 @@ ChunkStruct Chunk::getStruct()
             m_SuperBrickIndices[pos] = chosenIndex;
 
             m_ChunkStruct.data[index].pointer = chosenIndex;
+            m_ChunkStruct.data[index].requested = 0;
 
             std::vector<SuperBrickStruct> temp { superBrick };
             m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
@@ -134,7 +147,7 @@ ChunkStruct Chunk::getStruct()
 
             bool isEmpty = true;
             for (size_t i = 0; i < superBrick.data.size(); i++) {
-                if (superBrick.data[i].empty_flag == 0) {
+                if (superBrick.data[i].empty_flag == 0 || superBrick.data[i].loaded == 0) {
                     isEmpty = false;
                     break;
                 }
@@ -142,17 +155,27 @@ ChunkStruct Chunk::getStruct()
 
             size_t index = positionToIndex(pos);
 
+            m_ChunkStruct.data[index].loaded = 1;
+
+            if (isEmpty) {
+                m_ChunkStruct.data[index].empty_flag = 1;
+                if (m_SuperBrickIndices.contains(pos)) {
+                    m_FreeIndices.insert(m_SuperBrickIndices[pos]);
+                    m_SuperBrickIndices.erase(pos);
+                }
+                continue;
+            }
+
             uint16_t location = m_SuperBrickIndices[pos];
 
+            m_ChunkStruct.data[index].requested = 0;
             m_ChunkStruct.data[index].pointer = location;
-            m_ChunkStruct.data[index].empty_flag = isEmpty;
+            m_ChunkStruct.data[index].empty_flag = 0;
 
-            if (!isEmpty) {
-                std::vector<SuperBrickStruct> temp { superBrick };
-                m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
-                m_SuperBrickLocations.copyFromBuffer(
-                    m_Staging, sizeof(SuperBrickStruct), 0, location * sizeof(SuperBrickStruct));
-            }
+            std::vector<SuperBrickStruct> temp { superBrick };
+            m_Staging.copyFromData_CPUOnly<SuperBrickStruct>(temp);
+            m_SuperBrickLocations.copyFromBuffer(
+                m_Staging, sizeof(SuperBrickStruct), 0, location * sizeof(SuperBrickStruct));
         }
 
         m_ToBeUpdated.clear();

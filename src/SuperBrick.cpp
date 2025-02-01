@@ -61,6 +61,15 @@ void SuperBrick::free()
     m_Colours.free();
 }
 
+bool SuperBrick::hasGenerated(glm::ivec3 brickIndex)
+{
+    if (!m_Bricks.contains(brickIndex)) {
+        return false;
+    }
+
+    return true;
+}
+
 void SuperBrick::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick)
 {
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
@@ -118,16 +127,14 @@ SuperBrickStruct SuperBrick::getStruct()
         size_t colourOffset = 0;
 
         for (glm::ivec3 p : m_ToBeLoaded) {
-            if (m_GeneratedBricks.contains(p))
-                continue;
-
             Brick& brick = m_Bricks[p];
             size_t index = p.x + p.z * SUPERBRICK_SIZE + p.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
 
             auto brickStruct = brick.getStruct();
 
+            m_Struct.data[index].loaded = 1;
+
             if (!brickStruct.has_value()) {
-                m_Struct.data[index].loaded = 1;
                 m_Struct.data[index].empty_flag = 1;
                 continue;
             }
@@ -149,7 +156,6 @@ SuperBrickStruct SuperBrick::getStruct()
             m_GeneratedBricks[p] = chosenIndex;
 
             m_Struct.data[index].pointer = chosenIndex;
-            m_Struct.data[index].loaded = 1;
             m_Struct.data[index].empty_flag = 0;
 
             m_FreeIndices.erase(chosenIndex);

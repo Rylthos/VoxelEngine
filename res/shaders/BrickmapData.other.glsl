@@ -33,8 +33,7 @@ layout(buffer_reference, std430) readonly buffer ColourBuffers {
 struct SuperBrick {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
     // Unloaded:     LOD: 8 | LOD: 8 | LOD:     12 | Flags: 3 | 0
-
-    uint32_t data[16 * 16 * 16];
+    uint32_t data[SUPER_BRICK_SIZE * SUPER_BRICK_SIZE * SUPER_BRICK_SIZE];
     BrickBuffer bricksBuffer;
     ColourBuffers colourBuffers;
 };
@@ -60,7 +59,7 @@ struct Chunk {
     // Empty/Loaded: UNUSED: 8 | LOD: 8 | Pointer: 12 | Flags: 3 | 1
     // Unloaded:     LOD: 8 | LOD: 8 | LOD:     12 | Flags: 3 | 0
 
-    uint32_t data[16 * 16 * 16];
+    uint32_t data[CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
     SuperBrickBuffer superBricks;
 };
 

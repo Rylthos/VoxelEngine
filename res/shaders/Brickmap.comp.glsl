@@ -198,11 +198,8 @@ void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 mi
             hit.hasHitVoxel = true;
             hit.voxelHitIndex = voxelIndex;
             hit.normal = normal;
-            #ifdef PER_PIXEL
+
             hit.position = rayStart + removeInf(ray.direction * traversal * VOXEL_SIZE);
-            #else
-            hit.position = hit.brickHitIndex * BRICK_SIZE + hit.voxelHitIndex + hit.normal * 0.5;
-            #endif
             return;
         }
 
@@ -223,8 +220,9 @@ void traverseBrick(Ray ray, in Brick brick, in uint32_t superBrickIndex, vec3 mi
 
 void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, vec3 minBound, inout int iterations, inout HitRecord hit)
 {
-    float tMin, tMax;
     const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE * VOXEL_SIZE;
+
+    float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
     if (!intersectBound) return;
@@ -272,12 +270,13 @@ void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, 
                 return;
             }
 
+            debugPrintfEXT("Requesting: %v3d | Data: %d", brickIndex, data);
+
             uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             uint32_t previous = atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], new_data);
 
             uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             if (previously_requested == 0) {
-                debugPrintfEXT("Unloaded Brick: %v3d", brickIndex);
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
                     p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = ivec4(brickIndex, 1);
@@ -293,7 +292,7 @@ void traverseSuperBrick(in Ray ray, uint32_t superBrickIndex, ivec3 superBrick, 
             {
                 Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
 
-                vec3 brickMinBound = brickIndex * BRICK_SIZE * VOXEL_SIZE;
+                vec3 brickMinBound = minBound + brickIndex * BRICK_SIZE * VOXEL_SIZE;
 
                 vec3 brickCenter = (brickIndex * BRICK_SIZE + vec3(BRICK_SIZE / 2)) * VOXEL_SIZE;
                 float brickDistance = length(brickCenter - p_CameraPosition);
@@ -379,30 +378,34 @@ HitRecord traverseChunk(in Ray ray)
         uint32_t pointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+            if (brickIndex.y != 0 || brickIndex.z != 0) {} else {
+                if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+                    return hit;
+                }
+
+                uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+                uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
+
+                uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+                if (previously_requested == 0) {
+                    uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
+                    if (writePointer < p_ToBeLoaded.maxSize) {
+                        p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = ivec4(0);
+                        p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(brickIndex, 1);
+                    } else {
+                        atomicExchange(p_Chunk.chunks.data[index], previous);
+                    }
+                }
+
                 return hit;
             }
-
-            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
-
-            uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            if (previously_requested == 0) {
-                uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
-                if (writePointer < p_ToBeLoaded.maxSize) {
-                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(brickIndex, 1);
-                } else {
-                    atomicExchange(p_Chunk.chunks.data[index], previous);
-                }
-            }
-
-            return hit;
         } else { // SuperBrick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                vec3 superbrickMinbound = brickIndex * SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE;
+                vec3 superbrickMinbound = minBound + brickIndex * SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE;
 
                 hit.normal = normal;
+                hit.superBrickHitIndex = brickIndex;
 
                 traverseSuperBrick(ray, index, brickIndex, superbrickMinbound, iterations, hit);
 
@@ -466,6 +469,8 @@ void main()
         imageStore(o_Normal, texelCoord, ivec4(hit.normal, inShadow));
         imageStore(o_Colour, texelCoord, vec4(hit.colour.rgb, 1.));
     }
+
+    imageStore(o_Normal, texelCoord, ivec4(hit.normal, 0));
 
     if (hit.comparisons >= 0) {
         vec4 lowestHitColour = vec4(0.5, 0., 0.5, 1.0);

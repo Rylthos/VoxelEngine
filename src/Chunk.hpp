@@ -29,6 +29,8 @@ class Chunk {
 
     void free();
 
+    bool hasGenerated(glm::ivec3 chunkIndex, glm::ivec3 brickIndex);
+
     void loadSuperBrick(glm::ivec3 index);
 
     void loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3>, Brick& brick);
@@ -59,7 +61,7 @@ class Chunk {
   private:
     size_t positionToIndex(glm::ivec3 index)
     {
-        return index.x + index.z * SUPERBRICK_SIZE + index.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
+        return index.x + index.z * CHUNK_SIZE + index.y * CHUNK_SIZE * CHUNK_SIZE;
     }
 
     void growPool(bool preserveStaging);
