@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <concepts>
 #include <glm/gtx/string_cast.hpp>
 #include <iterator>
 #include <memory>
@@ -12,12 +13,14 @@
 #include "Chunk.hpp"
 #include "ChunkGenerator.hpp"
 #include "Constants.hpp"
+#include "SuperBrick.hpp"
 #include "Timer.hpp"
 
 #include "Events.hpp"
 #include "imgui.h"
 #include "spdlog/fmt/bundled/core.h"
 #include <GLFW/glfw3.h>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 // #include "ChunkGenerator.hpp"
@@ -94,6 +97,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
 
     m_VoxelPushConstants.sunDirection = glm::vec4(0, -1, 0, 1);
     m_VoxelPushConstants.lodDistance = 500.f;
+    m_VoxelPushConstants.loadVoxels = true;
 
     ChunkGenerator::addChunks(&m_Chunks);
 }
@@ -216,6 +220,8 @@ void SceneManager::receive(const Event* event)
             ImGui::Text("LOD Distance");
             ImGui::SliderFloat("##LODDistance", &m_VoxelPushConstants.lodDistance, 10.f, 1000.f);
 
+            ImGui::Checkbox("Load Voxels", (bool*)&m_VoxelPushConstants.loadVoxels);
+
             ImGui::Text("Generation Queue: %ld", ChunkGenerator::getQueueSize());
             // ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
             // ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
@@ -311,9 +317,10 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
 
     createStaging(sizeof(SuperBrickStruct));
 
+    // m_Staging.copyFromBuffer(m_ChunkBuffer, sizeof(ChunkStruct));
     std::vector<ChunkStruct> temp = { m_Chunks[{ 0, 0, 0 }].getStruct() };
-    m_Staging.copyFromData_CPUOnly<ChunkStruct>(temp);
-    m_ChunkBuffer.copyFromBuffer(m_Staging, sizeof(ChunkStruct));
+    memcpy(m_ChunkBuffer.getAllocationInfo().pMappedData, temp.data(), sizeof(ChunkStruct));
+    // m_ChunkBuffer.copyFromBuffer(m_Staging, sizeof(ChunkStruct));
 
     m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
     m_VoxelPushConstants.chunk = m_ChunkBuffer.getDeviceAddress(m_Device);
@@ -333,19 +340,44 @@ void SceneManager::checkChunks(uint32_t currentFrame)
 
     const LoadedData* loaded = (const LoadedData*)(data + 4);
 
+    static std::unordered_map<glm::ivec3, uint32_t> cache;
+
+    glm::ivec3 chunkPos = { 0, 0, 0 };
+
     uint32_t length = std::min(data[0], data[1]);
     if (length != 0) {
+        spdlog::info("New Request");
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
             if (l.brickIndex.a != 0) {
-                // spdlog::info("Loading Brick: {} | {}",
-                //     glm::to_string(glm::ivec3(l.superBrickIndex)),
-                //     glm::to_string(glm::ivec3(l.brickIndex)));
+                glm::ivec3 converted
+                    = glm::ivec3(l.superBrickIndex) * SUPERBRICK_SIZE + glm::ivec3(l.brickIndex);
 
-                ChunkGenerator::requestBrick(
-                    { 0, 0, 0 }, glm::ivec3(l.superBrickIndex), glm::ivec3(l.brickIndex));
+                spdlog::info("Requesting: {} | {}", glm::to_string(l.superBrickIndex),
+                    glm::to_string(l.brickIndex));
+
+                if (cache.contains(converted)) {
+                    spdlog::info(
+                        "Double request: {} | {}", glm::to_string(converted), cache[converted]);
+                    cache[converted] += 1;
+                    continue;
+                } else {
+                    cache.insert({ converted, 1 });
+                }
+
+                auto localPosition = LocalChunkPosition { chunkPos, glm::ivec3(l.superBrickIndex),
+                    glm::ivec3(l.brickIndex) };
+
+                m_Chunks[chunkPos].setRequestedBrick(localPosition);
+
+                ChunkGenerator::requestBrick(localPosition);
+
             } else if (l.superBrickIndex.a != 0) {
-                m_Chunks[{ 0, 0, 0 }].loadSuperBrick(glm::ivec3(l.superBrickIndex));
+                m_Chunks[chunkPos].setRequested({
+                    chunkPos, glm::ivec3(l.superBrickIndex), { 0, 0, 0 }
+                });
+
+                m_Chunks[chunkPos].loadSuperBrick(glm::ivec3(l.superBrickIndex));
             }
         }
     }
@@ -381,6 +413,7 @@ void SceneManager::createStaging(size_t size)
 
     m_Staging.free();
 
-    m_Staging.create(m_Allocator, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_AUTO,
+    m_Staging.create(m_Allocator, size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
 }

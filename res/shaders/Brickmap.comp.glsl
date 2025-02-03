@@ -38,7 +38,7 @@ layout(push_constant) uniform constants {
 
     vec4 p_SunDir;
 
-    float _1;
+    int p_LoadVoxels;
     uint32_t p_MaxDepthShown;
     uint32_t p_LOD;
     float p_LODDistance;
@@ -65,7 +65,6 @@ struct HitRecord {
     ivec3 normal;
     vec4 colour;
     vec3 position;
-    vec3 temp;
     int comparisons;
 };
 
@@ -87,8 +86,6 @@ HitRecord emptyHit()
     hit.chunkHitIndex = ivec3(0);
 
     hit.normal = ivec3(0);
-
-    hit.temp = vec3(-10.);
 
     return hit;
 }
@@ -161,11 +158,8 @@ void traverseBrick(in Ray ray, in uint32_t superBrickIndex, in uint32_t brickPoi
     float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectBound) {
-        debugPrintfEXT("Failed Intersection Brick: %d | Min Bound: %v3f | Max bound: %v3f", superBrickIndex, minBound, maxBound);
-        hit.temp = vec3(-9);
-        return;
-    }
+    if (!intersectBound) return;
+
     hit.hasHitBrick = true;
 
     vec3 invDir = ray.invDir;
@@ -178,8 +172,6 @@ void traverseBrick(in Ray ray, in uint32_t superBrickIndex, in uint32_t brickPoi
     const ivec3 stepDirection = dir_sign(ray.direction);
     const vec3 stepSize = invDir * stepDirection;
     vec3 nextDist = (voxelIndex - entryPos + max(stepDirection, 0)) * invDir;
-
-    hit.temp = voxelIndex;
 
     bool hasStepped = false;
     ivec3 normal = hit.normal;
@@ -227,18 +219,15 @@ void traverseBrick(in Ray ray, in uint32_t superBrickIndex, in uint32_t brickPoi
     return;
 }
 
-void traverseSuperBrick(in Ray ray, in uint32_t superBrickIndex, in ivec3 superBrick, in vec3 minBound, inout int iterations, inout HitRecord hit)
+void traverseSuperBrick(in Ray ray, in ivec3 superBrickPosition, in uint32_t superBrickIndex, in vec3 minBound, inout int iterations, inout HitRecord hit)
 {
     const vec3 maxBound = minBound + vec3(SUPER_BRICK_SIZE) * BRICK_SIZE * VOXEL_SIZE;
 
     float tMin, tMax;
     bool intersectBound = rayBoxIntersect(ray, minBound, maxBound, 0.0, 1000000.0, tMin, tMax);
 
-    if (!intersectBound) {
-        debugPrintfEXT("Failed Intersection: %v3d | Min Bound: %v3f | Max bound: %v3f", superBrickIndex, minBound, maxBound);
-        hit.temp = vec3(-8);
-        return;
-    }
+    if (!intersectBound) return;
+
     hit.hasHitSuperBrick = true;
 
     const vec3 invDir = ray.invDir;
@@ -260,7 +249,6 @@ void traverseSuperBrick(in Ray ray, in uint32_t superBrickIndex, in ivec3 superB
         bvec3 higher = greaterThanEqual(brickIndex, ivec3(SUPER_BRICK_SIZE));
         if (lower.x || lower.y || lower.z || higher.x || higher.y || higher.z)
         {
-            hit.temp.x = -7;
             break;
         }
 
@@ -273,41 +261,42 @@ void traverseSuperBrick(in Ray ray, in uint32_t superBrickIndex, in ivec3 superB
         uint32_t data = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index];
 
         uint32_t is_loaded = bitfieldExtract(data, SUPER_BRICK_IS_LOADED_OFFSET, SUPER_BRICK_IS_LOADED_SIZE);
+        uint32_t requested = bitfieldExtract(data, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+
         uint32_t is_empty = bitfieldExtract(data, SUPER_BRICK_IS_EMPTY_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
 
         uint32_t brickPointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
-        hit.hasHitBrick = true;
-        hit.hasHitVoxel = true;
-        hit.colour = vec4(vec3(brickIndex) / CHUNK_SIZE, 1.);
-
-        return;
-
         if (is_loaded == 0) {
-            if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+            if (p_LoadVoxels == 0 || requested == 1 || p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return;
             }
 
-            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            uint32_t previous = atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], new_data);
+            uint32_t mask = bitfieldInsert(0, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            uint32_t previous = atomicOr(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], mask);
 
             uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+
             if (previously_requested == 0) {
                 uint32_t writePointer = atomicAdd(p_ToBeLoaded.currentPointer, 1);
                 if (writePointer < p_ToBeLoaded.maxSize) {
                     p_ToBeLoaded.toBeLoaded[writePointer].brickIndex = ivec4(brickIndex, 1);
-                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(superBrick, 0);
+                    p_ToBeLoaded.toBeLoaded[writePointer].superBrickIndex = ivec4(superBrickPosition, 0);
                 } else {
                     atomicExchange(p_Chunk.chunks.superBricks.superBrick[superBrickIndex].data[index], previous);
                 }
             }
 
-            hit.temp.y = 1;
-
             return;
         } else { // Brick is already loaded
             if (is_empty == 0) // Not Empty
             {
+                // hit.hasHitBrick = true;
+                // hit.hasHitVoxel = true;
+                // hit.colour = vec4(vec3(brickIndex) / CHUNK_SIZE, 1.);
+                //
+                // return;
+
                 const vec3 brickMinBound = minBound + brickIndex * BRICK_SIZE * VOXEL_SIZE;
 
                 hit.normal = normal;
@@ -318,11 +307,6 @@ void traverseSuperBrick(in Ray ray, in uint32_t superBrickIndex, in ivec3 superB
                 if (hit.hasHitBrick) {
                     return;
                 }
-
-                hit.temp.y = 2;
-            } else {
-                hit.temp.y = 3;
-                hit.temp.z = data;
             }
         }
 
@@ -384,17 +368,18 @@ HitRecord traverseChunk(in Ray ray)
         uint32_t data = p_Chunk.chunks.data[index];
 
         uint32_t is_loaded = bitfieldExtract(data, SUPER_BRICK_IS_LOADED_OFFSET, SUPER_BRICK_IS_LOADED_SIZE);
+        uint32_t requested = bitfieldExtract(data, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
         uint32_t is_empty = bitfieldExtract(data, SUPER_BRICK_IS_EMPTY_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
 
         uint32_t pointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            if (p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+            if (p_LoadVoxels == 0 || requested == 1 || p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return hit;
             }
 
-            uint32_t new_data = bitfieldInsert(data, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
-            uint32_t previous = atomicExchange(p_Chunk.chunks.data[index], new_data);
+            uint32_t mask = bitfieldInsert(0, 1, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
+            uint32_t previous = atomicOr(p_Chunk.chunks.data[index], mask);
 
             uint32_t previously_requested = bitfieldExtract(previous, SUPER_BRICK_REQUESTED_FLAG_OFFSET, SUPER_BRICK_FLAG_SIZE);
             if (previously_requested == 0) {
@@ -416,7 +401,7 @@ HitRecord traverseChunk(in Ray ray)
                 hit.normal = normal;
                 hit.superBrickHitIndex = brickIndex;
 
-                traverseSuperBrick(ray, index, brickIndex, superbrickMinbound, iterations, hit);
+                traverseSuperBrick(ray, brickIndex, pointer, superbrickMinbound, iterations, hit);
 
                 if (hit.hasHitSuperBrick) {
                     return hit;
@@ -458,20 +443,19 @@ void main()
             vec3(p_CameraRight),
             vec3(p_CameraUp), p_AspectRatio);
 
-    ivec3 brickIndex;
     HitRecord hit = traverseChunk(ray);
 
     vec4 colour = vec4(0.);
     if (hit.hasHitBrick) {
         bool inShadow = false;
 
-        if (hit.hasHitVoxel) {
-            Ray shadowRay = createRay(hit.position, p_SunDir.xyz);
-
-            HitRecord shadow = traverseChunk(shadowRay);
-
-            inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
-        }
+        // if (hit.hasHitVoxel) {
+        //     Ray shadowRay = createRay(hit.position, p_SunDir.xyz);
+        //
+        //     HitRecord shadow = traverseChunk(shadowRay);
+        //
+        //     inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
+        // }
 
         vec3 positionOffset = hit.position - p_CameraPosition;
         imageStore(o_Position, texelCoord, vec4(positionOffset, hit.hasHitVoxel));

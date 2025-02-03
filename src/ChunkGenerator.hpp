@@ -15,6 +15,7 @@
 #include "Chunk.hpp"
 #include "Profilling.hpp"
 #include "Queue.hpp"
+#include "spdlog/common.h"
 
 struct GenerationPushConstants {
     glm::ivec3 brickIndex;
@@ -40,8 +41,7 @@ class ChunkGenerator {
 
     static void addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks);
 
-    static void requestBrick(
-        glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex);
+    static void requestBrick(LocalChunkPosition position);
 
     static size_t getQueueSize() { return s_ToBeGenerated.size(); }
 
@@ -57,7 +57,7 @@ class ChunkGenerator {
 
     inline static bool s_Running = false;
     inline static std::vector<std::thread> s_GenerationThreads;
-    inline static size_t s_NumGenerationThreads = 4;
+    const inline static size_t s_NumGenerationThreads = 8;
 
     inline static std::condition_variable_any s_CanGenerate;
     inline static PROF_LOCKABLE_MUTEX(std::mutex, s_GeneratedQueueLock, "Generated Queue Lock");
@@ -67,10 +67,9 @@ class ChunkGenerator {
     inline static std::unordered_set<glm::ivec3> s_Enqueued;
 
   private:
-    static glm::ivec3 localToWorldIndex(
-        glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex);
+    static glm::ivec3 localToWorldIndex(LocalChunkPosition position);
 
-    static std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> worldToLocalIndex(glm::ivec3 worldIndex);
+    static LocalChunkPosition worldToLocalIndex(glm::ivec3 worldIndex);
 
     static void generationLoop(size_t id);
 };

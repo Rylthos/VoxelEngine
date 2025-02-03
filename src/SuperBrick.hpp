@@ -46,6 +46,7 @@ class SuperBrick {
     void free();
 
     bool hasGenerated(glm::ivec3 brickIndex);
+    void setRequested(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position);
     void loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick);
 
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }

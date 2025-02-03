@@ -70,6 +70,17 @@ bool SuperBrick::hasGenerated(glm::ivec3 brickIndex)
     return true;
 }
 
+void SuperBrick::setRequested(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position)
+{
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+
+    glm::ivec3 brickPosition = std::get<2>(position);
+    size_t index = brickPosition.x + brickPosition.z * SUPERBRICK_SIZE
+        + brickPosition.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
+
+    m_Struct.data[index].requested_flag = 1;
+}
+
 void SuperBrick::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick)
 {
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
@@ -204,10 +215,11 @@ SuperBrickStruct SuperBrick::getStruct()
         m_CurrentColourCount += newColours.size();
 
         m_ToBeLoaded.clear();
-
-        m_Struct.bricks = m_BrickPool.getDeviceAddress(m_Device);
-        m_Struct.colour = m_Colours.getDeviceAddress(m_Device);
     }
+
+    m_Struct.bricks = m_BrickPool.getDeviceAddress(m_Device);
+    m_Struct.colour = m_Colours.getDeviceAddress(m_Device);
+
     return m_Struct;
 }
 

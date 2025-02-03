@@ -21,6 +21,8 @@ struct ChunkStruct {
     VkDeviceAddress pointers;
 };
 
+typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> LocalChunkPosition;
+
 class Chunk {
   public:
     Chunk();
@@ -31,9 +33,13 @@ class Chunk {
 
     bool hasGenerated(glm::ivec3 chunkIndex, glm::ivec3 brickIndex);
 
-    void loadSuperBrick(glm::ivec3 index);
+    VkBufferMemoryBarrier getMemoryBarrier();
 
-    void loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3>, Brick& brick);
+    void setRequested(LocalChunkPosition position);
+    void setRequestedBrick(LocalChunkPosition position);
+
+    void loadSuperBrick(glm::ivec3 index);
+    void loadBrick(LocalChunkPosition, Brick& brick);
 
     ChunkStruct getStruct();
 

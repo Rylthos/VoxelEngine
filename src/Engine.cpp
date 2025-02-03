@@ -1243,6 +1243,9 @@ void Engine::render(float frameDelta)
 
         Image::transition(commandBuffer, m_SwapchainImages[swapchainImageIndex],
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
     }
     VK_CHECK(vkEndCommandBuffer(commandBuffer));
 

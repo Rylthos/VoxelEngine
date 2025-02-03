@@ -60,7 +60,7 @@ struct VoxelPushConstants {
 
     glm::vec4 sunDirection;
 
-    float size;
+    int loadVoxels;
     uint32_t maxDepthShown = 5;
     uint32_t lod;
     float lodDistance;

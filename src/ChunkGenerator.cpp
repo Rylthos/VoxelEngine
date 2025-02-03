@@ -14,6 +14,7 @@
 #include "SuperBrick.hpp"
 #include "Timer.hpp"
 #include "VkCheck.hpp"
+#include "spdlog/common.h"
 
 void ChunkGenerator::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
 {
@@ -80,14 +81,9 @@ void ChunkGenerator::free()
 
 void ChunkGenerator::addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks) { s_Chunks = chunks; }
 
-void ChunkGenerator::requestBrick(
-    glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex)
+void ChunkGenerator::requestBrick(LocalChunkPosition position)
 {
-    glm::ivec3 worldIndex = localToWorldIndex(chunkIndex, superBrickIndex, brickIndex);
-
-    if ((*s_Chunks)[chunkIndex].hasGenerated(superBrickIndex, brickIndex)) {
-        return;
-    }
+    glm::ivec3 worldIndex = localToWorldIndex(position);
 
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_GeneratedQueueLock);
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(s_EnqueuedLock);
@@ -101,11 +97,10 @@ void ChunkGenerator::requestBrick(
     s_CanGenerate.notify_one();
 }
 
-glm::ivec3 ChunkGenerator::localToWorldIndex(
-    glm::ivec3 chunkIndex, glm::ivec3 superBrickIndex, glm::ivec3 brickIndex)
+glm::ivec3 ChunkGenerator::localToWorldIndex(LocalChunkPosition position)
 {
-    return chunkIndex * CHUNK_SIZE * SUPERBRICK_SIZE + superBrickIndex * SUPERBRICK_SIZE
-        + brickIndex;
+    return std::get<0>(position) * CHUNK_SIZE * SUPERBRICK_SIZE
+        + std::get<1>(position) * SUPERBRICK_SIZE + std::get<2>(position);
 }
 
 std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> ChunkGenerator::worldToLocalIndex(
@@ -165,6 +160,7 @@ void ChunkGenerator::generationLoop(size_t id)
 
         VK_CHECK(vkCreateFence(s_Device, &fenceCI, nullptr, &generationFence));
     }
+
     while (s_Running) {
         glm::ivec3 position;
         {

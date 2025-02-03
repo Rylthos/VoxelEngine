@@ -19,6 +19,7 @@ void Chunk::init(VkDevice device, VmaAllocator allocator, Queue* computeQueue)
     for (int i = 0; i < CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE; i++) {
         m_ChunkStruct.data[i] = {
             .loaded = 0,
+            .requested = 0,
             .empty_flag = 0,
         };
     }
@@ -51,6 +52,32 @@ bool Chunk::hasGenerated(glm::ivec3 chunkIndex, glm::ivec3 brickIndex)
     return m_SuperBricks[chunkIndex].hasGenerated(brickIndex);
 }
 
+VkBufferMemoryBarrier Chunk::getMemoryBarrier()
+{
+    return {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+        .pNext = nullptr,
+        .srcAccessMask = VK_ACCESS_NONE,
+        .dstAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
+    };
+}
+
+void Chunk::setRequested(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position)
+{
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+
+    glm::ivec3 superBrickPosition = std::get<1>(position);
+    m_ChunkStruct.data[positionToIndex(superBrickPosition)].requested = 1;
+}
+
+void Chunk::setRequestedBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position)
+{
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+
+    glm::ivec3 superBrickPosition = std::get<1>(position);
+    m_SuperBricks[superBrickPosition].setRequested(position);
+}
+
 void Chunk::loadSuperBrick(glm::ivec3 index)
 {
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
@@ -58,7 +85,7 @@ void Chunk::loadSuperBrick(glm::ivec3 index)
 
     if (m_SuperBrickIndices.contains(index) || m_ToBeLoaded.contains(index)
         || m_SuperBricks.contains(index)) {
-        spdlog::info("Already generated brick");
+        spdlog::critical("Already requested");
         return;
     }
 
@@ -78,8 +105,8 @@ void Chunk::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, B
         return;
     }
 
-    m_SuperBricks[superBrickPosition].loadBrick(position, brick);
     m_ToBeUpdated.insert(superBrickPosition);
+    m_SuperBricks[superBrickPosition].loadBrick(position, brick);
 }
 
 ChunkStruct Chunk::getStruct()
@@ -152,14 +179,14 @@ ChunkStruct Chunk::getStruct()
 
             m_ChunkStruct.data[index].loaded = 1;
 
-            // if (isEmpty) {
-            //     m_ChunkStruct.data[index].empty_flag = 1;
-            //     if (m_SuperBrickIndices.contains(pos)) {
-            //         m_FreeIndices.insert(m_SuperBrickIndices[pos]);
-            //         m_SuperBrickIndices.erase(pos);
-            //     }
-            //     continue;
-            // }
+            if (isEmpty) {
+                m_ChunkStruct.data[index].empty_flag = 1;
+                if (m_SuperBrickIndices.contains(pos)) {
+                    m_FreeIndices.insert(m_SuperBrickIndices[pos]);
+                    m_SuperBrickIndices.erase(pos);
+                }
+                continue;
+            }
 
             uint16_t location = m_SuperBrickIndices[pos];
 
