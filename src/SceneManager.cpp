@@ -30,12 +30,7 @@ SceneManager::SceneManager(PaletteManager* paletteManager, Camera* camera)
 
 {
     m_VoxelPushConstants.maxIterations = 1024;
-    m_VoxelPushConstants.maxDepthShown = std::log2(m_Dimension);
     m_VoxelPushConstants.maxHeatShown = m_VoxelPushConstants.maxIterations;
-    m_VoxelPushConstants.lod = m_VoxelPushConstants.maxDepthShown;
-
-    m_VoxelPushConstants.flags = 0;
-    m_VoxelPushConstants.flags |= PCF_SHOW_HEAT_MAP;
 }
 
 SceneManager::SceneManager(SceneManager& other)
@@ -96,8 +91,9 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_CurrentColour = glm::vec3(1.);
 
     m_VoxelPushConstants.sunDirection = glm::vec4(0, -1, 0, 1);
-    m_VoxelPushConstants.lodDistance = 500.f;
-    m_VoxelPushConstants.loadVoxels = true;
+
+    m_VoxelPushConstants.brickLODDistance = 100.f;
+    m_VoxelPushConstants.superBrickLODDistance = 200.f;
 
     ChunkGenerator::addChunks(&m_Chunks);
 }
@@ -217,22 +213,17 @@ void SceneManager::receive(const Event* event)
                 // m_SuperBrick.reset();
             }
 
-            ImGui::Text("LOD Distance");
-            ImGui::SliderFloat("##LODDistance", &m_VoxelPushConstants.lodDistance, 10.f, 1000.f);
+            ImGui::Text("Super brick LOD Distance");
+            ImGui::SliderFloat("##SuperBrickLODDistance",
+                &m_VoxelPushConstants.superBrickLODDistance, 10.f, 1000.f);
 
-            ImGui::Checkbox("Load Voxels", (bool*)&m_VoxelPushConstants.loadVoxels);
+            ImGui::Text("Brick LOD Distance");
+            ImGui::SliderFloat(
+                "##BrickLODDistance", &m_VoxelPushConstants.brickLODDistance, 10.f, 1000.f);
+
+            ImGui::Checkbox("Load Voxels", (bool*)&m_VoxelPushConstants.shouldLoadVoxels);
 
             ImGui::Text("Generation Queue: %ld", ChunkGenerator::getQueueSize());
-            // ImGui::Text("Free indices: %ld", m_SuperBrick.getFreeIndices());
-            // ImGui::Text("Currently Generated: %ld", m_SuperBrick.getBricksSize());
-            // ImGui::Text("To be Generated: %ld", m_SuperBrick.getQueued());
-            // ImGui::Text("Allocation Size: %ld", m_SuperBrick.getCurrentAllocation());
-            // ImGui::Text("Colours Allocated: %ld", m_SuperBrick.getCurrentColourAllocation());
-            // ImGui::Text(
-            //     "Colours Allocation Size: %ld", m_SuperBrick.getCurrentColourAllocationSize());
-            // ImGui::Text("Colours Indices Free: %ld", m_SuperBrick.getCurrentColourIndexSize());
-            //
-            // ImGui::Text("Queued Changes: %ld", m_SuperBrick.getQueuedChanges());
 
             ImGui::Text("Max Heat");
             ImGui::SliderInt("##Heat", (int*)&m_VoxelPushConstants.maxHeatShown, 1, 1024);
@@ -340,8 +331,6 @@ void SceneManager::checkChunks(uint32_t currentFrame)
 
     const LoadedData* loaded = (const LoadedData*)(data + 4);
 
-    static std::unordered_map<glm::ivec3, uint32_t> cache;
-
     glm::ivec3 chunkPos = { 0, 0, 0 };
 
     uint32_t length = std::min(data[0], data[1]);
@@ -350,28 +339,12 @@ void SceneManager::checkChunks(uint32_t currentFrame)
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
             if (l.brickIndex.a != 0) {
-                glm::ivec3 converted
-                    = glm::ivec3(l.superBrickIndex) * SUPERBRICK_SIZE + glm::ivec3(l.brickIndex);
-
-                spdlog::info("Requesting: {} | {}", glm::to_string(l.superBrickIndex),
-                    glm::to_string(l.brickIndex));
-
-                if (cache.contains(converted)) {
-                    spdlog::info(
-                        "Double request: {} | {}", glm::to_string(converted), cache[converted]);
-                    cache[converted] += 1;
-                    continue;
-                } else {
-                    cache.insert({ converted, 1 });
-                }
-
                 auto localPosition = LocalChunkPosition { chunkPos, glm::ivec3(l.superBrickIndex),
                     glm::ivec3(l.brickIndex) };
 
                 m_Chunks[chunkPos].setRequestedBrick(localPosition);
 
                 ChunkGenerator::requestBrick(localPosition);
-
             } else if (l.superBrickIndex.a != 0) {
                 m_Chunks[chunkPos].setRequested({
                     chunkPos, glm::ivec3(l.superBrickIndex), { 0, 0, 0 }

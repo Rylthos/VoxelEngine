@@ -41,7 +41,7 @@ void Engine::init()
     spdlog::set_level(spdlog::level::trace);
     m_Window.create("Voxel Engine", 960, 960);
 
-    m_Camera = Camera(glm::vec3(8.f, 8.f, -10.f), 0., 0.);
+    m_Camera = Camera(glm::vec3(8.1f, 8.f, -10.f), 0., 0.);
 
     // m_PaletteManager.defaultPalette();
     m_SceneManager = SceneManager(&m_PaletteManager, &m_Camera);

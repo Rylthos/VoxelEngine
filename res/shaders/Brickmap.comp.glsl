@@ -32,21 +32,18 @@ layout(push_constant) uniform constants {
     vec3 p_CameraPosition;
     float p_AspectRatio;
 
-    vec4 p_CameraFront;
+    vec3 p_CameraFront;
+    int p_ShouldLoadVoxels;
+
     vec4 p_CameraRight;
     vec4 p_CameraUp;
 
     vec4 p_SunDir;
 
-    int p_LoadVoxels;
-    uint32_t p_MaxDepthShown;
-    uint32_t p_LOD;
-    float p_LODDistance;
-
+    float p_SuperBrickLODDistance;
+    float p_BrickLODDistance;
     uint32_t p_MaxHeatShown;
-    uint32_t p_Flags;
     uint32_t p_MaxIterations;
-    uint32_t _2;
 
     ToBeLoadedBuffer p_ToBeLoaded;
     ChunkBuffer p_Chunk;
@@ -268,7 +265,7 @@ void traverseSuperBrick(in Ray ray, in ivec3 superBrickPosition, in uint32_t sup
         uint32_t brickPointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            if (p_LoadVoxels == 0 || requested == 1 || p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+            if (p_ShouldLoadVoxels == 0 || requested == 1 || p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return;
             }
 
@@ -291,16 +288,19 @@ void traverseSuperBrick(in Ray ray, in ivec3 superBrickPosition, in uint32_t sup
         } else { // Brick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                // hit.hasHitBrick = true;
-                // hit.hasHitVoxel = true;
-                // hit.colour = vec4(vec3(brickIndex) / CHUNK_SIZE, 1.);
-                //
-                // return;
-
                 const vec3 brickMinBound = minBound + brickIndex * BRICK_SIZE * VOXEL_SIZE;
 
                 hit.normal = normal;
                 hit.brickHitIndex = ivec3(brickMinBound);
+                const vec3 center = brickMinBound + vec3(BRICK_SIZE * VOXEL_SIZE) / 2.;
+                if (length(center - p_CameraPosition) > p_BrickLODDistance)
+                {
+                    const Brick brick = p_Chunk.chunks.superBricks.superBrick[superBrickIndex].bricksBuffer.bricks[brickPointer];
+                    hit.hasHitBrick = true;
+                    hit.colour = vec4(brick.lodR / 255., brick.lodG / 255., brick.lodB / 255., 1.);
+
+                    return;
+                }
 
                 traverseBrick(ray, superBrickIndex, brickPointer, brickMinBound, iterations, hit);
 
@@ -374,7 +374,7 @@ HitRecord traverseChunk(in Ray ray)
         uint32_t pointer = bitfieldExtract(data, SUPER_BRICK_POINTER_OFFSET, SUPER_BRICK_POINTER_SIZE);
 
         if (is_loaded == 0) {
-            if (p_LoadVoxels == 0 || requested == 1 || p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
+            if (p_ShouldLoadVoxels == 0 || requested == 1 || p_ToBeLoaded.currentPointer >= p_ToBeLoaded.maxSize) {
                 return hit;
             }
 
@@ -396,10 +396,18 @@ HitRecord traverseChunk(in Ray ray)
         } else { // SuperBrick is already loaded
             if (is_empty == 0) // Not Empty
             {
-                vec3 superbrickMinbound = minBound + brickIndex * SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE;
+                const vec3 superbrickMinbound = minBound + brickIndex * SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE;
 
                 hit.normal = normal;
                 hit.superBrickHitIndex = brickIndex;
+
+                const vec3 center = superbrickMinbound + vec3(SUPER_BRICK_SIZE * BRICK_SIZE * VOXEL_SIZE) / 2.;
+                if (length(center - p_CameraPosition) > p_SuperBrickLODDistance)
+                {
+                    hit.hasHitSuperBrick = true;
+                    hit.colour = vec4(1.);
+                    return hit;
+                }
 
                 traverseSuperBrick(ray, brickIndex, pointer, superbrickMinbound, iterations, hit);
 
@@ -446,16 +454,16 @@ void main()
     HitRecord hit = traverseChunk(ray);
 
     vec4 colour = vec4(0.);
-    if (hit.hasHitBrick) {
+    if (hit.hasHitSuperBrick || hit.hasHitBrick) {
         bool inShadow = false;
 
-        // if (hit.hasHitVoxel) {
-        //     Ray shadowRay = createRay(hit.position, p_SunDir.xyz);
-        //
-        //     HitRecord shadow = traverseChunk(shadowRay);
-        //
-        //     inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
-        // }
+        if (hit.hasHitVoxel) {
+            Ray shadowRay = createRay(hit.position, p_SunDir.xyz);
+
+            HitRecord shadow = traverseChunk(shadowRay);
+
+            inShadow = shadow.hasHitBrick && shadow.hasHitVoxel;
+        }
 
         vec3 positionOffset = hit.position - p_CameraPosition;
         imageStore(o_Position, texelCoord, vec4(positionOffset, hit.hasHitVoxel));
