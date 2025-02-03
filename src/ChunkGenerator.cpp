@@ -199,8 +199,12 @@ void ChunkGenerator::generationLoop(size_t id)
 
                 GenerationPushConstants pushConstants;
                 auto local = worldToLocalIndex(position);
-                pushConstants.brickIndex = std::get<2>(local);
-                pushConstants.worldPosition = position;
+                // pushConstants.brickIndex = std::get<2>(local);
+                pushConstants.brickPosition
+                    = glm::vec3(std::get<0>(local) * CHUNK_SIZE * SUPERBRICK_SIZE * BRICK_SIZE)
+                        * VOXEL_SIZE
+                    + glm::vec3(std::get<1>(local) * SUPERBRICK_SIZE * BRICK_SIZE) * VOXEL_SIZE
+                    + glm::vec3(std::get<2>(local) * BRICK_SIZE) * VOXEL_SIZE;
                 pushConstants.data = generatedData.getDeviceAddress(s_Device);
                 pushConstants.colours = generatedColour.getDeviceAddress(s_Device);
 

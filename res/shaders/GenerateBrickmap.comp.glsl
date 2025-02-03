@@ -22,9 +22,7 @@ layout(buffer_reference, std430) buffer GenerationData {
 };
 
 layout(push_constant) uniform constants {
-    ivec3 p_BrickIndex;
-    int _1;
-    ivec3 p_WorldPosition;
+    vec3 p_BrickPosition;
     int _2;
     GenerationData p_Data;
     ColourBuffer p_Colours;
@@ -63,20 +61,20 @@ float height(vec3 pos)
 void main() {
     uvec3 currentIndex = gl_GlobalInvocationID.xyz;
 
-    ivec3 worldPosition = p_WorldPosition + ivec3(currentIndex);
-    // vec3 uv = vec3(worldPosition);
-    // uv.y -= 40.;
-    // uv.y = -(uv.y / 1.5);
-    //
-    // uv.xz /= 50.;
-    //
-    // float value = height(uv) * 10.;
+    vec3 worldPosition = p_BrickPosition + currentIndex * 0.125;
+    vec3 uv = vec3(worldPosition);
+    uv.y -= 60.;
+    uv.y = -(uv.y / 1.5);
 
-    setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+    uv.xz /= 50.;
 
-    // if (uv.y < value) {
-    //     setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
-    // } else {
-    //     setAir(currentIndex);
-    // }
+    float value = height(uv) * 20.;
+
+    // setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+
+    if (uv.y < value) {
+        setVoxel(currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+    } else {
+        setAir(currentIndex);
+    }
 }

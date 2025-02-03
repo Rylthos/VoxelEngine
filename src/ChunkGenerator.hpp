@@ -18,9 +18,7 @@
 #include "spdlog/common.h"
 
 struct GenerationPushConstants {
-    glm::ivec3 brickIndex;
-    int _1;
-    glm::ivec3 worldPosition;
+    glm::vec3 brickPosition;
     int _2;
     VkDeviceAddress data;
     VkDeviceAddress colours;

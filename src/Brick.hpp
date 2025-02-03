@@ -10,6 +10,7 @@
 #include <glm/glm.hpp>
 
 #define BRICK_SIZE 8
+#define VOXEL_SIZE 0.125f
 
 struct BrickStruct {
     uint64_t solidMask[8];
