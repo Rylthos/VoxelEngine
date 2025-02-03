@@ -142,6 +142,8 @@ void Engine::start()
 
 void Engine::cleanup()
 {
+    ChunkGenerator::free();
+
     std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk2(m_GraphicsQueue.queueMutex);
     std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lk(m_ComputeQueue.queueMutex);
 
@@ -154,7 +156,6 @@ void Engine::cleanup()
     TracyVkDestroy(g_TracyVkCtx);
 #endif
 
-    ChunkGenerator::free();
     m_SceneManager.freeResources();
 
     ImmediateSubmit::free();
