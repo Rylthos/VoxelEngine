@@ -17,17 +17,11 @@
 #include "Queue.hpp"
 #include "spdlog/common.h"
 
-struct GenerationPushConstants {
-    glm::vec3 brickPosition;
-    int _2;
-    VkDeviceAddress data;
-    VkDeviceAddress colours;
-};
+#define MAX_BRICKS_PER_DISPATCH 4
 
-struct GenerationData {
-    int colourSumR;
-    int colourSumG;
-    int colourSumB;
+struct GenerationPushConstants {
+    std::array<glm::vec4, MAX_BRICKS_PER_DISPATCH> brickPosition;
+    VkDeviceAddress colours;
 };
 
 class ChunkGenerator {

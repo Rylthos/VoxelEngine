@@ -4,6 +4,7 @@
 #include <glm/gtx/string_cast.hpp>
 
 #include <format>
+#include <sys/param.h>
 
 #include "Brick.hpp"
 #include "Chunk.hpp"
@@ -115,15 +116,16 @@ std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> ChunkGenerator::worldToLocalIndex
 
 void ChunkGenerator::generationLoop(size_t id)
 {
-    Buffer generatedData;
+    // Buffer generatedData;
     Buffer generatedColour;
-    generatedData.create(s_Allocator, sizeof(GenerationData),
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-            | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-        VMA_MEMORY_USAGE_AUTO,
-        VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
+    // generatedData.create(s_Allocator, sizeof(GenerationData) * MAX_BRICKS_PER_DISPATCH,
+    //     VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+    //         | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+    //     VMA_MEMORY_USAGE_AUTO,
+    //     VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT);
 
-    generatedColour.create(s_Allocator, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE,
+    generatedColour.create(s_Allocator,
+        sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE * MAX_BRICKS_PER_DISPATCH,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
             | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
         VMA_MEMORY_USAGE_AUTO,
@@ -162,7 +164,7 @@ void ChunkGenerator::generationLoop(size_t id)
     }
 
     while (s_Running) {
-        glm::ivec3 position;
+        std::vector<glm::ivec3> positions;
         {
             std::unique_lock<PROF_LOCKABLE_BASE(std::mutex)> lock(s_GeneratedQueueLock);
             while (s_ToBeGenerated.size() == 0) {
@@ -175,8 +177,11 @@ void ChunkGenerator::generationLoop(size_t id)
             if (!s_Running)
                 break;
 
-            position = s_ToBeGenerated.front();
-            s_ToBeGenerated.pop_front();
+            size_t elements = std::min((size_t)MAX_BRICKS_PER_DISPATCH, s_ToBeGenerated.size());
+            for (size_t i = 0; i < elements; i++) {
+                positions.push_back(s_ToBeGenerated.front());
+                s_ToBeGenerated.pop_front();
+            }
         }
         if (!s_Running)
             break;
@@ -198,20 +203,23 @@ void ChunkGenerator::generationLoop(size_t id)
                     commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, s_GeneratePipeline);
 
                 GenerationPushConstants pushConstants;
-                auto local = worldToLocalIndex(position);
-                // pushConstants.brickIndex = std::get<2>(local);
-                pushConstants.brickPosition
-                    = glm::vec3(std::get<0>(local) * CHUNK_SIZE * SUPERBRICK_SIZE * BRICK_SIZE)
-                        * VOXEL_SIZE
-                    + glm::vec3(std::get<1>(local) * SUPERBRICK_SIZE * BRICK_SIZE) * VOXEL_SIZE
-                    + glm::vec3(std::get<2>(local) * BRICK_SIZE) * VOXEL_SIZE;
-                pushConstants.data = generatedData.getDeviceAddress(s_Device);
+                for (size_t i = 0; i < positions.size(); i++) {
+                    auto local = worldToLocalIndex(positions[i]);
+                    // pushConstants.brickIndex = std::get<2>(local);
+                    pushConstants.brickPosition[i] = glm::vec4(
+                        glm::vec3(std::get<0>(local) * CHUNK_SIZE * SUPERBRICK_SIZE * BRICK_SIZE)
+                                * VOXEL_SIZE
+                            + glm::vec3(std::get<1>(local) * SUPERBRICK_SIZE * BRICK_SIZE)
+                                * VOXEL_SIZE
+                            + glm::vec3(std::get<2>(local) * BRICK_SIZE) * VOXEL_SIZE,
+                        i);
+                }
                 pushConstants.colours = generatedColour.getDeviceAddress(s_Device);
 
                 vkCmdPushConstants(commandBuffer, s_GeneratePipelineLayout,
                     VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants), &pushConstants);
 
-                vkCmdDispatch(commandBuffer, 1, 1, 1);
+                vkCmdDispatch(commandBuffer, MAX_BRICKS_PER_DISPATCH, 1, 1);
             }
             VK_CHECK(vkEndCommandBuffer(commandBuffer));
 
@@ -231,42 +239,43 @@ void ChunkGenerator::generationLoop(size_t id)
         }
         VK_CHECK(vkWaitForFences(s_Device, 1, &generationFence, true, 1e10));
 
-        const GenerationData* data
-            = (const GenerationData*)(generatedData.getAllocationInfo().pMappedData);
-
         const glm::vec4* colour_data
             = (const glm::vec4*)(generatedColour.getAllocationInfo().pMappedData);
 
-        Brick brick;
-        for (int y = 0; y < BRICK_SIZE; y++) {
-            for (int z = 0; z < BRICK_SIZE; z++) {
-                for (int x = 0; x < BRICK_SIZE; x++) {
-                    uint32_t index = x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
-                    glm::ivec3 voxelIndex = { x, y, z };
-                    if (colour_data[index].a >= 0) {
-                        brick.setVoxel(voxelIndex, colour_data[index], true);
+        for (size_t i = 0; i < positions.size(); i++) {
+            glm::ivec3 position = positions[i];
+
+            size_t offset = BRICK_SIZE * BRICK_SIZE * BRICK_SIZE * i;
+
+            Brick brick;
+            for (int y = 0; y < BRICK_SIZE; y++) {
+                for (int z = 0; z < BRICK_SIZE; z++) {
+                    for (int x = 0; x < BRICK_SIZE; x++) {
+                        uint32_t index = offset + x + z * BRICK_SIZE + y * BRICK_SIZE * BRICK_SIZE;
+                        glm::ivec3 voxelIndex = { x, y, z };
+                        if (colour_data[index].a >= 0) {
+                            brick.setVoxel(voxelIndex, colour_data[index], true);
+                        }
                     }
                 }
             }
+
+            memset((void*)colour_data, 0, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE);
+
+            {
+                std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_EnqueuedLock);
+                s_Enqueued.erase(position);
+            }
+
+            auto localPosition = worldToLocalIndex(position);
+            (*s_Chunks)[std::get<0>(localPosition)].loadBrick(localPosition, brick);
         }
-
-        memset((void*)data, 0, sizeof(GenerationData));
-        memset((void*)colour_data, 0, sizeof(glm::vec4) * BRICK_SIZE * BRICK_SIZE * BRICK_SIZE);
-
         Timer::stopTimer(timerString);
-
-        {
-            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_EnqueuedLock);
-            s_Enqueued.erase(position);
-        }
-
-        auto localPosition = worldToLocalIndex(position);
-        (*s_Chunks)[std::get<0>(localPosition)].loadBrick(localPosition, brick);
     }
 
     vkDestroyFence(s_Device, generationFence, nullptr);
 
-    generatedData.free();
+    // generatedData.free();
     generatedColour.free();
 
     vkDestroyCommandPool(s_Device, commandPool, nullptr);

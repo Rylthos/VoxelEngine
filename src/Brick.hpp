@@ -33,6 +33,8 @@ class Brick {
     std::vector<glm::vec4> getColours();
     size_t getColoursSize() { return m_Colours.size(); }
 
+    void setSums(float r, float g, float b) { m_LODSum = { r, g, b }; }
+
   private:
     BrickStruct m_Brick;
     std::map<int, glm::vec4> m_Colours;
