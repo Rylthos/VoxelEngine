@@ -13,6 +13,8 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 
+layout(constant_id = 0) const int NUM_BRICKS = 6;
+
 layout(buffer_reference, std430) buffer ColourBuffer {
     vec4 colours[];
 };
@@ -24,7 +26,7 @@ layout(buffer_reference, std430) buffer GenerationData {
 };
 
 layout(push_constant) uniform constants {
-    vec4 p_BrickPosition[4];
+    vec4 p_BrickPosition[NUM_BRICKS];
     ColourBuffer p_Colours;
 };
 

@@ -17,7 +17,7 @@
 #include "Queue.hpp"
 #include "spdlog/common.h"
 
-#define MAX_BRICKS_PER_DISPATCH 4
+#define MAX_BRICKS_PER_DISPATCH 6
 
 struct GenerationPushConstants {
     std::array<glm::vec4, MAX_BRICKS_PER_DISPATCH> brickPosition;

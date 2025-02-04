@@ -5,6 +5,7 @@
 
 #include <format>
 #include <sys/param.h>
+#include <vulkan/vulkan_core.h>
 
 #include "Brick.hpp"
 #include "Chunk.hpp"
@@ -24,6 +25,18 @@ void ChunkGenerator::init(VkDevice device, VmaAllocator allocator, Queue* comput
     s_ComputeQueue = computeQueue;
 
     {
+        VkSpecializationMapEntry specializationME {};
+        specializationME.constantID = 0;
+        specializationME.offset = 0;
+        specializationME.size = sizeof(int);
+
+        std::vector<int> data = { MAX_BRICKS_PER_DISPATCH };
+        VkSpecializationInfo specializationInfo {};
+        specializationInfo.mapEntryCount = 1;
+        specializationInfo.pMapEntries = &specializationME;
+        specializationInfo.dataSize = sizeof(int);
+        specializationInfo.pData = data.data();
+
         VkPushConstantRange pushConstant {};
         pushConstant.offset = 0;
         pushConstant.size = sizeof(GenerationPushConstants);
@@ -49,6 +62,7 @@ void ChunkGenerator::init(VkDevice device, VmaAllocator allocator, Queue* comput
         shaderStageCI.stage = VK_SHADER_STAGE_COMPUTE_BIT;
         shaderStageCI.module = voxelShader.getShaderModule();
         shaderStageCI.pName = "main";
+        shaderStageCI.pSpecializationInfo = &specializationInfo;
 
         VkComputePipelineCreateInfo computePipelineCI {};
         computePipelineCI.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
