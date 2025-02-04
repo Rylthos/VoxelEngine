@@ -22,7 +22,7 @@
 #define MAX_PLACEMENT_SIZE 64
 #define MIN_PLACEMENT_SIZE 1
 
-#define MAX_LOADED 256
+#define MAX_LOADED 512
 
 enum class PlacementType : int { Cube = 0, Sphere = 1, NUM_TYPES };
 

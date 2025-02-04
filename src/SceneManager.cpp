@@ -335,7 +335,6 @@ void SceneManager::checkChunks(uint32_t currentFrame)
 
     uint32_t length = std::min(data[0], data[1]);
     if (length != 0) {
-        spdlog::info("New Request");
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
             if (l.brickIndex.a != 0) {

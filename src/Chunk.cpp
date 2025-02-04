@@ -89,6 +89,12 @@ void Chunk::loadSuperBrick(glm::ivec3 index)
         return;
     }
 
+    // TODO: Check if super brick is empty to save time
+
+    if (index.y < 2) {
+        m_ChunkStruct.data[positionToIndex(index)].empty_flag = 1;
+    }
+
     m_ToBeLoaded.insert(index);
     m_SuperBricks[index].init(m_Device, m_Allocator);
 }
@@ -123,19 +129,14 @@ ChunkStruct Chunk::getStruct()
 
             bool isEmpty = true;
             for (size_t i = 0; i < superBrick.data.size(); i++) {
-                if (superBrick.data[i].empty_flag == 0) {
-                    isEmpty = false;
-                    break;
-                }
-
-                if (superBrick.data[i].loaded == 0) {
+                if (superBrick.data[i].empty_flag == 0 || superBrick.data[i].loaded == 0) {
                     isEmpty = false;
                     break;
                 }
             }
 
             m_ChunkStruct.data[index].loaded = 1;
-            if (isEmpty) {
+            if (isEmpty || m_ChunkStruct.data[index].empty_flag == 1) {
                 m_ChunkStruct.data[index].empty_flag = 1;
                 continue;
             }
