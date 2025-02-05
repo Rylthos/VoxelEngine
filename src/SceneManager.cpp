@@ -343,7 +343,7 @@ void SceneManager::checkChunks(uint32_t currentFrame)
 
                 m_Chunks[chunkPos].setRequestedBrick(localPosition);
 
-                ChunkGenerator::requestBrick(localPosition);
+                ChunkGenerator::requestBrick(localPosition, m_Camera->getPosition());
             } else if (l.superBrickIndex.a != 0) {
                 m_Chunks[chunkPos].setRequested({
                     chunkPos, glm::ivec3(l.superBrickIndex), { 0, 0, 0 }

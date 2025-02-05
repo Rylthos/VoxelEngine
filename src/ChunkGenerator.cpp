@@ -96,9 +96,14 @@ void ChunkGenerator::free()
 
 void ChunkGenerator::addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks) { s_Chunks = chunks; }
 
-void ChunkGenerator::requestBrick(LocalChunkPosition position)
+void ChunkGenerator::requestBrick(LocalChunkPosition position, glm::vec3 cameraPosition)
 {
     glm::ivec3 worldIndex = localToWorldIndex(position);
+
+    glm::vec3 brickWorldPosition = glm::vec3(std::get<0>(position) * SUPERBRICK_SIZE * BRICK_SIZE
+                                       + std::get<1>(position) * BRICK_SIZE + std::get<2>(position))
+        * VOXEL_SIZE;
+    float diff = glm::length(cameraPosition - brickWorldPosition);
 
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(s_GeneratedQueueLock);
     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(s_EnqueuedLock);
@@ -107,7 +112,7 @@ void ChunkGenerator::requestBrick(LocalChunkPosition position)
         return;
 
     s_Enqueued.insert(worldIndex);
-    s_ToBeGenerated.push_back(worldIndex);
+    s_ToBeGenerated.insert({ diff, worldIndex });
 
     s_CanGenerate.notify_one();
 }
@@ -193,8 +198,9 @@ void ChunkGenerator::generationLoop(size_t id)
 
             size_t elements = std::min((size_t)MAX_BRICKS_PER_DISPATCH, s_ToBeGenerated.size());
             for (size_t i = 0; i < elements; i++) {
-                positions.push_back(s_ToBeGenerated.front());
-                s_ToBeGenerated.pop_front();
+                auto itr = s_ToBeGenerated.begin();
+                positions.push_back(itr->second);
+                s_ToBeGenerated.erase(itr);
             }
         }
         if (!s_Running)

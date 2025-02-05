@@ -33,7 +33,7 @@ class ChunkGenerator {
 
     static void addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks);
 
-    static void requestBrick(LocalChunkPosition position);
+    static void requestBrick(LocalChunkPosition position, glm::vec3 cameraPosition);
 
     static size_t getQueueSize() { return s_ToBeGenerated.size(); }
 
@@ -55,7 +55,7 @@ class ChunkGenerator {
     inline static PROF_LOCKABLE_MUTEX(std::mutex, s_GeneratedQueueLock, "Generated Queue Lock");
     inline static PROF_LOCKABLE_MUTEX(std::mutex, s_EnqueuedLock, "Enqueued Lock");
 
-    inline static std::deque<glm::ivec3> s_ToBeGenerated;
+    inline static std::multimap<float, glm::ivec3> s_ToBeGenerated;
     inline static std::unordered_set<glm::ivec3> s_Enqueued;
 
   private:
