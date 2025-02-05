@@ -72,14 +72,24 @@ VkDeviceAddress Buffer::getDeviceAddress(VkDevice device) const
     return address;
 }
 
-void Buffer::startCopyFromBuffer() { ImmediateSubmit::start(); }
-
-void Buffer::copyData(const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
+void Buffer::startCopyFromBuffer()
 {
-    ImmediateSubmit::execute(
-        [&](VkCommandBuffer cmd) { copyFromBuffer(cmd, buffer, size, srcOffset, dstOffset); });
+    if (s_StagedCopy)
+        return;
+
+    ImmediateSubmit::start();
+    s_StagedCopy = true;
 }
-void Buffer::endCopyFromBuffer() { ImmediateSubmit::end(); }
+
+bool Buffer::endCopyFromBuffer()
+{
+    if (!s_StagedCopy)
+        return false;
+
+    s_StagedCopy = false;
+    ImmediateSubmit::end();
+    return true;
+}
 
 void Buffer::copyFromBuffer(
     VkCommandBuffer cmd, const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
@@ -98,6 +108,11 @@ void Buffer::copyFromBuffer(
 
 void Buffer::copyFromBuffer(const Buffer& buffer, size_t size, size_t srcOffset, size_t dstOffset)
 {
-    ImmediateSubmit::submit(
-        [&](VkCommandBuffer cmd) { copyFromBuffer(cmd, buffer, size, srcOffset, dstOffset); });
+    if (s_StagedCopy) {
+        ImmediateSubmit::execute(
+            [&](VkCommandBuffer cmd) { copyFromBuffer(cmd, buffer, size, srcOffset, dstOffset); });
+    } else {
+        ImmediateSubmit::submit(
+            [&](VkCommandBuffer cmd) { copyFromBuffer(cmd, buffer, size, srcOffset, dstOffset); });
+    }
 }

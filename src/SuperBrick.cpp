@@ -137,6 +137,7 @@ SuperBrickStruct SuperBrick::getStruct()
         std::unordered_map<int, size_t> stagingMapping;
         size_t colourOffset = 0;
 
+        Buffer::startCopyFromBuffer();
         for (glm::ivec3 p : m_ToBeLoaded) {
             Brick& brick = m_Bricks[p];
             size_t index = p.x + p.z * SUPERBRICK_SIZE + p.y * SUPERBRICK_SIZE * SUPERBRICK_SIZE;
@@ -190,29 +191,28 @@ SuperBrickStruct SuperBrick::getStruct()
             m_AllocatedColourSizes[p] = { colourInterval->first, colours.size() };
         }
 
-        m_BrickPool.startCopyFromBuffer();
         for (const auto& m : stagingCommit.getIntervals()) {
             size_t size = stagingCommit.sizeOfInterval(m);
             size_t srcOffset = stagingMapping[m.first];
             size_t dstOffset = m.first;
-            m_BrickPool.copyData(m_Staging, sizeof(BrickStruct) * size,
+            m_BrickPool.copyFromBuffer(m_Staging, sizeof(BrickStruct) * size,
                 srcOffset * sizeof(BrickStruct), dstOffset * sizeof(BrickStruct));
         }
-        m_BrickPool.endCopyFromBuffer();
+        Buffer::endCopyFromBuffer();
 
         generateStaging(newColours.size() * sizeof(glm::vec4));
         m_Staging.copyFromData_CPUOnly<glm::vec4>(newColours);
 
-        m_BrickPool.startCopyFromBuffer();
+        Buffer::startCopyFromBuffer();
         for (const auto& m : mapping) {
             size_t srcOffset = m.first;
             size_t dstOffset = m.second.first;
             size_t size = m.second.second;
-            m_Colours.copyData(m_Staging, size * sizeof(glm::vec4), srcOffset * sizeof(glm::vec4),
-                dstOffset * sizeof(glm::vec4));
+            m_Colours.copyFromBuffer(m_Staging, size * sizeof(glm::vec4),
+                srcOffset * sizeof(glm::vec4), dstOffset * sizeof(glm::vec4));
         }
-        m_BrickPool.endCopyFromBuffer();
         m_CurrentColourCount += newColours.size();
+        Buffer::endCopyFromBuffer();
 
         m_ToBeLoaded.clear();
     }
@@ -311,10 +311,15 @@ void SuperBrick::generateStaging(size_t size)
         return;
     }
 
+    bool wasEnabled = Buffer::endCopyFromBuffer();
+
     m_Staging.free();
     m_Staging.create(m_Allocator, size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_AUTO,
         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT);
+
+    if (wasEnabled)
+        Buffer::startCopyFromBuffer();
 }
 
 void SuperBrick::resizeColours(bool preserveStaging)
@@ -323,6 +328,8 @@ void SuperBrick::resizeColours(bool preserveStaging)
     size_t previous = m_MaxColours;
     m_MaxColours *= 2;
     m_AvailableColourIndices.addInterval(previous, m_MaxColours - 1);
+
+    bool wasEnabled = Buffer::endCopyFromBuffer();
 
     size_t size = m_Colours.getSize();
 
@@ -348,6 +355,9 @@ void SuperBrick::resizeColours(bool preserveStaging)
         memcpy(m_Staging.getAllocationInfo().pMappedData, copy, stagingSize);
         std::free(copy);
     }
+
+    if (wasEnabled)
+        Buffer::startCopyFromBuffer();
 }
 
 void SuperBrick::resizeBricks(bool preserveStaging)
@@ -355,6 +365,8 @@ void SuperBrick::resizeBricks(bool preserveStaging)
     spdlog::info("Resizing Bricks");
     size_t previous = m_CurrentPoolSize;
     m_CurrentPoolSize *= 2;
+
+    bool wasEnabled = Buffer::endCopyFromBuffer();
 
     for (size_t i = previous; i < m_CurrentPoolSize; i++) {
         m_FreeIndices.insert(i);
@@ -384,4 +396,7 @@ void SuperBrick::resizeBricks(bool preserveStaging)
         memcpy(m_Staging.getAllocationInfo().pMappedData, copy, stagingSize);
         std::free(copy);
     }
+
+    if (wasEnabled)
+        Buffer::startCopyFromBuffer();
 }

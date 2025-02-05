@@ -30,9 +30,8 @@ class Buffer {
 
     VkDeviceAddress getDeviceAddress(VkDevice device) const;
 
-    void startCopyFromBuffer();
-    void copyData(const Buffer& buffer, size_t size, size_t srcOffset = 0, size_t dstOffset = 0);
-    void endCopyFromBuffer();
+    static void startCopyFromBuffer();
+    static bool endCopyFromBuffer();
 
     void copyFromBuffer(
         const Buffer& buffer, size_t size, size_t srcOffset = 0, size_t dstOffset = 0);
@@ -76,4 +75,6 @@ class Buffer {
     VmaAllocator m_Allocator;
 
     size_t m_Size = 0;
+
+    inline static bool s_StagedCopy = false;
 };

@@ -306,12 +306,12 @@ VoxelPushConstants& SceneManager::getVoxelPushConstants(uint32_t currentFrame)
         m_ToBeLoaded[currentFrame].copyFromBuffer(m_Staging, sizeof(uint32_t) * 2);
     }
 
-    createStaging(sizeof(SuperBrickStruct));
+    Buffer::startCopyFromBuffer();
 
-    // m_Staging.copyFromBuffer(m_ChunkBuffer, sizeof(ChunkStruct));
     std::vector<ChunkStruct> temp = { m_Chunks[{ 0, 0, 0 }].getStruct() };
     memcpy(m_ChunkBuffer.getAllocationInfo().pMappedData, temp.data(), sizeof(ChunkStruct));
-    // m_ChunkBuffer.copyFromBuffer(m_Staging, sizeof(ChunkStruct));
+
+    Buffer::endCopyFromBuffer();
 
     m_VoxelPushConstants.toBeLoaded = m_ToBeLoaded[currentFrame].getDeviceAddress(m_Device);
     m_VoxelPushConstants.chunk = m_ChunkBuffer.getDeviceAddress(m_Device);

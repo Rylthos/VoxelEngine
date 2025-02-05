@@ -124,7 +124,6 @@ ChunkStruct Chunk::getStruct()
         createStaging(sizeof(SuperBrickStruct));
         for (const auto& pos : m_ToBeLoaded) {
             size_t index = positionToIndex(pos);
-
             const SuperBrickStruct& superBrick = m_SuperBricks[pos].getStruct();
 
             bool isEmpty = true;
