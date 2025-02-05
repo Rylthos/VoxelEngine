@@ -70,7 +70,8 @@ void main() {
     float value = height(uv) * 20.;
 
     if (uv.y < value) {
-        setVoxel(writeOffset, currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+        // setVoxel(writeOffset, currentIndex, vec3(currentIndex.x / 7., currentIndex.y / 7., currentIndex.z / 7.));
+        setVoxel(writeOffset, currentIndex, vec3(1.));
     } else {
         setAir(writeOffset, currentIndex);
     }
