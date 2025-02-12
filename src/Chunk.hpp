@@ -3,6 +3,8 @@
 #include <glm/glm.hpp>
 #include <vk_mem_alloc.h>
 
+#include <glm/gtx/hash.hpp>
+
 #include "SuperBrick.hpp"
 
 #define CHUNK_SIZE 16
@@ -21,7 +23,19 @@ struct ChunkStruct {
     VkDeviceAddress pointers;
 };
 
-typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> LocalChunkPosition;
+typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> WorldBrickPosition;
+typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3, glm::ivec3> WorldVoxelPosition;
+
+struct tuple_3_hash {
+
+    template <class T1, class T2, class T3>
+
+    size_t operator()(const std::tuple<T1, T2, T3>& x) const
+    {
+        return std::hash<glm::ivec3>()(get<0>(x)) ^ std::hash<glm::ivec3>()(get<1>(x))
+            ^ std::hash<glm::ivec3>()(get<2>(x));
+    }
+};
 
 class Chunk {
   public:
@@ -35,11 +49,11 @@ class Chunk {
 
     VkBufferMemoryBarrier getMemoryBarrier();
 
-    void setRequested(LocalChunkPosition position);
-    void setRequestedBrick(LocalChunkPosition position);
+    void setRequested(WorldBrickPosition position);
+    void setRequestedBrick(WorldBrickPosition position);
 
     void loadSuperBrick(glm::ivec3 index);
-    void loadBrick(LocalChunkPosition, Brick& brick);
+    void loadBrick(WorldBrickPosition, Brick& brick);
 
     ChunkStruct getStruct();
 

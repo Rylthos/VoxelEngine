@@ -96,7 +96,7 @@ void ChunkGenerator::free()
 
 void ChunkGenerator::addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks) { s_Chunks = chunks; }
 
-void ChunkGenerator::requestBrick(LocalChunkPosition position, glm::vec3 cameraPosition)
+void ChunkGenerator::requestBrick(WorldBrickPosition position, glm::vec3 cameraPosition)
 {
     glm::ivec3 worldIndex = localToWorldIndex(position);
 
@@ -117,7 +117,7 @@ void ChunkGenerator::requestBrick(LocalChunkPosition position, glm::vec3 cameraP
     s_CanGenerate.notify_one();
 }
 
-glm::ivec3 ChunkGenerator::localToWorldIndex(LocalChunkPosition position)
+glm::ivec3 ChunkGenerator::localToWorldIndex(WorldBrickPosition position)
 {
     return std::get<0>(position) * CHUNK_SIZE * SUPERBRICK_SIZE
         + std::get<1>(position) * SUPERBRICK_SIZE + std::get<2>(position);

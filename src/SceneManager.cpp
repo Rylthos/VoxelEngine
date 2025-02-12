@@ -9,6 +9,7 @@
 #include <spdlog/fmt/ranges.h>
 #include <spdlog/spdlog.h>
 
+#include "Brick.hpp"
 #include "Buffer.hpp"
 #include "Chunk.hpp"
 #include "ChunkGenerator.hpp"
@@ -174,11 +175,16 @@ void SceneManager::receive(const Event* event)
                             op = 0;
                         }
 
-                        changes.push_back({ m_Feedback.brickIndex, newIndex, op });
+                        changes.push_back({
+                            { m_Feedback.chunkIndex, m_Feedback.superBrickIndex,
+                             m_Feedback.brickIndex, newIndex },
+                            op
+                        });
                     }
                 }
             }
-            // m_SuperBrick.changeVoxels(changes, m_ReplaceVoxels);
+
+            setVoxels(changes, m_ReplaceVoxels);
             Timer::stopTimer("Modify Voxels");
         }
 
@@ -338,7 +344,7 @@ void SceneManager::checkChunks(uint32_t currentFrame)
         for (uint32_t i = 0; i < length; i++) {
             const LoadedData l = loaded[i];
             if (l.brickIndex.a != 0) {
-                auto localPosition = LocalChunkPosition { chunkPos, glm::ivec3(l.superBrickIndex),
+                auto localPosition = WorldBrickPosition { chunkPos, glm::ivec3(l.superBrickIndex),
                     glm::ivec3(l.brickIndex) };
 
                 m_Chunks[chunkPos].setRequestedBrick(localPosition);
@@ -368,6 +374,136 @@ void SceneManager::freeBuffers()
 
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
         m_ToBeLoaded[i].free();
+    }
+}
+
+void SceneManager::transformChange(VoxelChange change, WorldVoxelPosition& position, VoxelOp& op)
+{
+    auto pos = std::get<0>(change);
+    glm::ivec3 chunkIndex = std::get<0>(pos);
+    glm::ivec3 superBrickIndex = std::get<1>(pos);
+    glm::ivec3 brickIndex = std::get<2>(pos);
+    glm::ivec3 voxelIndex = std::get<3>(pos);
+
+    op = std::get<1>(change);
+
+    for (int i = 0; i < 3; i++) {
+        bool notChanged = true;
+        do {
+            notChanged = true;
+            if (voxelIndex[i] > BRICK_SIZE) {
+                brickIndex[i] += 1;
+                voxelIndex[i] -= BRICK_SIZE;
+                notChanged = false;
+            }
+            if (voxelIndex[i] < 0) {
+                brickIndex[i] -= 1;
+                voxelIndex[i] += BRICK_SIZE;
+                notChanged = false;
+            }
+
+            if (brickIndex[i] > SUPERBRICK_SIZE) {
+                brickIndex[i] -= SUPERBRICK_SIZE;
+                superBrickIndex[i] += 1;
+                notChanged = false;
+            }
+            if (brickIndex[i] < 0) {
+                brickIndex[i] += SUPERBRICK_SIZE;
+                superBrickIndex[i] -= 1;
+                notChanged = false;
+            }
+
+            if (superBrickIndex[i] > CHUNK_SIZE) {
+                superBrickIndex[i] -= SUPERBRICK_SIZE;
+                chunkIndex[i] += 1;
+                notChanged = false;
+            }
+            if (superBrickIndex[i] < 0) {
+                superBrickIndex[i] += SUPERBRICK_SIZE;
+                chunkIndex[i] -= 1;
+                notChanged = false;
+            }
+        } while (!notChanged);
+    }
+
+    position = { chunkIndex, superBrickIndex, brickIndex, voxelIndex };
+}
+
+void SceneManager::transformChanges(const std::vector<VoxelChange> changes,
+    std::unordered_map<WorldBrickPosition, std::vector<std::pair<glm::ivec3, VoxelOp>>,
+        tuple_3_hash>& groupedChanges)
+{
+    PROF_ZONE_SCOPED;
+    for (const VoxelChange& change : changes) {
+        WorldVoxelPosition pos;
+        VoxelOp op;
+
+        transformChange(change, pos, op);
+
+        glm::ivec3 chunkIndex = std::get<0>(pos);
+
+        bool shouldSkip = false;
+        for (int i = 0; i < 3; i++) {
+            if (chunkIndex[i] > 0 || chunkIndex[i] < 0) {
+                shouldSkip = true;
+                break;
+            }
+        }
+        if (shouldSkip)
+            continue;
+
+        WorldBrickPosition pos2 = { std::get<0>(pos), std::get<1>(pos), std::get<2>(pos) };
+        glm::ivec3 voxelIndex = std::get<3>(pos);
+
+        groupedChanges[pos2].emplace_back(voxelIndex, op);
+    }
+}
+
+void SceneManager::setVoxels(const std::vector<VoxelChange>& voxels, bool replace)
+{
+    PROF_ZONE_SCOPED;
+    std::unordered_map<WorldBrickPosition, std::vector<std::pair<glm::ivec3, VoxelOp>>,
+        tuple_3_hash>
+        groupedChanges;
+
+    transformChanges(voxels, groupedChanges);
+
+    for (const auto& brickChanges : groupedChanges) {
+        WorldBrickPosition position = brickChanges.first;
+
+        // if (!m_Bricks.contains(brickIndex)) {
+        //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);
+        //     for (const auto& change : brickChanges.second) {
+        //         m_QueuedChanges[brickIndex][change.first] = { change.second, replace };
+        //     }
+        //
+        //     continue;
+        // }
+
+        // std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_BufferLock);
+        // for (const auto& change : brickChanges.second) {
+        //     if (std::holds_alternative<ERASE_OP>(change.second)) {
+        //         m_Bricks.at(brickIndex).setAir(change.first);
+        //     } else {
+        //         m_Bricks.at(brickIndex)
+        //             .setVoxel(change.first, std::get<PLACE_OP>(change.second), replace);
+        //     }
+        // }
+
+        //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
+        //     m_ToBeLoaded.insert(brickIndex);
+        //     if (m_GeneratedBricks.contains(brickIndex)) {
+        //         uint16_t lookup = m_GeneratedBricks[brickIndex];
+        //         m_GeneratedBricks.erase(brickIndex);
+        //         m_FreeIndices.insert(lookup);
+        //
+        //         auto colourAllocation = m_AllocatedColourSizes[brickIndex];
+        //         m_AvailableColourIndices.addInterval(
+        //             colourAllocation.first, colourAllocation.first + colourAllocation.second -
+        //             1);
+        //         m_AllocatedColourSizes.erase(brickIndex);
+        //         m_CurrentColourCount -= colourAllocation.second;
+        //     }
     }
 }
 

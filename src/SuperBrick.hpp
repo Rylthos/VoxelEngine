@@ -18,11 +18,6 @@
 
 #define SUPERBRICK_SIZE 16
 
-#define ERASE_OP int
-#define PLACE_OP glm::vec4
-typedef std::variant<ERASE_OP, PLACE_OP> VoxelOp;
-typedef std::tuple<glm::ivec3, glm::ivec3, VoxelOp> VoxelChange;
-
 struct SuperBrickEntry {
     uint32_t loaded : 1;
     uint32_t requested_flag : 1;
@@ -50,12 +45,6 @@ class SuperBrick {
     void loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, Brick& brick);
 
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
-
-    void placeVoxel(
-        glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour, bool replace = false);
-    void eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool replace = false);
-
-    void changeVoxels(const std::vector<VoxelChange>& voxels, bool replace);
 
     SuperBrickStruct getStruct();
 
@@ -86,17 +75,7 @@ class SuperBrick {
     PROF_LOCKABLE_MUTEX(std::mutex, m_QueuedChangesLock, "Queued Changed Lock");
     PROF_LOCKABLE_MUTEX(std::mutex, m_LoadedLock, "ToBeLoaded Lock");
 
-    std::unordered_map<glm::ivec3, std::unordered_map<glm::ivec3, std::pair<VoxelOp, bool>>>
-        m_QueuedChanges;
-
   private:
-    void transformChange(
-        VoxelChange change, glm::ivec3& brickIndex, glm::ivec3& voxelIndex, VoxelOp& op);
-    void transformChanges(const std::vector<VoxelChange> changes,
-        std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>&
-            groupedChanges);
-    void setVoxels(const std::vector<VoxelChange>& voxels, bool replace);
-
     void generateStaging(size_t size);
 
     void resizeColours(bool preserveStaging = false);

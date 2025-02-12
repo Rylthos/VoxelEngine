@@ -33,7 +33,7 @@ class ChunkGenerator {
 
     static void addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks);
 
-    static void requestBrick(LocalChunkPosition position, glm::vec3 cameraPosition);
+    static void requestBrick(WorldBrickPosition position, glm::vec3 cameraPosition);
 
     static size_t getQueueSize() { return s_ToBeGenerated.size(); }
 
@@ -59,9 +59,9 @@ class ChunkGenerator {
     inline static std::unordered_set<glm::ivec3> s_Enqueued;
 
   private:
-    static glm::ivec3 localToWorldIndex(LocalChunkPosition position);
+    static glm::ivec3 localToWorldIndex(WorldBrickPosition position);
 
-    static LocalChunkPosition worldToLocalIndex(glm::ivec3 worldIndex);
+    static WorldBrickPosition worldToLocalIndex(glm::ivec3 worldIndex);
 
     static void generationLoop(size_t id);
 };

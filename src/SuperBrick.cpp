@@ -96,24 +96,6 @@ void SuperBrick::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> positi
     m_ToBeLoaded.insert(brickIndex);
 }
 
-void SuperBrick::placeVoxel(
-    glm::ivec3 brickIndex, glm::ivec3 voxelIndex, glm::vec4 colour, bool replace)
-{
-    std::vector<VoxelChange> temp = { std::make_tuple(brickIndex, voxelIndex, colour) };
-    setVoxels(temp, replace);
-}
-
-void SuperBrick::eraseVoxel(glm::ivec3 brickIndex, glm::ivec3 voxelIndex, bool replace)
-{
-    std::vector<VoxelChange> temp = { std::make_tuple(brickIndex, voxelIndex, 0) };
-    setVoxels(temp, true);
-}
-
-void SuperBrick::changeVoxels(const std::vector<VoxelChange>& voxels, bool replace)
-{
-    setVoxels(voxels, replace);
-}
-
 SuperBrickStruct SuperBrick::getStruct()
 {
     if (m_ToBeLoaded.size() != 0) {
@@ -221,88 +203,6 @@ SuperBrickStruct SuperBrick::getStruct()
     m_Struct.colour = m_Colours.getDeviceAddress(m_Device);
 
     return m_Struct;
-}
-
-void SuperBrick::transformChange(
-    VoxelChange change, glm::ivec3& brickIndex, glm::ivec3& voxelIndex, VoxelOp& op)
-{
-    brickIndex = std::get<0>(change);
-    voxelIndex = std::get<1>(change);
-    op = std::get<2>(change);
-
-    for (int i = 0; i < 3; i++) {
-        int brickOffset = (int)std::floor(voxelIndex[i] / (float)BRICK_SIZE);
-        // int brickOffset = voxelIndex[i] >> 4;
-        int voxelOffset = (voxelIndex[i] % BRICK_SIZE + BRICK_SIZE) % BRICK_SIZE;
-
-        voxelIndex[i] = voxelOffset;
-        brickIndex[i] += brickOffset;
-    }
-}
-
-void SuperBrick::transformChanges(const std::vector<VoxelChange> changes,
-    std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>>& groupedChanges)
-{
-    PROF_ZONE_SCOPED;
-    for (const VoxelChange& change : changes) {
-        glm::ivec3 brickIndex;
-        glm::ivec3 voxelIndex;
-        VoxelOp op;
-
-        transformChange(change, brickIndex, voxelIndex, op);
-
-        if (brickIndex.x < 0 || brickIndex.x >= SUPERBRICK_SIZE || brickIndex.y < 0
-            || brickIndex.y >= SUPERBRICK_SIZE || brickIndex.z < 0
-            || brickIndex.z >= SUPERBRICK_SIZE) {
-            continue;
-        }
-
-        groupedChanges[brickIndex].emplace_back(voxelIndex, op);
-    }
-}
-
-void SuperBrick::setVoxels(const std::vector<VoxelChange>& changes, bool replace)
-{
-    PROF_ZONE_SCOPED;
-    std::unordered_map<glm::ivec3, std::vector<std::pair<glm::ivec3, VoxelOp>>> groupedChanges;
-    transformChanges(changes, groupedChanges);
-
-    for (const auto& brickChanges : groupedChanges) {
-        glm::ivec3 brickIndex = brickChanges.first;
-
-        if (!m_Bricks.contains(brickIndex)) {
-            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);
-            for (const auto& change : brickChanges.second) {
-                m_QueuedChanges[brickIndex][change.first] = { change.second, replace };
-            }
-
-            continue;
-        }
-
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_BufferLock);
-        for (const auto& change : brickChanges.second) {
-            if (std::holds_alternative<ERASE_OP>(change.second)) {
-                m_Bricks.at(brickIndex).setAir(change.first);
-            } else {
-                m_Bricks.at(brickIndex)
-                    .setVoxel(change.first, std::get<PLACE_OP>(change.second), replace);
-            }
-        }
-
-        std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
-        m_ToBeLoaded.insert(brickIndex);
-        if (m_GeneratedBricks.contains(brickIndex)) {
-            uint16_t lookup = m_GeneratedBricks[brickIndex];
-            m_GeneratedBricks.erase(brickIndex);
-            m_FreeIndices.insert(lookup);
-
-            auto colourAllocation = m_AllocatedColourSizes[brickIndex];
-            m_AvailableColourIndices.addInterval(
-                colourAllocation.first, colourAllocation.first + colourAllocation.second - 1);
-            m_AllocatedColourSizes.erase(brickIndex);
-            m_CurrentColourCount -= colourAllocation.second;
-        }
-    }
 }
 
 void SuperBrick::generateStaging(size_t size)
