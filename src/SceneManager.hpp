@@ -24,13 +24,6 @@
 
 #define MAX_LOADED 512
 
-#define ERASE_OP int
-#define PLACE_OP glm::vec4
-typedef std::variant<ERASE_OP, PLACE_OP> VoxelOp;
-typedef std::tuple<WorldVoxelPosition, VoxelOp> VoxelChange;
-
-enum class PlacementType : int { Cube = 0, Sphere = 1, NUM_TYPES };
-
 static const char* PlacementTypeToString[] = {
     "Cube",
     "Sphere",
@@ -89,6 +82,8 @@ class SceneManager : public EventReceiver {
     void initResources(VkDevice device, VmaAllocator allocator, Queue* computeQueue);
     void freeResources();
 
+    void loadBrick(WorldBrickPosition, Brick& brick);
+
     void receive(const Event* event);
 
     VoxelPushConstants& getVoxelPushConstants(uint32_t currentFrame);
@@ -124,6 +119,8 @@ class SceneManager : public EventReceiver {
     bool m_ReplaceVoxels = false;
     PlacementType m_CurrentPlacement = PlacementType::Sphere;
     uint32_t m_PlacementSize = MIN_PLACEMENT_SIZE;
+
+    PROF_LOCKABLE_MUTEX(std::mutex, m_QueuedChangesLock, "Queued Changes Lock");
 
     std::unordered_map<WorldBrickPosition, std::unordered_map<glm::ivec3, std::pair<VoxelOp, bool>>,
         tuple_3_hash>

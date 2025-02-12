@@ -96,6 +96,35 @@ void SuperBrick::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> positi
     m_ToBeLoaded.insert(brickIndex);
 }
 
+void SuperBrick::setVoxels(WorldBrickPosition pos,
+    const std::vector<std::pair<glm::ivec3, VoxelOp>>& changes, bool replace)
+{
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_BufferLock);
+
+    glm::ivec3 brickIndex = std::get<2>(pos);
+    for (size_t i = 0; i < changes.size(); i++) {
+        const auto& change = changes[i];
+        if (std::holds_alternative<PLACE_OP>(change.second))
+            m_Bricks[brickIndex].setVoxel(change.first, std::get<PLACE_OP>(change.second), replace);
+        if (std::holds_alternative<ERASE_OP>(change.second))
+            m_Bricks[brickIndex].setAir(change.first);
+    }
+
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_LoadedLock);
+    m_ToBeLoaded.insert(brickIndex);
+    if (m_GeneratedBricks.contains(brickIndex)) {
+        uint16_t lookup = m_GeneratedBricks[brickIndex];
+        m_GeneratedBricks.erase(brickIndex);
+        m_FreeIndices.insert(lookup);
+
+        auto colourAllocation = m_AllocatedColourSizes[brickIndex];
+        m_AvailableColourIndices.addInterval(
+            colourAllocation.first, colourAllocation.first + colourAllocation.second - 1);
+        m_AllocatedColourSizes.erase(brickIndex);
+        m_CurrentColourCount -= colourAllocation.second;
+    }
+}
+
 SuperBrickStruct SuperBrick::getStruct()
 {
     if (m_ToBeLoaded.size() != 0) {

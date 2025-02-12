@@ -1,5 +1,7 @@
 #include "ChunkGenerator.hpp"
 
+#include "SceneManager.hpp"
+
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/string_cast.hpp>
 
@@ -11,7 +13,6 @@
 #include "Chunk.hpp"
 #include "Descriptors.hpp"
 #include "Profilling.hpp"
-#include "SceneManager.hpp"
 #include "ShaderModule.hpp"
 #include "SuperBrick.hpp"
 #include "Timer.hpp"
@@ -94,7 +95,7 @@ void ChunkGenerator::free()
     vkDestroyPipelineLayout(s_Device, s_GeneratePipelineLayout, nullptr);
 }
 
-void ChunkGenerator::addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks) { s_Chunks = chunks; }
+void ChunkGenerator::addSceneManager(SceneManager* sceneManager) { s_SceneManager = sceneManager; }
 
 void ChunkGenerator::requestBrick(WorldBrickPosition position, glm::vec3 cameraPosition)
 {
@@ -288,7 +289,7 @@ void ChunkGenerator::generationLoop(size_t id)
             }
 
             auto localPosition = worldToLocalIndex(position);
-            (*s_Chunks)[std::get<0>(localPosition)].loadBrick(localPosition, brick);
+            (*s_SceneManager).loadBrick(localPosition, brick);
         }
         Timer::stopTimer(timerString);
     }

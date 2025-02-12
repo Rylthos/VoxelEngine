@@ -23,9 +23,6 @@ struct ChunkStruct {
     VkDeviceAddress pointers;
 };
 
-typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> WorldBrickPosition;
-typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3, glm::ivec3> WorldVoxelPosition;
-
 struct tuple_3_hash {
 
     template <class T1, class T2, class T3>
@@ -54,6 +51,11 @@ class Chunk {
 
     void loadSuperBrick(glm::ivec3 index);
     void loadBrick(WorldBrickPosition, Brick& brick);
+
+    void setVoxels(WorldBrickPosition pos,
+        const std::vector<std::pair<glm::ivec3, VoxelOp>>& changes, bool replace);
+    void setVoxel(
+        WorldBrickPosition pos, const std::pair<glm::ivec3, VoxelOp>& changes, bool replace);
 
     ChunkStruct getStruct();
 

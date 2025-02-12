@@ -19,6 +19,8 @@
 
 #define MAX_BRICKS_PER_DISPATCH 6
 
+class SceneManager;
+
 struct GenerationPushConstants {
     std::array<glm::vec4, MAX_BRICKS_PER_DISPATCH> brickPosition;
     VkDeviceAddress colours;
@@ -31,7 +33,7 @@ class ChunkGenerator {
     static void init(VkDevice m_Device, VmaAllocator allocator, Queue* computeQueue);
     static void free();
 
-    static void addChunks(std::unordered_map<glm::ivec3, Chunk>* chunks);
+    static void addSceneManager(SceneManager* sceneManager);
 
     static void requestBrick(WorldBrickPosition position, glm::vec3 cameraPosition);
 
@@ -41,7 +43,7 @@ class ChunkGenerator {
     inline static VkDevice s_Device;
     inline static VmaAllocator s_Allocator;
 
-    inline static std::unordered_map<glm::ivec3, Chunk>* s_Chunks;
+    inline static SceneManager* s_SceneManager;
 
     inline static Queue* s_ComputeQueue;
     inline static VkPipeline s_GeneratePipeline;

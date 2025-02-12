@@ -96,7 +96,7 @@ void SceneManager::initResources(VkDevice device, VmaAllocator allocator, Queue*
     m_VoxelPushConstants.brickLODDistance = 100.f;
     m_VoxelPushConstants.superBrickLODDistance = 200.f;
 
-    ChunkGenerator::addChunks(&m_Chunks);
+    ChunkGenerator::addSceneManager(this);
 }
 
 void SceneManager::freeResources()
@@ -106,6 +106,23 @@ void SceneManager::freeResources()
 
     freeBuffers();
     m_Initialized = false;
+}
+
+void SceneManager::loadBrick(WorldBrickPosition position, Brick& brick)
+{
+    m_Chunks[std::get<0>(position)].loadBrick(position, brick);
+
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_QueuedChangesLock);
+
+    if (m_QueuedChanges.contains(position)) {
+        const auto& data = m_QueuedChanges[position];
+        for (const auto& v : data) {
+            m_Chunks[std::get<0>(position)].setVoxel(
+                position, { v.first, v.second.first }, v.second.second);
+        }
+
+        m_QueuedChanges.erase(position);
+    }
 }
 
 void SceneManager::receive(const Event* event)
@@ -391,7 +408,7 @@ void SceneManager::transformChange(VoxelChange change, WorldVoxelPosition& posit
         bool notChanged = true;
         do {
             notChanged = true;
-            if (voxelIndex[i] > BRICK_SIZE) {
+            if (voxelIndex[i] >= BRICK_SIZE) {
                 brickIndex[i] += 1;
                 voxelIndex[i] -= BRICK_SIZE;
                 notChanged = false;
@@ -402,7 +419,7 @@ void SceneManager::transformChange(VoxelChange change, WorldVoxelPosition& posit
                 notChanged = false;
             }
 
-            if (brickIndex[i] > SUPERBRICK_SIZE) {
+            if (brickIndex[i] >= SUPERBRICK_SIZE) {
                 brickIndex[i] -= SUPERBRICK_SIZE;
                 superBrickIndex[i] += 1;
                 notChanged = false;
@@ -413,7 +430,7 @@ void SceneManager::transformChange(VoxelChange change, WorldVoxelPosition& posit
                 notChanged = false;
             }
 
-            if (superBrickIndex[i] > CHUNK_SIZE) {
+            if (superBrickIndex[i] >= CHUNK_SIZE) {
                 superBrickIndex[i] -= SUPERBRICK_SIZE;
                 chunkIndex[i] += 1;
                 notChanged = false;
@@ -470,6 +487,20 @@ void SceneManager::setVoxels(const std::vector<VoxelChange>& voxels, bool replac
 
     for (const auto& brickChanges : groupedChanges) {
         WorldBrickPosition position = brickChanges.first;
+
+        glm::ivec3 chunkIndex = std::get<0>(position);
+        glm::ivec3 superBrickIndex = std::get<1>(position);
+        glm::ivec3 brickIndex = std::get<2>(position);
+        if (!m_Chunks[chunkIndex].hasGenerated(superBrickIndex, brickIndex)) {
+            std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_QueuedChangesLock);
+            for (const auto& change : brickChanges.second) {
+                m_QueuedChanges[position][change.first] = { change.second, replace };
+            }
+
+            continue;
+        }
+
+        m_Chunks[chunkIndex].setVoxels(position, brickChanges.second, replace);
 
         // if (!m_Bricks.contains(brickIndex)) {
         //     std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock(m_QueuedChangesLock);

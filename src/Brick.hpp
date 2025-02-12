@@ -9,8 +9,20 @@
 
 #include <glm/glm.hpp>
 
+#include <variant>
+
 #define BRICK_SIZE 8
 #define VOXEL_SIZE 0.125f
+
+typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> WorldBrickPosition;
+typedef std::tuple<glm::ivec3, glm::ivec3, glm::ivec3, glm::ivec3> WorldVoxelPosition;
+
+#define ERASE_OP int
+#define PLACE_OP glm::vec4
+typedef std::variant<ERASE_OP, PLACE_OP> VoxelOp;
+typedef std::tuple<WorldVoxelPosition, VoxelOp> VoxelChange;
+
+enum class PlacementType : int { Cube = 0, Sphere = 1, NUM_TYPES };
 
 struct BrickStruct {
     uint64_t solidMask[8];

@@ -115,6 +115,23 @@ void Chunk::loadBrick(std::tuple<glm::ivec3, glm::ivec3, glm::ivec3> position, B
     m_SuperBricks[superBrickPosition].loadBrick(position, brick);
 }
 
+void Chunk::setVoxel(
+    WorldBrickPosition pos, const std::pair<glm::ivec3, VoxelOp>& changes, bool replace)
+{
+    setVoxels(pos, { changes }, replace);
+}
+
+void Chunk::setVoxels(WorldBrickPosition pos,
+    const std::vector<std::pair<glm::ivec3, VoxelOp>>& changes, bool replace)
+{
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock1(m_BufferLock);
+    std::lock_guard<PROF_LOCKABLE_BASE(std::mutex)> lock2(m_UpdatedLock);
+
+    glm::ivec3 superBrickIndex = std::get<1>(pos);
+    m_SuperBricks[superBrickIndex].setVoxels(pos, changes, replace);
+    m_ToBeUpdated.insert(superBrickIndex);
+}
+
 ChunkStruct Chunk::getStruct()
 {
     if (m_ToBeLoaded.size() != 0) {

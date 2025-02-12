@@ -46,6 +46,9 @@ class SuperBrick {
 
     VkDeviceAddress getBrickmap() { return m_BrickPool.getDeviceAddress(m_Device); }
 
+    void setVoxels(WorldBrickPosition pos,
+        const std::vector<std::pair<glm::ivec3, VoxelOp>>& changes, bool replace);
+
     SuperBrickStruct getStruct();
 
   private:
